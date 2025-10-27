@@ -1,0 +1,64 @@
+/* ===== Login page ===== */
+.login-page, .login-page * { box-sizing: border-box; }
+.login-page { min-height: 100dvh; font-family: "Noto Sans JP", system-ui, sans-serif; }
+
+.login-bg {
+  position: fixed; inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.95) 0%, rgba(255,255,255,.85) 30%, rgba(255,255,255,.85) 100%),
+    /* gunakan gambar dari tohatsu.co.jp (bebas ganti path gambar lain di domain tsb) */
+    url('https://www.tohatsu.co.jp/asset/images/product/hero_01.jpg')
+    center/cover no-repeat;
+  z-index: 0;  /* paling belakang */
+}
+.login-overlay { display: none; } /* tidak perlu overlay kedua */
+
+.appbar{
+  position: relative;
+  z-index: 2;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; gap: 12px;
+  background: transparent;
+}
+.appbar .brand{ display: inline-flex; gap:10px; align-items:center; }
+.appbar .brand img{ width:28px; height:28px; }
+.appbar .brand span{ font-weight:700; letter-spacing:.02em; }
+
+.burger{
+  display:none; border:0; background:#f1f5f9; border-radius:10px; padding:6px 10px; cursor:pointer;
+}
+.topnav a{ display:inline-block; padding:8px 12px; border-radius:10px; background:#f1f5f9; }
+
+/* login card */
+.login-wrap{
+  position: relative; z-index: 2;
+  min-height: calc(100dvh - 60px);
+  display: grid; place-items: center; padding: 24px 16px;
+}
+.login-card{
+  width: min(560px, 96vw);
+  background: #fff; border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(15,23,42,.08);
+  padding: 24px;
+}
+.login-card h1{ font-size: 22px; margin:0 0 8px; }
+.login-card .lbl{ display:block; margin: 14px 0; font-size: 14px; }
+.login-card input{
+  width: 100%; margin-top: 6px; padding: 12px 14px;
+  border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;
+}
+.login-card .actions{ display:flex; gap:10px; justify-content:flex-end; margin-top: 8px; }
+.login-card .primary{ background:#2563eb; color:#fff; border:0; padding:10px 14px; border-radius: 12px; cursor:pointer; }
+.login-card .ghost{ background:#f1f5f9; color:#111827; border:0; padding:10px 14px; border-radius: 12px; cursor:pointer; }
+
+/* QR dialog */
+.qr-dialog::backdrop { background: rgba(0,0,0,.25); }
+.qr-dialog { border:0; border-radius: 16px; width: min(520px, 96vw); padding: 16px; }
+
+/* responsive */
+@media (max-width: 640px){
+  .burger{ display:block; }
+  .topnav{ position:absolute; top:52px; left:16px; right:16px; display:none; }
+  .topnav.open{ display:flex; background:#fff; border-radius: 12px; box-shadow: 0 10px 30px rgba(15,23,42,.08); }
+  .topnav a{ margin:8px; }
+}
