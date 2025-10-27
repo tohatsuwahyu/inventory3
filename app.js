@@ -1,6 +1,5 @@
-
 /*************************************************
- * app.js — Inventory Dashboard (UI-upgrade + fixes)
+ * app.js — Inventory Dashboard (UI-upgrade + item recap & CSV)
  **************************************************/
 
 // === Auth guard
@@ -40,7 +39,7 @@ function showView(id, title){
 }
 function updateWho(){ const u=state.currentUser; const el=qs('#who'); if(el) el.textContent=`${u.name}（${u.id}｜${u.role||'user'}）`; }
 
-// === mobile drawer (kompatibel id lama/baru)
+// === mobile drawer
 function openMenu(open){
   const sb = qs('#sb') || qs('.sidebar');
   const bd = qs('#sb-backdrop') || qs('#backdrop');
@@ -53,7 +52,7 @@ function openMenu(open){
 (qs('#sb-backdrop')||qs('#backdrop'))?.addEventListener('click', ()=>openMenu(false));
 window.addEventListener('keydown', e=>{ if(e.key==='Escape') openMenu(false); });
 
-// === API — robust + logging
+// === API
 async function api(action, {method='GET', body}={}){
   if(!window.CONFIG || !CONFIG.BASE_URL){
     console.error('[API] config.js belum diisi');
@@ -82,7 +81,7 @@ async function api(action, {method='GET', body}={}){
   }
 }
 
-// menormalkan bentuk respons (array langsung / dibungkus)
+// menormalkan respon
 function normArr(resp, key){
   if (Array.isArray(resp)) return resp;
   if (resp && Array.isArray(resp[key])) return resp[key];
@@ -115,21 +114,18 @@ async function loadAll(){
 }
 
 function parseTs(s){
-  // s contoh: 'yyyy-MM-dd HH:mm' (lihat GAS historyList)
   if(!s) return null;
   const p = s.replace(' ','T');
   const d = new Date(p);
   return isNaN(+d) ? null : d;
 }
+const ymOf = (d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 
 function renderMetrics(){
-  // total items
   qs('#metric-total-items').textContent = fmt(state.items.length);
-  // stok <= min
   qs('#metric-low-stock').textContent  = fmt(state.items.filter(i=>Number(i.stock||0)<=Number(i.min||0)).length);
-  // users
   qs('#metric-users').textContent      = fmt(state.users.length);
-  // transaksi 30 hari terakhir
+
   const now = today();
   const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
   const last30 = state.history.filter(h=>{
@@ -160,12 +156,11 @@ function renderPieThisMonth(){
   pieChart?.destroy?.();
 
   const now = today();
-  const ym   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const ym   = ymOf(now);
   let IN=0, OUT=0;
   state.history.forEach(h=>{
     const d = parseTs(h.timestamp); if(!d) return;
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    if(key!==ym) return;
+    if(ymOf(d)!==ym) return;
     const qty = Number(h.qty||0);
     if(String(h.type)==='IN') IN += qty; else OUT += qty;
   });
@@ -182,13 +177,12 @@ function renderMovementsThisMonth(){
   tb.innerHTML = '';
 
   const now = today();
-  const ym   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const ym   = ymOf(now);
 
   const byCode = new Map();
   state.history.forEach(h=>{
     const d = parseTs(h.timestamp); if(!d) return;
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    if(key!==ym) return;
+    if(ymOf(d)!==ym) return;
     const code = String(h.code||'');
     const item = byCode.get(code) || { code, name:'', IN:0, OUT:0 };
     const it = state.items.find(x=>String(x.code)===code);
@@ -218,9 +212,34 @@ function renderMovementsThisMonth(){
   }, { once:true });
 }
 
-/* === QR === */
+/* === QR text === */
 const itemQrText = (code)=>`ITEM|${String(code||'')}`;
 const userQrText = (id)=>`USER|${String(id||'')}`;
+
+/* === Recap & CSV per item === */
+function recapForItem(code){
+  const ym = ymOf(today());
+  let IN=0, OUT=0;
+  state.history.forEach(h=>{
+    if(String(h.code)!==String(code)) return;
+    const d=parseTs(h.timestamp); if(!d || ymOf(d)!==ym) return;
+    const q=Number(h.qty||0); if(String(h.type)==='IN') IN+=q; else OUT+=q;
+  });
+  const it = state.items.find(x=>String(x.code)===String(code));
+  return { IN, OUT, STOCK:Number(it?.stock||0) };
+}
+function buildItemReportCsv(code){
+  const it = state.items.find(x=>String(x.code)===String(code));
+  const name = it?.name || '';
+  const ym = ymOf(today());
+  const head='timestamp,userId,code,qty,unit,type\n';
+  const rows = state.history
+    .filter(h => String(h.code)===String(code) && (()=>{const d=parseTs(h.timestamp); return d && ymOf(d)===ym;})())
+    .map(h=>[h.timestamp||'', h.userId||'', h.code||'', h.qty||0, h.unit||'', h.type||''].join(','));
+  const r = recapForItem(code);
+  rows.push(`TOTAL,,${code},IN:${r.IN},,OUT:${r.OUT}`);
+  return { csv: head + rows.join('\n'), filename: `report_${safeFile(code)}_${safeFile(name)}.csv` };
+}
 
 function renderItems(){
   const tb = qs('#tbl-items'); if(!tb) return;
@@ -228,12 +247,16 @@ function renderItems(){
   state.items.forEach(i=>{
     const codeStr = String(i.code||'');
     const idHolder = `qr-${codeStr.replace(/[^\w\-:.]/g,'_')}`;
+
+    const rec = recapForItem(codeStr);
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="qr-cell">
         <div class="qrbox">
           <div id="${idHolder}"></div>
           <div class="caption">${i.name||''}（${codeStr}）</div>
+          <div class="caption">IN ${fmt(rec.IN)}・OUT ${fmt(rec.OUT)}・在庫 ${fmt(rec.STOCK)}</div>
         </div>
       </td>
       <td>${codeStr}</td>
@@ -242,7 +265,10 @@ function renderItems(){
       <td class="text-end">¥${fmt(i.price||0)}</td>
       <td class="text-end">${fmt(i.stock||0)}</td>
       <td class="text-end">${fmt(i.min||0)}</td>
-      <td class="text-end"><button class="btn btn-sm btn-outline-secondary" data-act="dl" data-code="${idHolder}"><i class="bi bi-download"></i></button></td>`;
+      <td class="text-end d-flex justify-content-end gap-1">
+        <button class="btn btn-sm btn-outline-secondary" data-act="dl" data-code="${idHolder}" title="QRを保存"><i class="bi bi-download"></i></button>
+        <button class="btn btn-sm btn-outline-secondary" data-act="dlrep" data-itemcode="${codeStr}" title="レポートCSV"><i class="bi bi-filetype-csv"></i></button>
+      </td>`;
     tb.appendChild(tr);
 
     const holder = document.getElementById(idHolder);
@@ -256,6 +282,7 @@ function renderItems(){
     }
   });
 
+  // Download QR PNG
   tb.querySelectorAll('button[data-act="dl"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const tr = btn.closest('tr');
@@ -268,6 +295,18 @@ function renderItems(){
       const dataUrl = canvas?.toDataURL?.('image/png') || img?.src || '';
       if(!dataUrl) return;
       const a=document.createElement('a'); a.href=dataUrl; a.download=`QR_${safeFile(code)}_${safeFile(name)}.png`; a.click();
+    });
+  });
+
+  // Download per-item report CSV (bulan ini)
+  tb.querySelectorAll('button[data-act="dlrep"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const code = btn.getAttribute('data-itemcode');
+      const { csv, filename } = buildItemReportCsv(code);
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+      a.download=filename;
+      a.click();
     });
   });
 
@@ -383,7 +422,7 @@ function onScanStocktake(text){
       pushStocktake(code, it?.name||'', Number(it?.stock||0), Number(it?.stock||0));
     }
   }catch(_){}
-} // <-- FIX: function closed properly!
+}
 
 function pushStocktake(code,name,book,real){
   const diff=Number(real)-Number(book);
@@ -429,7 +468,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='stocktake.csv'; a.click();
   });
 
-  // Items export CSV
+  // Items export CSV (all items)
   qs('#btn-items-export')?.addEventListener('click', ()=>{
     const head='code,name,price,stock,min\n';
     const lines=state.items.map(r=>[r.code,r.name,r.price,r.stock,r.min].join(',')).join('\n');
