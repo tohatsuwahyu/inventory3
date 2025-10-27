@@ -1,0 +1,8 @@
+@media print{
+  .sidebar, .topbar, .toolbar, .ghost, .primary, .accent { display:none !important; }
+  body{ background:#fff; }
+  .print-a4{ display:block !important; }
+  .qr-grid{ grid-template-columns: repeat(4, 1fr); gap:10px; }
+  .qr-cell{ box-shadow:none; border:1px solid #ddd }
+}
+.print-a4{ display:none; }
