@@ -1,381 +1,593 @@
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
-  <title>在庫管理 - ダッシュボード</title>
+/*************************************************
+ * app.js — Inventory Dashboard (pro upgrade)
+ **************************************************/
 
-  <!-- Fonts & UI -->
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+// === Auth guard
+const saved = localStorage.getItem('currentUser');
+if (!saved) location.href = 'index.html';
 
-  <style>
-    :root{
-      --sidebar:#0f213e; --card:#fff;
-      --c1:#4f8cff; --c2:#f97316; --c3:#22c55e; --c4:#a855f7;
-      --muted:#7a8499;
+const state = {
+  currentUser: JSON.parse(saved),
+  items: [], users: [], history: [], monthly: [],
+  scanner: null, ioScanner: null, stocktakeRows: [],
+  filteredItems: []
+};
+
+// === tiny helpers
+const qs  = (s, el=document)=>el.querySelector(s);
+const qsa = (s, el=document)=>[...el.querySelectorAll(s)];
+const fmt = (n)=>new Intl.NumberFormat('ja-JP').format(n ?? 0);
+const isMobile = ()=> window.innerWidth < 992;
+const today = ()=> new Date();
+const safeFile = (s)=> String(s||'').replace(/[\s\\/:*?"<>|]+/g,'_');
+
+(function setBrand(){ try{
+  const url = (window.CONFIG && CONFIG.LOGO_URL) || './assets/tsh.png';
+  const img = qs('#brand-logo'); if(img) img.src = url;
+}catch(_){}})();
+
+function setTitle(t){ const el=qs('#page-title'); if(el) el.textContent=t; }
+function showView(id, title){
+  qsa('main section').forEach(sec=>{
+    const on = (sec.id===id);
+    sec.classList.toggle('d-none', !on);
+    requestAnimationFrame(()=>sec.classList.toggle('active', on));
+  });
+  qsa('aside nav a').forEach(a=>a.classList.toggle('active', a.getAttribute('data-view')===id));
+  if (title) setTitle(title);
+  if (isMobile()) openMenu(false);
+}
+function updateWho(){ const u=state.currentUser; const el=qs('#who'); if(el) el.textContent=`${u.name}（${u.id}｜${u.role||'user'}）`; }
+
+// === mobile drawer
+function openMenu(open){
+  const sb = qs('#sb') || qs('.sidebar');
+  const bd = qs('#sb-backdrop') || qs('#backdrop');
+  if(open){ sb?.classList.add('show','open'); bd?.classList.add('show'); document.body.classList.add('overflow-hidden'); }
+  else{ sb?.classList.remove('show','open'); bd?.classList.remove('show'); document.body.classList.remove('overflow-hidden'); }
+}
+['#burger','#btn-menu'].forEach(id=>{ qs(id)?.addEventListener('click', (e)=>{ e.preventDefault(); openMenu(true); }); });
+(qs('#sb-backdrop')||qs('#backdrop'))?.addEventListener('click', ()=>openMenu(false));
+window.addEventListener('keydown', e=>{ if(e.key==='Escape') openMenu(false); });
+
+// === API
+async function api(action, {method='GET', body}={}){
+  if(!window.CONFIG || !CONFIG.BASE_URL) throw new Error('config.js belum diisi (BASE_URL kosong)');
+  const apikey = encodeURIComponent(CONFIG.API_KEY||'');
+  const url = `${CONFIG.BASE_URL}?action=${encodeURIComponent(action)}&apikey=${apikey}&_=${Date.now()}`;
+
+  if(method==='GET'){
+    const r = await fetch(url, { mode:'cors', cache:'no-cache' });
+    if(!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
+    return await r.json();
+  }
+  const r = await fetch(url, {
+    method:'POST',
+    mode:'cors',
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+    body: JSON.stringify({ ...(body||{}), apikey: CONFIG.API_KEY })
+  });
+  if(!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
+  return await r.json();
+}
+function normArr(resp, key){
+  if (Array.isArray(resp)) return resp;
+  if (resp && Array.isArray(resp[key])) return resp[key];
+  if (resp && resp.data && Array.isArray(resp.data)) return resp.data;
+  return [];
+}
+
+// === LOAD ALL
+async function loadAll(){
+  try{
+    const [items, users, history, monthly] = await Promise.all([
+      api('items').catch(()=>[]),
+      api('users').catch(()=>[]),
+      api('history').catch(()=>[]),
+      api('statsMonthlySeries').catch(()=>[]),
+    ]);
+    state.items   = normArr(items,   'items');
+    state.users   = normArr(users,   'users');
+    state.history = normArr(history, 'history');
+    state.monthly = normArr(monthly, 'series');
+    state.filteredItems = [...state.items];
+
+    renderMetrics();
+    renderMonthlyChart();
+    renderPieThisMonth();
+    renderMovementsThisMonth();
+    renderItems(); renderUsers(); renderHistory();
+  }catch(err){
+    alert('Gagal ambil data dari backend.\nCek Console untuk detail dan periksa config.js / deployment GAS.');
+  }
+}
+
+// === Charts, metrics (sama seperti versi sebelumnya) ===
+function parseTs(s){ if(!s) return null; const p = s.replace(' ','T'); const d = new Date(p); return isNaN(+d) ? null : d; }
+function renderMetrics(){
+  qs('#metric-total-items').textContent = fmt(state.items.length);
+  qs('#metric-low-stock').textContent  = fmt(state.items.filter(i=>Number(i.stock||0)<=Number(i.min||0)).length);
+  qs('#metric-users').textContent      = fmt(state.users.length);
+  const now = today();
+  const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+  const last30 = state.history.filter(h=>{ const d = parseTs(h.timestamp); return d && d >= cutoff; });
+  qs('#metric-txn').textContent = fmt(last30.length);
+}
+let monthlyChart, pieChart;
+function renderMonthlyChart(){
+  const el = qs('#chart-monthly'); if(!el) return;
+  monthlyChart?.destroy?.();
+  monthlyChart = new Chart(el, { type:'bar',
+    data:{ labels: state.monthly.map(m=>m.month), datasets:[ {label:'IN',data: state.monthly.map(m=>m.in||0)}, {label:'OUT',data: state.monthly.map(m=>m.out||0)} ] },
+    options:{ responsive:true, scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{ display:true } } }
+  });
+}
+function renderPieThisMonth(){
+  const el = qs('#chart-pie'); if(!el) return;
+  pieChart?.destroy?.();
+  const now = today(); const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  let IN=0, OUT=0;
+  state.history.forEach(h=>{ const d = parseTs(h.timestamp); if(!d) return; const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; if(key!==ym) return;
+    const qty = Number(h.qty||0); if(String(h.type)==='IN') IN += qty; else OUT += qty; });
+  pieChart = new Chart(el, { type:'pie', data:{ labels:['IN','OUT'], datasets:[{ data:[IN, OUT] }] }, options:{ responsive:true, plugins:{ legend:{ position:'bottom' } } } });
+}
+function renderMovementsThisMonth(){
+  const tb = qs('#tbl-mov'); if(!tb) return; tb.innerHTML = '';
+  const now = today(); const ym   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const byCode = new Map();
+  state.history.forEach(h=>{
+    const d = parseTs(h.timestamp); if(!d) return; const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; if(key!==ym) return;
+    const code = String(h.code||''); const item = byCode.get(code) || { code, name:'', IN:0, OUT:0 };
+    const it = state.items.find(x=>String(x.code)===code); item.name = it?.name || item.name;
+    const qty = Number(h.qty||0); if(String(h.type)==='IN') item.IN += qty; else item.OUT += qty; byCode.set(code, item);
+  });
+  [...byCode.values()].sort((a,b)=> (b.IN + b.OUT) - (a.IN + a.OUT)).forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.code}</td><td>${r.name}</td><td class="text-end">${fmt(r.IN)}</td><td class="text-end">${fmt(r.OUT)}</td><td class="text-end">${fmt(r.IN - r.OUT)}</td>`;
+    tb.appendChild(tr);
+  });
+  qs('#btn-export-mov')?.addEventListener('click', ()=>{
+    const head='code,name,IN,OUT,NET\n';
+    const lines = [...byCode.values()].map(r=>[r.code, r.name, r.IN, r.OUT, r.IN - r.OUT].join(',')).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='movements_this_month.csv'; a.click();
+  }, { once:true });
+}
+
+/* === QR === */
+const itemQrText = (code)=>`ITEM|${String(code||'')}`;
+const userQrText = (id)=>`USER|${String(id||'')}`;
+
+/* === Items table + filter + actions === */
+function renderItems(){
+  const tb = qs('#tbl-items'); if(!tb) return; tb.innerHTML = '';
+  const list = state.filteredItems.length ? state.filteredItems : state.items;
+
+  list.forEach(i=>{
+    const codeStr = String(i.code||'');
+    const idHolder = `qr-${codeStr.replace(/[^\w\-:.]/g,'_')}`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="qr-cell"><div class="qrbox"><div id="${idHolder}"></div><div class="caption">${i.name||''}（${codeStr}）</div></div></td>
+      <td>${codeStr}</td>
+      <td class="item-name clickable text-decoration-underline" data-code="${codeStr}" role="button">${i.name||''}</td>
+      <td>${i.img ? `<img class="thumb" src="${i.img}" alt="">` : ''}</td>
+      <td class="text-end">¥${fmt(i.price||0)}</td>
+      <td class="text-end">${fmt(i.stock||0)}</td>
+      <td class="text-end">${fmt(i.min||0)}</td>
+      <td>${i.location||''}</td>
+      <td class="text-end"><button class="btn btn-sm btn-outline-secondary" data-act="dl" data-code="${idHolder}"><i class="bi bi-download"></i></button></td>
+      <td class="text-end">
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-primary" data-act="edit" data-code="${codeStr}">✏️</button>
+          <button class="btn btn-outline-danger" data-act="del" data-code="${codeStr}">🗑️</button>
+          <button class="btn btn-outline-secondary" data-act="detail" data-code="${codeStr}">🔍</button>
+        </div>
+      </td>`;
+    tb.appendChild(tr);
+
+    const holder = document.getElementById(idHolder);
+    if (holder && typeof QRCode !== 'undefined') {
+      holder.innerHTML = '';
+      new QRCode(holder, { text: itemQrText(codeStr), width:84, height:84, correctLevel: QRCode.CorrectLevel.M });
     }
-    body{ font-family:"Noto Sans JP",system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue","Hiragino Sans",Meiryo,sans-serif; background:#f6f9ff; }
-    .sidebar{
-      width:260px; background:var(--sidebar); color:#dbe6ff; min-height:100vh; position:fixed; left:0; top:0;
-      box-shadow: 8px 0 24px rgba(15,33,62,.15);
+  });
+
+  // DL QR
+  tb.querySelectorAll('button[data-act="dl"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const hid = btn.getAttribute('data-code');
+      const holder = document.getElementById(hid);
+      const canvas = holder?.querySelector('canvas');
+      const img    = holder?.querySelector('img');
+      const dataUrl = canvas?.toDataURL?.('image/png') || img?.src || '';
+      if(!dataUrl) return;
+      const tr = btn.closest('tr');
+      const code = tr?.children?.[1]?.textContent?.trim() || '';
+      const name = tr?.children?.[2]?.textContent?.trim() || '';
+      const a=document.createElement('a'); a.href=dataUrl; a.download=`QR_${safeFile(code)}_${safeFile(name)}.png`; a.click();
+    });
+  });
+  // Edit
+  tb.querySelectorAll('button[data-act="edit"]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openEditItem(btn.getAttribute('data-code')));
+  });
+  // Delete
+  tb.querySelectorAll('button[data-act="del"]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const code = btn.getAttribute('data-code');
+      if(!confirm(`商品（${code}）を削除しますか？`)) return;
+      try{
+        const r = await api('deleteItem',{ method:'POST', body:{ code } });
+        if(r && r.ok===false) throw new Error(r.error||'削除失敗');
+        await loadAll();
+      }catch(e){ alert(e.message||e); }
+    });
+  });
+  // Detail
+  tb.querySelectorAll('button[data-act="detail"], td.item-name').forEach(el=>{
+    el.addEventListener('click', ()=> openItemDetail(el.getAttribute('data-code')));
+  });
+
+  // Filter
+  qs('#items-search')?.addEventListener('input', (e)=>{
+    const q = String(e.target.value||'').toLowerCase();
+    state.filteredItems = state.items.filter(i=> String(i.name||'').toLowerCase().includes(q));
+    renderItems();
+  }, { once:true });
+}
+
+/* === Users (unchanged except visibility) === */
+function renderUsers(){
+  const btnAdd = qs('#btn-open-new-user');
+  const btnPrint = qs('#btn-print-qr-users');
+  const isAdmin = (state.currentUser.role === 'admin');
+  if (isAdmin) btnAdd?.classList.remove('d-none'); else btnAdd?.classList.add('d-none');
+  if (isAdmin) btnPrint?.classList.remove('d-none'); else btnPrint?.classList.add('d-none');
+
+  const tb = qs('#tbl-userqr'); if(!tb) return;
+  tb.innerHTML = '';
+  const grid = qs('#print-qr-users-grid'); if (grid) grid.innerHTML = '';
+
+  const list = isAdmin ? state.users : state.users.filter(u=> String(u.id) === String(state.currentUser.id));
+
+  list.forEach(u=>{
+    const idStr = String(u.id||'');
+    const holderId = `uqr-${idStr.replace(/[^\w\-:.]/g,'_')}`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="qr-cell"><div class="qrbox"><div id="${holderId}"></div><div class="caption">${u.name||''}（${u.id||''}）</div></div></td>
+      <td>${u.id||''}</td><td>${u.name||''}</td><td>${u.role||'user'}</td>
+      <td class="text-end"><button class="btn btn-sm btn-outline-secondary" data-act="dl" data-id="${holderId}" data-uid="${idStr}" data-name="${safeFile(u.name||'')}"><i class="bi bi-download"></i></button></td>`;
+    tb.appendChild(tr);
+
+    const div = document.getElementById(holderId);
+    if (div && typeof QRCode !== 'undefined') {
+      new QRCode(div, { text: userQrText(idStr), width:84, height:84, correctLevel: QRCode.CorrectLevel.M });
     }
-    .brand{ padding:20px 18px; display:flex; gap:12px; align-items:center; }
-    .brand img{ width:34px; height:34px; object-fit:contain; filter: drop-shadow(0 1px 6px rgba(255,255,255,.65)); }
-    .brand small{ color:#a8b6d0 }
-    .sidebar a.nav-link{ color:#cfe2ff; opacity:.92; border-radius:12px; padding:10px 14px; }
-    .sidebar a.nav-link.active, .sidebar a.nav-link:hover{ background:#1c3057; color:#fff; }
-    main{ margin-left:260px; padding:18px; }
-    header .btn-outline-secondary{ --bs-btn-color:#334155; --bs-btn-border-color:#cbd5e1; }
-    .metric{
-      background:var(--card); border:none; border-radius:16px; box-shadow:0 10px 30px rgba(15,33,62,.08);
+
+    // Print grid (A4)
+    const card=document.createElement('div'); card.className='qr-card';
+    const v=document.createElement('div'); v.id=`p-${holderId}`;
+    const title=document.createElement('div'); title.className='title'; title.textContent=`${u.name||''}（${u.id||''}｜${u.role||'user'}）`;
+    card.appendChild(v); card.appendChild(title); grid?.appendChild(card);
+    if (typeof QRCode !== 'undefined') new QRCode(v,{ text: userQrText(idStr), width:110, height:110, correctLevel:QRCode.CorrectLevel.M });
+  });
+
+  tb.querySelectorAll('button[data-act="dl"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const hid = btn.getAttribute('data-id');
+      const holder = document.getElementById(hid);
+      const canvas = holder?.querySelector('canvas');
+      const img    = holder?.querySelector('img');
+      const dataUrl = canvas?.toDataURL?.('image/png') || img?.src || '';
+      if(!dataUrl) return;
+      const code = btn.getAttribute('data-uid') || 'USER';
+      const name = btn.getAttribute('data-name') || '';
+      const a=document.createElement('a'); a.href=dataUrl; a.download=`USER_${safeFile(code)}_${safeFile(name)}.png`; a.click();
+    });
+  });
+}
+
+/* === History with edit === */
+function renderHistory(){
+  const tb=qs('#tbl-history'); if(!tb) return; tb.innerHTML='';
+  state.history.slice(-400).reverse().forEach(h=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${h.timestamp||''}</td>
+      <td>${h.userId||''}</td>
+      <td>${h.userName||''}</td>
+      <td>${h.code||''}</td>
+      <td>${h.itemName||''}</td>
+      <td class="text-end">${fmt(h.qty||0)}</td>
+      <td>${h.unit||''}</td>
+      <td>${h.type||''}</td>
+      <td>${h.note||''}</td>
+      <td><button class="btn btn-sm btn-outline-primary" data-act="hedit" data-row="${h._row||''}">✏️</button></td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('button[data-act="hedit"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const row = btn.getAttribute('data-row');
+      const item = state.history.find(x=>String(x._row)===String(row));
+      if(!item) return;
+      qs('#h-row').value = row;
+      qs('#h-userId').value = item.userId||'';
+      qs('#h-code').value = item.code||'';
+      qs('#h-qty').value = item.qty||0;
+      qs('#h-unit').value = item.unit||'pcs';
+      qs('#h-type').value = item.type||'IN';
+      qs('#h-note').value = item.note||'';
+      new bootstrap.Modal('#dlg-edit-history').show();
+    });
+  });
+}
+
+/* === IO: QR scan, manual lookup === */
+async function startBackCameraScan(mountId, onScan, boxSize=300){
+  const cfg = { fps:10, qrbox:{ width:boxSize, height:boxSize } };
+  const scanner = new Html5Qrcode(mountId);
+  try{ await scanner.start({ facingMode:'environment' }, cfg, onScan); return scanner; }catch(_){}
+  const cams = await Html5Qrcode.getCameras();
+  if(!cams || !cams.length) throw new Error('カメラが見つかりません');
+  const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams[cams.length-1] || cams[0];
+  await scanner.start({ deviceId:{ exact: back.id } }, cfg, onScan); return scanner;
+}
+function fillIoForm(it){ qs('#io-code').value=it.code||''; qs('#io-name').value=it.name||''; qs('#io-price').value=it.price||''; qs('#io-stock').value=it.stock||''; }
+async function startIoScan(){ try{ state.ioScanner=await startBackCameraScan('io-scan-area', onScanIo, (isMobile()?240:300)); }catch(e){ alert('カメラが見つかりません: '+(e?.message||e)) } }
+async function stopIoScan(){ try{ await state.ioScanner?.stop(); state.ioScanner?.clear(); }catch(_){ } state.ioScanner=null; }
+function onScanIo(text){
+  try{
+    let code='';
+    if(text.startsWith('ITEM|')) code=text.split('|')[1]||'';
+    else { try{ const o=JSON.parse(text); code=o.code||''; }catch(_){ } }
+    if(code){
+      const it=state.items.find(x=>String(x.code)===String(code)) || {code, name:'', price:0, stock:0};
+      fillIoForm(it); qs('#io-qty').focus();
     }
-    .metric .icon{
-      width:44px;height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#fff;
-      filter: drop-shadow(0 4px 10px rgba(37, 99, 235, .35));
+  }catch(_){ }
+}
+async function lookupIo(){
+  const code = qs('#io-code').value.trim();
+  if(!code) return;
+  try{
+    const r = await api('itemByCode',{ method:'POST', body:{ code } });
+    if(!r || r.ok===false) return alert(r?.error || '商品が見つかりません');
+    fillIoForm(r.item || {});
+  }catch(e){ alert(e.message||e); }
+}
+
+/* === Stocktake scan (no change except bugfix) === */
+async function startScanner(){ try{ state.scanner=await startBackCameraScan('scan-area', onScanStocktake, (isMobile()?240:300)); }catch(e){ alert('カメラが見つかりません: '+(e?.message||e)) } }
+async function stopScanner(){ try{ await state.scanner?.stop(); state.scanner?.clear(); }catch(_){ } state.scanner=null; }
+function onScanStocktake(text){
+  try{
+    let code='';
+    if(text.startsWith('ITEM|')) code=text.split('|')[1]||'';
+    else { try{ const o=JSON.parse(text); code=o.code||''; }catch(_){ } }
+    if(code){
+      const it=state.items.find(x=>String(x.code)===String(code));
+      pushStocktake(code, it?.name||'', Number(it?.stock||0), Number(it?.stock||0));
     }
-    .icon-c1{ background:linear-gradient(135deg,#60a5fa,#2563eb) }
-    .icon-c2{ background:linear-gradient(135deg,#fb923c,#f97316) }
-    .icon-c3{ background:linear-gradient(135deg,#34d399,#16a34a) }
-    .icon-c4{ background:linear-gradient(135deg,#c084fc,#a855f7) }
-    .muted{ color:var(--muted) }
-    .table-sm td,.table-sm th{ padding:.55rem .6rem }
+  }catch(_){}
+}
+function pushStocktake(code,name,book,real){
+  const diff=Number(real)-Number(book);
+  state.stocktakeRows.unshift({code,name,book,real,diff});
+  const tb=qs('#tbl-stocktake'); if(!tb) return; tb.innerHTML='';
+  state.stocktakeRows.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.code}</td><td>${r.name}</td>
+      <td class="text-end">${fmt(r.book)}</td>
+      <td class="text-end">${fmt(r.real)}</td>
+      <td class="text-end">${fmt(r.diff)}</td>`;
+    tb.appendChild(tr);
+  });
+}
 
-    #view-items table td:nth-child(3){ max-width: 320px; overflow-wrap:anywhere; line-height:1.35; }
-    #view-items img.thumb{ max-width:72px; max-height:48px; object-fit:cover; border-radius:8px }
-    td.qr-cell > .qrbox{ display:inline-flex; flex-direction:column; align-items:center; }
-    td.qr-cell > .qrbox > div{ width:84px; height:84px; }
-    td.qr-cell .caption{ font-size:.75rem; color:var(--muted); margin-top:.25rem }
-
-    .loading{ position:fixed; inset:0; z-index:2000; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(15,22,40,.35); backdrop-filter: blur(2px); }
-    .loading.d-none{ display:none }
-    .loading .spinner{ width:56px; height:56px; border-radius:50%; border:6px solid #ffffff66; border-top-color:#4f8cff; animation:spin .9s linear infinite }
-    .loading .text{ color:#fff; margin-top:10px; font-weight:600 }
-    @keyframes spin{ to{ transform:rotate(360deg) } }
-
-    @media (max-width: 991px){
-      .sidebar{ transform:translateX(-100%); transition:transform .28s ease; z-index:1045; }
-      .sidebar.show{ transform:translateX(0) }
-      main{ margin-left:0 }
-    }
-    #sb-backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.45); opacity:0; visibility:hidden; transition:opacity .2s ease, visibility .2s ease; z-index:1040; }
-    #sb-backdrop.show{ opacity:1; visibility:visible }
-  </style>
-
-  <script src="config.js"></script>
-</head>
-<body>
-<div id="sb-backdrop" aria-hidden="true"></div>
-
-<aside id="sb" class="sidebar" aria-label="Sidebar">
-  <div class="brand">
-    <img id="brand-logo" src="./assets/tsh.png" alt="logo">
-    <div>
-      <div class="fw-bold">TSH 在庫管理</div>
-      <small id="who">Administrator</small>
-    </div>
-  </div>
-  <nav class="px-3">
-    <a class="nav-link active" data-view="view-dashboard"><i class="bi bi-speedometer2 me-2"></i>ダッシュボード</a>
-    <a class="nav-link" data-view="view-io"><i class="bi bi-arrow-left-right me-2"></i>入出庫（QR対応）</a>
-    <a class="nav-link" data-view="view-stocktake"><i class="bi bi-clipboard2-data me-2"></i>棚卸</a>
-    <a class="nav-link" data-view="view-items"><i class="bi bi-box-seam me-2"></i>商品一覧</a>
-    <a class="nav-link" data-view="view-users"><i class="bi bi-people me-2"></i>ユーザー / QR</a>
-    <a class="nav-link" data-view="view-history"><i class="bi bi-clock-history me-2"></i>履歴</a>
-  </nav>
-</aside>
-
-<main>
-  <header class="d-flex justify-content-between align-items-center mb-3">
-    <div class="d-flex align-items-center gap-2">
-      <button id="burger" class="btn btn-outline-secondary d-lg-none" aria-label="Toggle menu"><i class="bi bi-list"></i></button>
-      <h4 id="page-title" class="mb-0">ダッシュボード</h4>
-    </div>
-    <button id="btn-logout" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-right me-1"></i> ログアウト</button>
-  </header>
-
-  <!-- ===== ダッシュボード ===== -->
-  <section id="view-dashboard">
-    <div class="row g-3 mb-3">
-      <div class="col-12 col-md-6 col-lg-3"><div class="card metric p-3"><div class="d-flex align-items-center gap-3"><div class="icon icon-c1"><i class="bi bi-box-seam-fill fs-5"></i></div><div><div class="muted small">総アイテム</div><div id="metric-total-items" class="fs-4 fw-bold">—</div></div></div></div></div>
-      <div class="col-12 col-md-6 col-lg-3"><div class="card metric p-3"><div class="d-flex align-items-center gap-3"><div class="icon icon-c2"><i class="bi bi-exclamation-triangle-fill fs-5"></i></div><div><div class="muted small">最小在庫以下</div><div id="metric-low-stock" class="fs-4 fw-bold">—</div></div></div></div></div>
-      <div class="col-12 col-md-6 col-lg-3"><div class="card metric p-3"><div class="d-flex align-items-center gap-3"><div class="icon icon-c3"><i class="bi bi-people-fill fs-5"></i></div><div><div class="muted small">ユーザー</div><div id="metric-users" class="fs-4 fw-bold">—</div></div></div></div></div>
-      <div class="col-12 col-md-6 col-lg-3"><div class="card metric p-3"><div class="d-flex align-items-center gap-3"><div class="icon icon-c4"><i class="bi bi-activity fs-5"></i></div><div><div class="muted small">直近30日の取引</div><div id="metric-txn" class="fs-4 fw-bold">—</div></div></div></div></div>
-    </div>
-
+/* === Item detail === */
+function openItemDetail(code){
+  const it = state.items.find(x=>String(x.code)===String(code));
+  if(!it){ alert('商品が見つかりません'); return; }
+  const host = qs('#card-item-detail'); const body=qs('#item-detail-body');
+  const recent = state.history.filter(h=>String(h.code)===String(code)).slice(-20).reverse();
+  body.innerHTML = `
     <div class="row g-3">
-      <div class="col-12 col-lg-8">
-        <div class="card metric p-3">
-          <div class="fw-semibold mb-2">月次 IN / OUT</div>
-          <canvas id="chart-monthly" height="130"></canvas>
+      <div class="col-md-4">
+        <div class="p-3 border rounded">
+          <div class="fw-semibold mb-2">${it.name||''}（${it.code}）</div>
+          ${it.img? `<img src="${it.img}" class="img-fluid rounded mb-2">` : ''}
+          <div class="small text-muted">置場: ${it.location||'-'}</div>
+          <div class="small text-muted">価格: ¥${fmt(it.price||0)}</div>
+          <div class="small text-muted">在庫: ${fmt(it.stock||0)}</div>
+          <div class="small text-muted">最小: ${fmt(it.min||0)}</div>
+          <div class="small text-muted">ロット: ${it.lotQty||'-'} ${it.lotUnit||''}</div>
         </div>
       </div>
-      <div class="col-12 col-lg-4">
-        <div class="card metric p-3">
-          <div class="fw-semibold mb-2">今月の比率</div>
-          <canvas id="chart-pie" height="130"></canvas>
+      <div class="col-md-8">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead><tr><th>日時</th><th>ユーザー</th><th class="text-end">数量</th><th>単位</th><th>種別</th></tr></thead>
+            <tbody>
+              ${recent.map(h=>`<tr><td>${h.timestamp||''}</td><td>${h.userName||h.userId||''}</td><td class="text-end">${fmt(h.qty||0)}</td><td>${h.unit||''}</td><td>${h.type||''}</td></tr>`).join('')}
+            </tbody>
+          </table>
         </div>
       </div>
-    </div>
+    </div>`;
+  host.classList.remove('d-none');
+  qs('#btn-close-detail')?.addEventListener('click', ()=> host.classList.add('d-none'), { once:true });
+  showView('view-items','商品一覧');
+}
 
-    <div class="card metric p-3 mt-3">
-      <div class="d-flex justify-content-between align-items-center">
-        <div class="fw-semibold">今月の入出庫（商品別）</div>
-        <div class="d-flex gap-2">
-          <button id="btn-export-mov" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i> CSV</button>
-        </div>
-      </div>
-      <div class="table-responsive mt-2">
-        <table class="table table-sm align-middle">
-          <thead><tr><th>コード</th><th>名称</th><th class="text-end">IN</th><th class="text-end">OUT</th><th class="text-end">NET</th></tr></thead>
-          <tbody id="tbl-mov"></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
+/* === Edit item modal === */
+function openEditItem(code){
+  const it = state.items.find(x=>String(x.code)===String(code));
+  if(!it) return alert('商品が見つかりません');
+  qs('#e-code').value = it.code||'';
+  qs('#e-name').value = it.name||'';
+  qs('#e-price').value= it.price||0;
+  qs('#e-stock').value= it.stock||0;
+  qs('#e-min').value  = it.min||0;
+  qs('#e-img').value  = it.img||'';
+  qs('#e-location').value = it.location||'';
+  qs('#e-lotUnit').value  = it.lotUnit||'pcs';
+  qs('#e-lotQty').value   = it.lotQty||0;
+  new bootstrap.Modal('#dlg-edit-item').show();
+}
 
-  <!-- ===== 入出庫（QR対応） ===== -->
-  <section id="view-io" class="d-none">
-    <div class="card metric p-3 mb-3">
-      <div class="fw-semibold mb-2">スキャン</div>
-      <div class="d-flex gap-2 mb-2">
-        <button id="btn-io-scan" class="btn btn-primary"><i class="bi bi-qr-code-scan me-1"></i> 開始</button>
-        <button id="btn-io-stop" class="btn btn-outline-secondary">停止</button>
-      </div>
-      <div id="io-scan-area" style="width:320px;max-width:100%"></div>
-    </div>
+/* === events === */
+window.addEventListener('DOMContentLoaded', async ()=>{
+  updateWho();
+  qsa('aside nav a').forEach(a=>a.addEventListener('click',()=>showView(a.getAttribute('data-view'), a.textContent.trim())));
+  qs('#btn-logout')?.addEventListener('click',()=>{ localStorage.removeItem('currentUser'); location.href='index.html'; });
 
-    <div class="card metric p-3">
-      <div class="fw-semibold mb-2">入出庫入力</div>
-      <form id="form-io" class="row g-3">
-        <div class="col-md-3">
-          <label class="form-label">コード</label>
-          <div class="input-group">
-            <input id="io-code" class="form-control" required>
-            <button id="btn-io-lookup" class="btn btn-outline-secondary" type="button"><i class="bi bi-search"></i></button>
-          </div>
-        </div>
-        <div class="col-md-4"><label class="form-label">名称</label><input id="io-name" class="form-control" readonly></div>
-        <div class="col-md-2"><label class="form-label">価格</label><input id="io-price" class="form-control" readonly></div>
-        <div class="col-md-2"><label class="form-label">在庫</label><input id="io-stock" class="form-control" readonly></div>
-        <div class="col-md-2"><label class="form-label">数量</label><input id="io-qty" type="number" class="form-control" required></div>
-        <div class="col-md-2"><label class="form-label">単位</label>
-          <select id="io-unit" class="form-select"><option value="pcs">pcs</option><option value="g">g</option></select>
-        </div>
-        <div class="col-md-2"><label class="form-label">種別</label>
-          <select id="io-type" class="form-select"><option>IN</option><option>OUT</option></select>
-        </div>
-        <div class="col-12"><button class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i> 登録</button></div>
-      </form>
-    </div>
-  </section>
+  // IO form
+  qs('#btn-io-scan')?.addEventListener('click', startIoScan);
+  qs('#btn-io-stop')?.addEventListener('click', stopIoScan);
+  qs('#btn-io-lookup')?.addEventListener('click', lookupIo);
+  qs('#io-code')?.addEventListener('change', lookupIo);
+  qs('#form-io')?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const body={ userId:state.currentUser.id, code:qs('#io-code').value.trim(), qty:Number(qs('#io-qty').value||0), unit:qs('#io-unit').value, type:qs('#io-type').value };
+    if(!body.code || !body.qty){ alert('コード/数量は必須'); return; }
+    try{
+      const r=await api('log',{method:'POST',body});
+      if(r && r.ok===false) return alert(r.error||'エラー');
+      alert('登録しました');
+      await loadAll(); showView('view-history','履歴');
+      fillIoForm({code:'',name:'',price:'',stock:''}); qs('#io-qty').value='';
+    }catch(err){ alert('登録失敗: '+(err?.message||err)); }
+  });
 
-  <!-- ===== 棚卸 ===== -->
-  <section id="view-stocktake" class="d-none">
-    <div class="card metric p-3 mb-3">
-      <div class="fw-semibold mb-2">QRスキャン</div>
-      <div class="d-flex gap-2 mb-2">
-        <button id="btn-start-scan" class="btn btn-primary"><i class="bi bi-qr-code-scan me-1"></i> 開始</button>
-        <button id="btn-stop-scan" class="btn btn-outline-secondary">停止</button>
-        <button id="st-export" class="btn btn-outline-secondary ms-auto"><i class="bi bi-filetype-csv me-1"></i> CSV出力</button>
-      </div>
-      <div id="scan-area" style="width:320px;max-width:100%"></div>
-    </div>
+  // Stocktake
+  qs('#btn-start-scan')?.addEventListener('click', startScanner);
+  qs('#btn-stop-scan')?.addEventListener('click', stopScanner);
+  qs('#st-add')?.addEventListener('click', (e)=>{ e.preventDefault(); const code=qs('#st-code').value.trim(); const real=Number(qs('#st-qty').value||0); if(!code) return; const it=state.items.find(x=>String(x.code)===String(code)); pushStocktake(code, it?.name||'', Number(it?.stock||0), real); });
+  qs('#st-export')?.addEventListener('click', ()=>{
+    const head='code,name,book,real,diff\n';
+    const lines=state.stocktakeRows.map(r=>[r.code,r.name,r.book,r.real,r.diff].join(',')).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='stocktake.csv'; a.click();
+  });
 
-    <div class="card metric p-3">
-      <div class="fw-semibold mb-2">手動追加</div>
-      <div class="row g-3 align-items-end">
-        <div class="col-md-3"><label class="form-label">コード</label><input id="st-code" class="form-control"></div>
-        <div class="col-md-2"><label class="form-label">数量</label><input id="st-qty" type="number" class="form-control" value="0"></div>
-        <div class="col-md-2"><button id="st-add" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> 追加</button></div>
-      </div>
+  // Items export & add
+  qs('#btn-items-export')?.addEventListener('click', ()=>{
+    const head='code,name,price,stock,min,location,lotUnit,lotQty\n';
+    const lines=state.items.map(r=>[r.code,r.name,r.price,r.stock,r.min,r.location||'',r.lotUnit||'',r.lotQty||0].join(',')).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='items.csv'; a.click();
+  });
+  qs('#btn-items-xlsx')?.addEventListener('click', ()=>{
+    const data = state.items.map(r=>({ code:r.code, name:r.name, price:r.price, stock:r.stock, min:r.min, location:r.location, lotUnit:r.lotUnit, lotQty:r.lotQty }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Items');
+    XLSX.writeFile(wb, 'items.xlsx');
+  });
 
-      <div class="table-responsive mt-3">
-        <table class="table table-sm align-middle">
-          <thead><tr><th>コード</th><th>名称</th><th class="text-end">帳簿在庫</th><th class="text-end">実在庫</th><th class="text-end">差分</th></tr></thead>
-        <tbody id="tbl-stocktake"></tbody></table>
-      </div>
-    </div>
-  </section>
+  // Modal Item (new)
+  const modalItem   = document.getElementById('dlg-new-item') ? new bootstrap.Modal('#dlg-new-item') : null;
+  qs('#btn-open-new-item')?.addEventListener('click', ()=>{
+    qs('#i-code').value  = nextItemCode();
+    qs('#i-name').value  = '';
+    qs('#i-price').value = 0;
+    qs('#i-stock').value = 0;
+    qs('#i-min').value   = 0;
+    qs('#i-img').value   = '';
+    qs('#i-location').value = '';
+    qs('#i-lotUnit').value  = 'pcs';
+    qs('#i-lotQty').value   = 0;
+    modalItem?.show();
+  });
+  qs('#form-item')?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const body={
+      code:qs('#i-code').value.trim(),
+      name:qs('#i-name').value.trim(),
+      price:Number(qs('#i-price').value||0),
+      stock:Number(qs('#i-stock').value||0),
+      min:Number(qs('#i-min').value||0),
+      img:qs('#i-img').value.trim(),
+      location:qs('#i-location').value.trim(),
+      lotUnit:qs('#i-lotUnit').value.trim()||'pcs',
+      lotQty:Number(qs('#i-lotQty').value||0),
+      overwrite:false
+    };
+    if(!body.code || !body.name){ alert('コード/名称は必須'); return; }
+    try{
+      const r=await api('addItem',{method:'POST',body});
+      if(r && r.ok===false) throw new Error(r.error||'登録失敗');
+      modalItem?.hide(); await loadAll(); showView('view-items','商品一覧');
+    }catch(err){ alert(err.message); }
+  });
+  qs('#btn-item-makeqr')?.addEventListener('click', ()=>{
+    const i={ code:qs('#i-code').value.trim(), name:qs('#i-name').value.trim(), price:Number(qs('#i-price').value||0) };
+    const tmp=document.createElement('div'); if(typeof QRCode!=='undefined'){ new QRCode(tmp,{ text:itemQrText(i.code), width:240, height:240, correctLevel:QRCode.CorrectLevel.M }); }
+    const canvas=tmp.querySelector('canvas'); const dataUrl=canvas?canvas.toDataURL('image/png'):''; const w=window.open('','qrprev','width=420,height=520');
+    w.document.write(`<div style="padding:20px;text-align:center;font-family:sans-serif"><img src="${dataUrl}" style="width:240px;height:240px"/><div style="margin-top:8px">${i.name}（${i.code}） ¥${fmt(i.price||0)}</div></div>`); tmp.remove();
+  });
 
-  <!-- ===== 商品一覧 ===== -->
-  <section id="view-items" class="d-none">
-    <div class="card metric p-3">
-      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div class="fw-semibold">商品一覧</div>
-        <div class="d-flex gap-2">
-          <input id="items-search" class="form-control form-control-sm" placeholder="名称で検索…" style="min-width:220px">
-          <button id="btn-items-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i> CSV</button>
-          <button id="btn-items-xlsx" class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-excel me-1"></i> Excel</button>
-          <button id="btn-open-new-item" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg me-1"></i> 新規</button>
-        </div>
-      </div>
-      <div class="table-responsive mt-2">
-        <table class="table table-sm align-middle">
-          <thead>
-            <tr>
-              <th>QR</th><th>コード</th><th>名称</th><th>画像</th>
-              <th class="text-end">価格</th><th class="text-end">在庫</th><th class="text-end">最小</th>
-              <th>置場</th>
-              <th class="text-end">DL</th>
-              <th class="text-end">操作</th>
-            </tr>
-          </thead>
-          <tbody id="tbl-items"></tbody>
-        </table>
-      </div>
-    </div>
+  // Modal Item (edit)
+  const modalEditItem = document.getElementById('dlg-edit-item') ? new bootstrap.Modal('#dlg-edit-item') : null;
+  qs('#form-edit-item')?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const body={
+      code:qs('#e-code').value.trim(),
+      name:qs('#e-name').value.trim(),
+      price:Number(qs('#e-price').value||0),
+      stock:Number(qs('#e-stock').value||0),
+      min:Number(qs('#e-min').value||0),
+      img:qs('#e-img').value.trim(),
+      location:qs('#e-location').value.trim(),
+      lotUnit:qs('#e-lotUnit').value.trim(),
+      lotQty:Number(qs('#e-lotQty').value||0),
+      overwrite:true
+    };
+    try{
+      const r=await api('updateItem',{method:'POST',body});
+      if(r && r.ok===false) throw new Error(r.error||'更新失敗');
+      modalEditItem?.hide(); await loadAll();
+    }catch(err){ alert(err.message||err); }
+  });
 
-    <!-- 新規商品モーダル -->
-    <div class="modal fade" id="dlg-new-item" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
-      <div class="modal-header"><h6 class="modal-title">新規商品</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <form id="form-item" class="row g-3">
-          <div class="col-md-3"><label class="form-label">コード</label><input id="i-code" class="form-control" required></div>
-          <div class="col-md-6"><label class="form-label">名称</label><input id="i-name" class="form-control" required></div>
-          <div class="col-md-3"><label class="form-label">価格</label><input id="i-price" type="number" class="form-control" value="0"></div>
-          <div class="col-md-3"><label class="form-label">在庫</label><input id="i-stock" type="number" class="form-control" value="0"></div>
-          <div class="col-md-3"><label class="form-label">最小</label><input id="i-min" type="number" class="form-control" value="0"></div>
-          <div class="col-md-6"><label class="form-label">画像URL（任意）</label><input id="i-img" class="form-control" placeholder="https://..."></div>
-          <div class="col-md-4"><label class="form-label">置場</label><input id="i-location" class="form-control" placeholder="A-01"></div>
-          <div class="col-md-4"><label class="form-label">ロット単位</label>
-            <input id="i-lotUnit" class="form-control" placeholder="pcs / box / pack">
-          </div>
-          <div class="col-md-4"><label class="form-label">ロット数量</label>
-            <input id="i-lotQty" type="number" class="form-control" placeholder="10 / 20">
-          </div>
-          <div class="col-12 d-flex gap-2">
-            <button class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i> 登録</button>
-            <button id="btn-item-makeqr" type="button" class="btn btn-outline-secondary"><i class="bi bi-qr-code me-1"></i> QRをプレビュー</button>
-          </div>
-        </form>
-      </div>
-    </div></div></div>
+  // Modal User (unchanged)
+  const modalUser   = document.getElementById('dlg-new-user') ? new bootstrap.Modal('#dlg-new-user') : null;
+  qs('#btn-open-new-user')?.addEventListener('click', ()=>modalUser?.show());
+  qs('#form-user')?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const body={ name:qs('#u-name').value.trim(), id:qs('#u-id').value.trim(), role:qs('#u-role').value, pin:qs('#u-pin').value.trim() };
+    try{ const r=await api('addUser',{method:'POST',body}); if(r && r.ok===false) throw new Error(r.error||'エラー'); modalUser?.hide(); await loadAll(); showView('view-users','ユーザー / QR'); }catch(err){ alert(err.message); }
+  });
+  qs('#btn-print-qr-users')?.addEventListener('click', ()=>{ /* A4 */ });
 
-    <!-- 編集商品モーダル -->
-    <div class="modal fade" id="dlg-edit-item" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
-      <div class="modal-header"><h6 class="modal-title">商品を編集</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <form id="form-edit-item" class="row g-3">
-          <div class="col-md-3"><label class="form-label">コード</label><input id="e-code" class="form-control" readonly></div>
-          <div class="col-md-6"><label class="form-label">名称</label><input id="e-name" class="form-control" required></div>
-          <div class="col-md-3"><label class="form-label">価格</label><input id="e-price" type="number" class="form-control"></div>
-          <div class="col-md-3"><label class="form-label">在庫</label><input id="e-stock" type="number" class="form-control"></div>
-          <div class="col-md-3"><label class="form-label">最小</label><input id="e-min" type="number" class="form-control"></div>
-          <div class="col-md-6"><label class="form-label">画像URL（任意）</label><input id="e-img" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label">置場</label><input id="e-location" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label">ロット単位</label><input id="e-lotUnit" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label">ロット数量</label><input id="e-lotQty" type="number" class="form-control"></div>
-          <div class="col-12 d-flex gap-2">
-            <button class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i> 保存</button>
-          </div>
-        </form>
-      </div>
-    </div></div></div>
+  // Edit history submit
+  qs('#form-edit-history')?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const body={
+      row: Number(qs('#h-row').value),
+      userId: qs('#h-userId').value.trim(),
+      code:   qs('#h-code').value.trim(),
+      qty:    Number(qs('#h-qty').value||0),
+      unit:   qs('#h-unit').value.trim(),
+      type:   qs('#h-type').value,
+      note:   qs('#h-note').value.trim()
+    };
+    try{
+      const r = await api('historyEdit',{ method:'POST', body });
+      if(!r || r.ok===false) throw new Error(r?.error||'修正に失敗しました');
+      bootstrap.Modal.getInstance(document.getElementById('dlg-edit-history'))?.hide();
+      await loadAll(); showView('view-history','履歴');
+    }catch(err){ alert(err.message||err); }
+  });
 
-    <!-- 詳細ページ -->
-    <div class="card metric p-3 mt-3 d-none" id="card-item-detail">
-      <div class="d-flex justify-content-between align-items-center">
-        <div class="fw-semibold">商品詳細</div>
-        <button id="btn-close-detail" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-lg"></i></button>
-      </div>
-      <div id="item-detail-body" class="mt-2"></div>
-    </div>
-  </section>
+  // init
+  showView('view-dashboard','ダッシュボード');
+  await loadAll();
+});
 
-  <!-- ===== ユーザー / QR ===== -->
-  <section id="view-users" class="d-none">
-    <div class="card metric p-3">
-      <div class="d-flex justify-content-between align-items-center">
-        <div class="fw-semibold">ユーザー / QR</div>
-        <div class="d-flex gap-2">
-          <button id="btn-print-qr-users" class="btn btn-sm btn-outline-secondary"><i class="bi bi-printer me-1"></i> 印刷（A4）</button>
-          <button id="btn-open-new-user" class="btn btn-sm btn-primary d-none"><i class="bi bi-person-plus me-1"></i> 追加</button>
-        </div>
-      </div>
-      <div class="table-responsive mt-2">
-        <table class="table table-sm align-middle">
-          <thead><tr><th>QR</th><th>ID</th><th>名前</th><th>ロール</th><th class="text-end">DL</th></tr></thead>
-          <tbody id="tbl-userqr"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div id="print-qr-users" class="d-none">
-      <div class="p-4">
-        <div id="print-qr-users-grid" class="d-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px"></div>
-      </div>
-    </div>
-
-    <div class="modal fade" id="dlg-new-user" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog"><div class="modal-content">
-        <div class="modal-header"><h6 class="modal-title">ユーザーを追加</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body">
-          <form id="form-user" class="row g-3">
-            <div class="col-12"><label class="form-label">名前</label><input id="u-name" class="form-control" required></div>
-            <div class="col-md-6"><label class="form-label">ID</label><input id="u-id" class="form-control" required placeholder="USR001"></div>
-            <div class="col-md-6"><label class="form-label">ロール</label>
-              <select id="u-role" class="form-select"><option value="user">user</option><option value="admin">admin</option></select>
-            </div>
-            <div class="col-12"><label class="form-label">PIN（任意）</label><input id="u-pin" class="form-control" placeholder="1234"></div>
-            <div class="col-12"><button class="btn btn-primary w-100"><i class="bi bi-check2-circle me-1"></i> 登録</button></div>
-          </form>
-        </div>
-      </div></div>
-    </div>
-  </section>
-
-  <!-- ===== 履歴 ===== -->
-  <section id="view-history" class="d-none">
-    <div class="card metric p-3">
-      <div class="d-flex justify-content-between align-items-center">
-        <div class="fw-semibold">履歴</div>
-      </div>
-      <div class="table-responsive mt-2">
-        <table class="table table-sm align-middle">
-          <thead>
-            <tr>
-              <th>日時</th><th>ユーザー</th><th>ユーザー名</th><th>コード</th><th>名称</th>
-              <th class="text-end">数量</th><th>単位</th><th>種別</th><th>備考</th><th>編集</th>
-            </tr>
-          </thead>
-          <tbody id="tbl-history"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 編集履歴モーダル -->
-    <div class="modal fade" id="dlg-edit-history" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-      <div class="modal-header"><h6 class="modal-title">履歴を修正</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <form id="form-edit-history" class="row g-3">
-          <input type="hidden" id="h-row">
-          <div class="col-md-4"><label class="form-label">ユーザーID</label><input id="h-userId" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label">コード</label><input id="h-code" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label">数量</label><input id="h-qty" type="number" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label">単位</label><input id="h-unit" class="form-control" placeholder="pcs"></div>
-          <div class="col-md-4"><label class="form-label">種別</label>
-            <select id="h-type" class="form-select"><option>IN</option><option>OUT</option></select>
-          </div>
-          <div class="col-12"><label class="form-label">備考</label><input id="h-note" class="form-control" placeholder="誤入力の修正など"></div>
-          <div class="col-12"><button class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i> 保存</button></div>
-        </form>
-      </div>
-    </div></div></div>
-  </section>
-
-</main>
-
-<div id="global-loading" class="loading d-none"><div class="spinner"></div><div id="loading-text" class="text">読み込み中…</div></div>
-
-<!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js"></script>
-
-<script src="app.js"></script>
-</body>
-</html>
+// === util
+function nextItemCode(){
+  const nums=state.items.map(i=>String(i.code||'')).map(c=>/^\d+$/.test(c)?Number(c):NaN).filter(n=>!isNaN(n));
+  const max=nums.length?Math.max(...nums):0;
+  const width=Math.max(4, ...state.items.map(i=>String(i.code||'').length||0)) || 4;
+  return String(max+1).padStart(width,'0');
+}
