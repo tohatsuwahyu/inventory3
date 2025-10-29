@@ -31,6 +31,32 @@
     main{flex:1}
     .layout{display:flex;min-height:100vh;gap:0}
     .content{padding:16px}
+    /* ==== Scan area: kecil & tetap proporsional ==== */
+#io-scan-area,
+#scan-area{
+  width:100%;
+  max-width:420px;        /* atur ukuran di sini (320–480px) */
+  margin:0 auto;
+  aspect-ratio: 4 / 3;    /* proporsi kamera */
+  position:relative;
+  overflow:hidden;
+  background:#0b0b0b10;
+  border-radius:12px;
+}
+
+/* library html5-qrcode sering set width:100% -> tetapkan ke container */
+#io-scan-area video,
+#io-scan-area canvas,
+#io-scan-area img,
+#scan-area video,
+#scan-area canvas,
+#scan-area img{
+  width:100% !important;
+  height:100% !important;
+  object-fit:cover;
+}
+.html5-qrcode-element{ display:none !important; } /* sembunyikan tombol default lib */
+
   </style>
 </head>
 <body>
