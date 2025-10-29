@@ -1,3 +1,4 @@
+// ======== app.js (versi perbaikan penuh) ========
 /*************************************************
  * app.js — Inventory Dashboard
  * - Fix QR hilang: pastikan QRCode (qrlib.js) ada sebelum render
@@ -66,7 +67,6 @@ window.addEventListener('keydown', e=>{ if(e.key==='Escape') openMenu(false); })
 // =====================================================
 // html5-qrcode loader (root → vendor → CDN)  **FIXED**
 // =====================================================
-// ——— Loader html5-qrcode dengan fallback ———
 let html5qrcodeReady = !!window.Html5Qrcode;
 function loadScriptOnce(src){
   return new Promise((res, rej)=>{
@@ -78,7 +78,6 @@ function loadScriptOnce(src){
 }
 async function ensureHtml5Qrcode(){
   if (window.Html5Qrcode) { html5qrcodeReady = true; return; }
-  // coba CDN → fallback vendor (jaga-jaga kalau urutan <script> berubah)
   try { await loadScriptOnce('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js'); } catch {}
   if (!window.Html5Qrcode) {
     try { await loadScriptOnce('./vendor/html5-qrcode.min.js'); } catch {}
@@ -86,15 +85,13 @@ async function ensureHtml5Qrcode(){
   html5qrcodeReady = !!window.Html5Qrcode;
 }
 
-// ——— Start scan kamera belakang TANPA enum yang deprecated ———
+// ——— Start scan kamera belakang TANPA enum deprecated ———
 async function startBackCameraScan(mountId, onScan, boxSize = 300){
-  // 1) Coba native BarcodeDetector bila ada
   if ('BarcodeDetector' in window) {
     try { return await startNativeDetector(mountId, onScan, boxSize); }
     catch (e) { console.warn('BarcodeDetector gagal, fallback ke html5-qrcode', e); }
   }
 
-  // 2) html5-qrcode
   await ensureHtml5Qrcode();
   if (!window.Html5Qrcode) throw new Error('ライブラリ html5-qrcode を読み込めませんでした。');
 
@@ -102,11 +99,9 @@ async function startBackCameraScan(mountId, onScan, boxSize = 300){
   const scanner = new Html5Qrcode(mountId);
 
   try {
-    // Prefer facingMode: environment (ini pengganti Html5QrcodeScanType.BACK_CAMERA)
     await scanner.start({ facingMode: 'environment' }, cfg, (txt)=>onScan(txt));
     return scanner;
   } catch (err1) {
-    // Fallback pilih deviceId terakhir (seringkali kamera belakang)
     try {
       const cams = await Html5Qrcode.getCameras();
       if (!cams || !cams.length) throw err1;
@@ -121,7 +116,7 @@ async function startBackCameraScan(mountId, onScan, boxSize = 300){
   }
 }
 
-// ——— Native detector (tetap dipertahankan) ———
+// ——— Native detector ———
 async function startNativeDetector(mountId, onScan, boxSize = 300){
   const mount = document.getElementById(mountId);
   mount.innerHTML = '';
@@ -134,7 +129,7 @@ async function startNativeDetector(mountId, onScan, boxSize = 300){
   const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
   video.srcObject = stream; await video.play();
 
-  const detector = new BarcodeDetector({ formats: ['qr_code','code_128','code_39','ean_13','ean_8'] });
+  const detector = new BarcodeDetector({ formats: ['qr_code'] });
   let stopped = false, last = '';
   async function tick(){
     if (stopped) return;
@@ -155,7 +150,7 @@ async function startNativeDetector(mountId, onScan, boxSize = 300){
   return { stop, clear: ()=>{} };
 }
 
-// API
+// ===== API wrapper (GAS) =====
 async function api(action, {method='GET', body, showLoading=true, loadingText='通信中…'}={}){
   if(!window.CONFIG || !CONFIG.BASE_URL) throw new Error('config.js belum diisi (BASE_URL kosong)');
   const apikey = encodeURIComponent(CONFIG.API_KEY||'');
@@ -179,7 +174,7 @@ async function api(action, {method='GET', body, showLoading=true, loadingText='�
 }
 function normArr(r, key){ if(Array.isArray(r)) return r; if(r&&Array.isArray(r[key])) return r[key]; if(r&&r.data&&Array.isArray(r.data)) return r.data; return []; }
 
-// LOAD ALL
+// ===== Load semua data =====
 async function loadAll(){
   loading(true,'データ読込中…');
   try{
@@ -203,7 +198,7 @@ async function loadAll(){
   }finally{ loading(false); }
 }
 
-// Charts
+// ===== Dashboard widgets =====
 function parseTs(s){ if(!s) return null; const d=new Date(s.replace(' ','T')); return isNaN(+d)?null:d; }
 function renderMetrics(){
   qs('#metric-total-items').textContent = fmt(state.items.length);
@@ -263,14 +258,13 @@ function renderMovementsThisMonth(){
   },{once:true});
 }
 
-// QR helpers
+// ===== QR helpers =====
 const itemQrText = (code)=>`ITEM|${String(code||'')}`;
 const userQrText = (id)=>`USER|${String(id||'')}`;
 
-/* Items table */
+/* ===== Items table + Label DL ===== */
 function renderItems(){
   const tb=qs('#tbl-items'); if(!tb) return; tb.innerHTML='';
-  // pastikan qrlib ada
   if (typeof QRCode === 'undefined'){
     console.error('QRCode library (qrlib.js) belum ter-load. Pastikan <script src="qrlib.js"> sebelum app.js');
   }
@@ -330,7 +324,7 @@ function renderItems(){
   },{once:true});
 }
 
-/* Users */
+/* ===== Users ===== */
 function renderUsers(){
   const btnAdd=qs('#btn-open-new-user'); const btnPrint=qs('#btn-print-qr-users');
   const admin=(state.currentUser.role==='admin'); if(admin){btnAdd?.classList.remove('d-none');btnPrint?.classList.remove('d-none');} else {btnAdd?.classList.add('d-none');btnPrint?.classList.add('d-none');}
@@ -358,7 +352,7 @@ function renderUsers(){
   });
 }
 
-/* History */
+/* ===== History ===== */
 function renderHistory(){
   const tb=qs('#tbl-history'); if(!tb) return; tb.innerHTML='';
   state.history.slice(-400).reverse().forEach(h=>{
@@ -385,118 +379,7 @@ function renderHistory(){
   });
 }
 
-// =====================================================
-// Konfigurasi scan QR (lebih stabil)  **BARU**
-// =====================================================
-const QR_VIDEO_CONSTRAINTS = {
-  facingMode: "environment",
-  width: { ideal: 1280 },
-  height: { ideal: 720 }
-};
-const QR_SCAN_CONFIG = {
-  fps: 12,
-  qrbox: { width: isMobile()?240:300, height: isMobile()?240:300 },
-  rememberLastUsedCamera: true,
-  aspectRatio: 1.33,
-  supportedScanTypes: [ Html5QrcodeScanType.SCAN_TYPE_CAMERA ],
-  formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] // fokus hanya QR
-};
-
-/* Scanner adaptor  **DIPERBARUI** */
-async function startBackCameraScan(mountId, onScan, boxSize=300){
-  // 1) Coba BarcodeDetector (native)
-  if('BarcodeDetector' in window){
-    try{
-      loading(true,'カメラを起動中…');
-      return await startNativeDetector(mountId,onScan,boxSize);
-    }catch(e){
-      console.warn('BarcodeDetector gagal, fallback ke html5-qrcode:', e);
-    }finally{
-      loading(false);
-    }
-  }
-
-  // 2) Fallback html5-qrcode (hanya QR)
-  await ensureHtml5Qrcode();
-  if(!window.Html5Qrcode) throw new Error('スキャナライブラリが読み込めません。');
-
-  const mount = document.getElementById(mountId);
-  if (!mount) throw new Error('Mount element not found: '+mountId);
-  mount.innerHTML = '';
-
-  const scanner = new Html5Qrcode(mountId, { useBarCodeDetectorIfSupported: true });
-  try{
-    loading(true,'カメラを起動中…');
-
-    // pertama: coba dengan facingMode environment
-    await scanner.start(
-      QR_VIDEO_CONSTRAINTS,
-      { ...QR_SCAN_CONFIG, qrbox:{ width: boxSize, height: boxSize } },
-      (text/*, result*/)=>{ onScan(text); },
-      (_err)=>{} // jangan spam UI untuk tiap frame gagal
-    );
-    return scanner;
-
-  }catch(err1){
-    try{
-      // kedua: enumerasi kamera lalu pilih belakang
-      const cams = await Html5Qrcode.getCameras();
-      if(!cams || !cams.length) throw err1;
-      const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams.at(-1);
-      await scanner.start(
-        { deviceId: { exact: back.id } },
-        { ...QR_SCAN_CONFIG, qrbox:{ width: boxSize, height: boxSize } },
-        (text)=>{ onScan(text); },
-        (_)=>{}
-      );
-      return scanner;
-    }catch(err2){
-      await scanner?.stop?.(); scanner?.clear?.();
-      console.error('html5-qrcode failed:', err2);
-      throw new Error('カメラが見つかりません。ブラウザ権限/ネットワークをご確認ください。');
-    }finally{
-      loading(false);
-    }
-  }
-}
-
-async function startNativeDetector(mountId,onScan,boxSize=300){
-  if(!('BarcodeDetector' in window)) throw new Error('BarcodeDetector 未対応');
-  const mount=document.getElementById(mountId); 
-  if(!mount) throw new Error('Mount element not found: '+mountId);
-  mount.innerHTML='';
-
-  const video=document.createElement('video');
-  video.setAttribute('playsinline','');
-  video.style.width='100%';
-  video.style.maxWidth=boxSize+'px';
-  mount.appendChild(video);
-
-  const stream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
-  video.srcObject=stream; await video.play();
-
-  const detector=new BarcodeDetector({ formats:['qr_code'] }); // QR saja
-  let stopped=false, last='';
-
-  async function tick(){
-    if(stopped) return;
-    try{
-      const codes=await detector.detect(video);
-      const v=codes?.[0]?.rawValue||'';
-      if(v && v!==last){ last=v; onScan(v); }
-    }catch{}
-    requestAnimationFrame(tick);
-  }
-  tick();
-
-  function stop(){
-    stopped=true; video.pause(); (stream.getTracks()||[]).forEach(t=>t.stop());
-    mount.innerHTML='';
-  }
-  return { stop, clear:()=>{} };
-}
-
-/* IO scan hooks */
+// ===== IO (入出庫) Scan =====
 function fillIoForm(it){ qs('#io-code').value=it.code||''; qs('#io-name').value=it.name||''; qs('#io-price').value=it.price||''; qs('#io-stock').value=it.stock||''; }
 async function startIoScan(){ try{ loading(true,'カメラを起動中…'); state.ioScanner=await startBackCameraScan('io-scan-area',onScanIo,(isMobile()?240:300)); }catch(e){ alert('カメラが見つかりません: '+(e?.message||e)); }finally{ loading(false); } }
 async function stopIoScan(){ try{ await state.ioScanner?.stop?.(); state.ioScanner?.clear?.(); }catch{} state.ioScanner=null; }
@@ -512,7 +395,7 @@ async function lookupIo(){
   catch(e){ alert(e.message||e); }
 }
 
-/* Stocktake scan */
+// ===== 棚卸 Scan =====
 async function startScanner(){ try{ loading(true,'カメラを起動中…'); state.scanner=await startBackCameraScan('scan-area',onScanStocktake,(isMobile()?240:300)); }catch(e){ alert('カメラが見つかりません: '+(e?.message||e)); }finally{ loading(false); } }
 async function stopScanner(){ try{ await state.scanner?.stop?.(); state.scanner?.clear?.(); }catch{} state.scanner=null; }
 function onScanStocktake(text){
@@ -527,7 +410,7 @@ function pushStocktake(code,name,book,real){
   state.stocktakeRows.forEach(r=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${r.code}</td><td>${r.name}</td><td class="text-end">${fmt(r.book)}</td><td class="text-end">${fmt(r.real)}</td><td class="text-end">${fmt(r.diff)}</td>`; tb.appendChild(tr); });
 }
 
-/* Item detail & edit */
+/* ===== Item detail ===== */
 function openItemDetail(code){
   const it=state.items.find(x=>String(x.code)===String(code)); if(!it){ alert('商品が見つかりません'); return; }
   const host=qs('#card-item-detail'); const body=qs('#item-detail-body');
@@ -554,7 +437,7 @@ function openItemDetail(code){
   showView('view-items','商品一覧');
 }
 
-/* Label generator */
+/* ===== Label generator (GAMBAR + QR + KODE/NAMA/LOKASI) ===== */
 function makeItemLabelCanvas(item){
   const W=760,H=260,pad=14,imgW=200,qrW=180,gridX=pad+imgW+pad+qrW+pad;
   const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
@@ -587,7 +470,7 @@ function makeItemLabelCanvas(item){
 }
 function makeItemLabelDataURL(item){ return new Promise(res=>{ const c=makeItemLabelCanvas(item); setTimeout(()=>res(c.toDataURL('image/png')),200); }); }
 
-/* DOMContentLoaded */
+/* ===== DOM ready ===== */
 window.addEventListener('DOMContentLoaded', async ()=>{
   updateWho();
   qsa('aside nav a').forEach(a=>a.addEventListener('click',()=>showView(a.getAttribute('data-view'),a.textContent.trim())));
@@ -617,17 +500,14 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   qs('#btn-items-xlsx')?.addEventListener('click',()=>{ loading(true,'Excelを生成中…'); try{ const data=state.items.map(r=>({code:r.code,name:r.name,price:r.price,stock:r.stock,min:r.min,location:r.location,lotUnit:r.lotUnit,lotQty:r.lotQty})); const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Items'); XLSX.writeFile(wb,'items.xlsx'); }finally{ loading(false); } });
   qs('#btn-items-print-all')?.addEventListener('click',()=>{ if(!state.items.length) return; loading(true,'ラベルを準備中…'); try{ const grid=document.createElement('div'); grid.style.display='grid'; grid.style.gridTemplateColumns='repeat(2,1fr)'; grid.style.gap='10mm'; state.items.forEach(it=>{ const c=makeItemLabelCanvas(it); const img=new Image(); img.src=c.toDataURL('image/png'); img.style.width='100%'; const cell=document.createElement('div'); cell.appendChild(img); grid.appendChild(cell); }); const w=window.open('','printlabels'); w.document.write(`<html><head><title>Labels</title><style>@page{size:A4;margin:12mm} body{font-family:sans-serif}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10mm} img{width:100%;page-break-inside:avoid;}</style></head><body><div class="grid">${grid.innerHTML}</div></body></html>`); w.document.close(); w.focus(); w.print(); }finally{ loading(false); } });
 
-  // New item modal
+  // Modal-modal form (jika ada di HTML-mu)
   const modalItem=document.getElementById('dlg-new-item')?new bootstrap.Modal('#dlg-new-item'):null;
   qs('#btn-open-new-item')?.addEventListener('click',()=>{ qs('#i-code').value=nextItemCode(); qs('#i-name').value=''; qs('#i-price').value=0; qs('#i-stock').value=0; qs('#i-min').value=0; qs('#i-img').value=''; qs('#i-location').value=''; qs('#i-lotUnit').value='pcs'; qs('#i-lotQty').value=0; modalItem?.show(); });
   qs('#form-item')?.addEventListener('submit',async e=>{ e.preventDefault(); const body={ code:qs('#i-code').value.trim(), name:qs('#i-name').value.trim(), price:Number(qs('#i-price').value||0), stock:Number(qs('#i-stock').value||0), min:Number(qs('#i-min').value||0), img:qs('#i-img').value.trim(), location:qs('#i-location').value.trim(), lotUnit:qs('#i-lotUnit').value.trim()||'pcs', lotQty:Number(qs('#i-lotQty').value||0), overwrite:false }; if(!body.code||!body.name){ alert('コード/名称は必須'); return; } try{ await api('addItem',{method:'POST',body,loadingText:'登録中…'}); modalItem?.hide(); await loadAll(); showView('view-items','商品一覧'); }catch(err){ alert(err.message); } });
-  qs('#btn-item-makeqr')?.addEventListener('click',()=>{ loading(true,'QRを生成中…'); try{ const i={code:qs('#i-code').value.trim(),name:qs('#i-name').value.trim(),price:Number(qs('#i-price').value||0)}; const tmp=document.createElement('div'); if(typeof QRCode!=='undefined'){ new QRCode(tmp,{ text:itemQrText(i.code), width:240, height:240, correctLevel:QRCode.CorrectLevel.M }); } const canvas=tmp.querySelector('canvas'); const dataUrl=canvas?canvas.toDataURL('image/png'):''; const w=window.open('','qrprev','width=420,height=520'); w.document.write(`<div style="padding:20px;text-align:center;font-family:sans-serif"><img src="${dataUrl}" style="width:240px;height:240px"/><div style="margin-top:8px">${i.name}（${i.code}） ¥${fmt(i.price||0)}</div></div>`); tmp.remove(); }finally{ loading(false); } });
 
-  // Edit item modal
   const modalEditItem=document.getElementById('dlg-edit-item')?new bootstrap.Modal('#dlg-edit-item'):null;
   qs('#form-edit-item')?.addEventListener('submit',async e=>{ e.preventDefault(); const body={ code:qs('#e-code').value.trim(), name:qs('#e-name').value.trim(), price:Number(qs('#e-price').value||0), stock:Number(qs('#e-stock').value||0), min:Number(qs('#e-min').value||0), img:qs('#e-img').value.trim(), location:qs('#e-location').value.trim(), lotUnit:qs('#e-lotUnit').value.trim(), lotQty:Number(qs('#e-lotQty').value||0), overwrite:true }; try{ await api('updateItem',{method:'POST',body,loadingText:'保存中…'}); modalEditItem?.hide(); await loadAll(); }catch(err){ alert(err.message||err); } });
 
-  // New user modal
   const modalUser=document.getElementById('dlg-new-user')?new bootstrap.Modal('#dlg-new-user'):null;
   qs('#btn-open-new-user')?.addEventListener('click',()=>modalUser?.show());
   qs('#form-user')?.addEventListener('submit',async e=>{ e.preventDefault(); const body={ name:qs('#u-name').value.trim(), id:qs('#u-id').value.trim(), role:qs('#u-role').value, pin:qs('#u-pin').value.trim() }; try{ await api('addUser',{method:'POST',body,loadingText:'登録中…'}); modalUser?.hide(); await loadAll(); showView('view-users','ユーザー / QR'); }catch(err){ alert(err.message); } });
@@ -636,7 +516,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   showView('view-dashboard','ダッシュボード');
   await loadAll();
 
-  // Peringatan jika QR lib tidak ada (agar tidak bingung kenapa kolom QR kosong)
+  // Notifikasi kalau qrlib.js belum termuat
   if(typeof QRCode==='undefined'){
     alert('ライブラリ qrlib.js が読み込めていないため、QRの表示/ダウンロードができません。\nファイル qrlib.js をプロジェクトのルートに配置し、<script src="qrlib.js"> を app.js の前に読み込んでください。');
   }
