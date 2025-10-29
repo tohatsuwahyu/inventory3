@@ -1,19 +1,13 @@
 /* =========================================================
  * app.js — Inventory (GAS backend)
- * by wahyu + fix pack
  * =======================================================*/
-
 (function(){
   "use strict";
 
-  /***********************
-   * Utilities
-   ***********************/
   const $  = (sel, el=document)=>el.querySelector(sel);
   const $$ = (sel, el=document)=>[...el.querySelectorAll(sel)];
   const fmt = (n)=> new Intl.NumberFormat('ja-JP').format(Number(n||0));
   const isMobile = ()=> /Android|iPhone|iPad/i.test(navigator.userAgent);
-
   function toast(msg){ alert(msg); }
 
   function setLoading(show, text){
@@ -23,9 +17,6 @@
     else { el.classList.add('d-none'); }
   }
 
-  /***********************
-   * API (GAS)
-   ***********************/
   async function api(action, { method='GET', body=null, silent=false }={}){
     if(!window.CONFIG || !CONFIG.BASE_URL){
       throw new Error('config.js BASE_URL belum di-set');
@@ -49,16 +40,11 @@
         if(!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
         return await r.json();
       }
-    }catch(e){
-      throw e;
     }finally{
       if(!silent) setLoading(false);
     }
   }
 
-  /***********************
-   * Script loaders (qrcode + html5-qrcode)
-   ***********************/
   function loadScriptOnce(src){
     return new Promise((resolve, reject)=>{
       if ([...document.scripts].some(s=>s.src===src || s.src.endsWith(src))) return resolve();
@@ -72,10 +58,8 @@
 
   async function ensureQRCode(){
     if (window.QRCode) return;
-    // lokal
     const locals = ['./qrlib.js','./qrcode.min.js','./vendor/qrcode.min.js'];
     for(const p of locals){ try{ await loadScriptOnce(p); if(window.QRCode) return; }catch(e){} }
-    // cdn
     const cdns = [
       'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js',
       'https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js',
@@ -98,18 +82,12 @@
     throw new Error('html5-qrcode tidak tersedia');
   }
 
-  /***********************
-   * Auth mini
-   ***********************/
   function getCurrentUser(){
     try{ return JSON.parse(localStorage.getItem('currentUser')||'null'); }catch(e){ return null; }
   }
   function setCurrentUser(u){ localStorage.setItem('currentUser', JSON.stringify(u||null)); }
   function logout(){ setCurrentUser(null); location.href='index.html'; }
 
-  /***********************
-   * Sidebar / Nav
-   ***********************/
   (function navHandler(){
     const sb = $('#sb'), bd = $('#sb-backdrop');
     const burger = $('#burger'), btnMenu = $('#btn-menu');
@@ -124,40 +102,32 @@
       if(!a) return;
       e.preventDefault();
 
-      // aktifkan link
       $$('aside nav a').forEach(n=>n.classList.remove('active'));
       a.classList.add('active');
 
-      // Sembunyikan semua section & hapus .active
       $$('main section').forEach(s=>{
         s.classList.add('d-none');
-        s.classList.remove('active'); // penting: hilangkan opacity:0 default (styles.css)
+        s.classList.remove('active');
       });
 
-      // Tampilkan target + beri .active agar tidak transparan
       const id = a.getAttribute('data-view');
       const sec = document.getElementById(id);
       if(sec){
         sec.classList.remove('d-none');
-        sec.classList.add('active'); // <- fix utama agar tidak “blank”
+        sec.classList.add('active');
       }
 
-      // Judul
       const title = a.textContent.trim();
       const h = $('#page-title'); if(h) h.textContent = title;
 
       closeSB();
 
-      // lazy load render
       if(id==='view-items') renderItems();
       if(id==='view-users') renderUsers();
       if(id==='view-history') renderHistory();
     });
   })();
 
-  /***********************
-   * Charts (Dashboard)
-   ***********************/
   let chartLine=null, chartPie=null;
   async function renderDashboard(){
     const who = getCurrentUser();
@@ -174,13 +144,11 @@
       const users  = Array.isArray(usersRaw)  ? usersRaw  : [];
       const series = Array.isArray(seriesRaw) ? seriesRaw : [];
 
-      // metrics
       $('#metric-total-items').textContent = items.length;
       const low = items.filter(it => Number(it.stock||0) <= Number(it.min||0)).length;
       $('#metric-low-stock').textContent = low;
       $('#metric-users').textContent = users.length;
 
-      // chart: guard bila kosong
       const ctx1 = $('#chart-monthly');
       if (ctx1){
         chartLine?.destroy();
@@ -207,20 +175,13 @@
         });
       }
 
-      // movement table (opsional)
       $('#tbl-mov').innerHTML = '';
-
-    }catch(e){
-      console.error(e);
+    }catch{
       toast('ダッシュボードの読み込みに失敗しました。');
     }
   }
 
-  /***********************
-   * Items list + Edit + Label
-   ***********************/
   let _ITEMS_CACHE = [];
-
   function tplItemRow(it){
     const qrid = `qr-${it.code}`;
     return `<tr>
@@ -244,21 +205,18 @@
   async function renderItems(){
     try{
       const list = await api('items',{method:'GET'});
-      _ITEMS_CACHE = list;
+      _ITEMS_CACHE = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
       const tbody = $('#tbl-items');
-      tbody.innerHTML = list.map(tplItemRow).join('');
+      tbody.innerHTML = _ITEMS_CACHE.map(tplItemRow).join('');
 
-      // render QR kolom
       await ensureQRCode();
-      for(const it of list){
+      for(const it of _ITEMS_CACHE){
         const holder = document.getElementById(`qr-${it.code}`);
         if(!holder) continue;
         holder.innerHTML = '';
-        // QR kecil untuk tabel
         new QRCode(holder, { text:`ITEM|${it.code}`, width:64, height:64, correctLevel: QRCode.CorrectLevel.M });
       }
 
-      // handlers
       tbody.addEventListener('click', async (e)=>{
         const btn = e.target.closest('button');
         if(!btn) return;
@@ -283,19 +241,15 @@
         }
       });
 
-      // detail panel link
       $$('#tbl-items .link-item').forEach(a=>{
-        a.addEventListener('click', async (ev)=>{
+        a.addEventListener('click', (ev)=>{
           ev.preventDefault();
           const code = a.getAttribute('data-code');
-          const r = await api('itemByCode',{method:'GET', body:null, silent:true})
-            .catch(()=>null); // fallback nanti
           const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
           showItemDetail(it);
         });
       });
 
-      // search
       $('#items-search')?.addEventListener('input', (e)=>{
         const q = (e.target.value||'').toLowerCase();
         const rows = $$('#tbl-items tr');
@@ -305,8 +259,7 @@
         });
       });
 
-    }catch(e){
-      console.error(e);
+    }catch{
       toast('商品一覧の読み込みに失敗しました。');
     }
   }
@@ -314,7 +267,6 @@
   function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;","&gt;":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
   function escapeAttr(s){ return escapeHtml(s); }
 
-  // === Edit item (modal sederhana) ===
   function openEditItem(code){
     const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
     if(!it) return;
@@ -348,7 +300,6 @@
     const modal = new bootstrap.Modal(wrap);
     modal.show();
 
-    // presisi input 置場: auto-format AAA-00-00
     $('#md-location',wrap)?.addEventListener('input', (e)=>{
       e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,'');
     });
@@ -356,15 +307,15 @@
     $('#md-save',wrap)?.addEventListener('click', async ()=>{
       try{
         const payload = {
-  code: $('#md-code',wrap).value,
-  name: $('#md-name',wrap).value,
-  price: Number($('#md-price',wrap).value||0),
-  stock: Number($('#md-stock',wrap).value||0),
-  min:   Number($('#md-min',wrap).value||0),
-  img:   $('#md-img',wrap).value,
-  location: ($('#md-location',wrap).value||'').toUpperCase().trim(), // presisi + uppercase
-  overwrite: true
-};
+          code: $('#md-code',wrap).value,
+          name: $('#md-name',wrap).value,
+          price: Number($('#md-price',wrap).value||0),
+          stock: Number($('#md-stock',wrap).value||0),
+          min:   Number($('#md-min',wrap).value||0),
+          img:   $('#md-img',wrap).value,
+          location: ($('#md-location',wrap).value||'').toUpperCase().trim(),
+          overwrite: true
+        };
         const r = await api('updateItem',{method:'POST', body: payload});
         if(r?.ok){
           modal.hide(); wrap.remove();
@@ -402,17 +353,27 @@
 
   function openPreview(url){
     const w = window.open('','_blank','width=900,height=600');
+    if(!w || !w.document){
+      // Popup diblokir → fallback
+      const a=document.createElement('a');
+      a.href=url; a.target='_blank'; a.download='';
+      a.click();
+      return;
+    }
     w.document.write(`<img src="${url}" style="max-width:100%">`);
   }
 
-  // === Label generator (rapi, presisi) ===
+  // === Label generator: QR lebih presisi tidak menimpa garis ===
   async function makeItemLabelDataURL(item){
     const W=760,H=260,pad=16;
     const imgW=200, gap=14;
     const qrBox=H-2*pad;
-    const qrSize=Math.min(180,qrBox);
-    const QUIET=10;                    // quiet-zone
-    const colQRW = qrSize + 2*QUIET;   // lebar kolom QR termasuk quiet
+
+    // tweak: sedikit lebih kecil + quiet-zone lebih lebar supaya tidak menyentuh garis
+    const QUIET=14;
+    const qrSize=Math.min(170, qrBox - 8);
+
+    const colQRW = qrSize + 2*QUIET;
     const gridX = pad + imgW + gap + colQRW + gap;
 
     const c=document.createElement('canvas'); c.width=W; c.height=H;
@@ -426,9 +387,10 @@
     roundRect(g, rx,ry,rw,rh,r, true,true,'#eaf1ff','#cbd5e1');
     await drawImageIfAny(g,item.img,rx,ry,rw,rh,r);
 
-    // QR (tengah) + quiet-zone
-    const qx = pad + imgW + gap + QUIET + Math.max(0,(qrBox-qrSize)/2);
-    const qy = pad + Math.max(0,(qrBox-qrSize)/2);
+    // QR center + quiet-zone (tidak menimpa garis)
+    const free = qrBox - qrSize;
+    const qx = pad + imgW + gap + QUIET + Math.max(0, free/2);
+    const qy = pad + Math.max(0, free/2);
     g.fillStyle='#fff';
     g.fillRect(qx-QUIET,qy-QUIET, qrSize+2*QUIET, qrSize+2*QUIET);
     try{
@@ -452,20 +414,16 @@
     g.fillText('商品名：', labelX, pad + cellH*1.5);
     g.fillText('置場：',   labelX, pad + cellH*2.5);
 
-    // code
     g.font='bold 22px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.code||''), valX, pad + cellH*0.5, valMaxW);
 
-    // name (wrap 2 baris)
     drawWrapAuto(g, String(item.name||''), valX, pad + cellH*1.5, valMaxW, { maxLines:2, base:22, min:16, lineGap:4 });
 
-    // location presisi + uppercase
     g.font='bold 20px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.location||'').toUpperCase(), valX, pad + cellH*2.5, valMaxW);
 
     return c.toDataURL('image/png');
 
-    // Helpers canvas
     function roundRect(ctx,x,y,w,h,r,fill,stroke,fillColor,border){
       ctx.save(); ctx.beginPath();
       ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
@@ -483,13 +441,13 @@
       }
       try{
         const im=new Image(); im.crossOrigin='anonymous'; im.src=url; await imgLoaded(im);
-        const s=Math.min(w/im.width,h/im.height), iw=im.width*s, ih=im.height+s*0; // keep ratio
-        const s2=Math.min(w/im.width,h/im.height); const iw2=im.width*s2, ih2=im.height*s2;
-        const ix=x+(w-iw2)/2, iy=y+(h-ih2)/2;
+        const s=Math.min(w/im.width,h/im.height);
+        const iw=im.width*s, ih=im.height*s;
+        const ix=x+(w-iw)/2, iy=y+(h-ih)/2;
         ctx.save(); ctx.beginPath();
         ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr);
         ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); ctx.clip();
-        ctx.drawImage(im, ix,iy, iw2,ih2); ctx.restore();
+        ctx.drawImage(im, ix,iy, iw,ih); ctx.restore();
       }catch(e){}
     }
     function drawSingleLineFit(ctx, text, x, y, maxW){
@@ -533,7 +491,6 @@
     }
   }
 
-  // generate QR (dataURL) via qrcodejs
   async function generateQrDataUrl(text, size){
     await ensureQRCode();
     return await new Promise((resolve)=>{
@@ -552,14 +509,12 @@
     });
   }
 
-  /***********************
-   * Users / QR
-   ***********************/
   async function renderUsers(){
     try{
       const list = await api('users',{method:'GET'});
+      const arr = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
       const tbody = $('#tbl-userqr');
-      tbody.innerHTML = list.map(u=>`
+      tbody.innerHTML = arr.map(u=>`
         <tr>
           <td style="width:170px"><div id="uqr-${escapeAttr(u.id)}"></div></td>
           <td>${escapeHtml(u.id)}</td>
@@ -570,7 +525,7 @@
       `).join('');
 
       await ensureQRCode();
-      for(const u of list){
+      for(const u of arr){
         const el = document.getElementById(`uqr-${u.id}`);
         if(!el) continue;
         el.innerHTML = '';
@@ -583,43 +538,40 @@
         const url = await generateQrDataUrl(`USER|${id}`, 300);
         const a=document.createElement('a'); a.href=url; a.download=`user_${id}.png`; a.click();
       });
-    }catch(e){
-      console.error(e);
+    }catch{
       toast('ユーザーQRの読み込みに失敗しました。');
     }
   }
 
-  /***********************
-   * History
-   ***********************/
   async function renderHistory(){
     try{
-      const list = await api('history',{method:'GET'});
+      const raw = await api('history',{method:'GET'});
+      // tahan banting: beberapa backend mengembalikan {data:[]}/{history:[]}/string
+      const list = Array.isArray(raw) ? raw
+                 : Array.isArray(raw?.history) ? raw.history
+                 : Array.isArray(raw?.data) ? raw.data
+                 : [];
       const tbody = $('#tbl-history');
       const recent = list.slice(-400).reverse();
       tbody.innerHTML = recent.map(h=>`
         <tr>
-          <td>${escapeHtml(h.timestamp)}</td>
-          <td>${escapeHtml(h.userId)}</td>
+          <td>${escapeHtml(h.timestamp||h.date||'')}</td>
+          <td>${escapeHtml(h.userId||'')}</td>
           <td>${escapeHtml(h.userName||'')}</td>
-          <td>${escapeHtml(h.code)}</td>
-          <td>${escapeHtml(h.itemName||'')}</td>
-          <td class="text-end">${fmt(h.qty)}</td>
-          <td>${escapeHtml(h.unit)}</td>
-          <td>${escapeHtml(h.type)}</td>
+          <td>${escapeHtml(h.code||'')}</td>
+          <td>${escapeHtml(h.itemName||h.name||'')}</td>
+          <td class="text-end">${fmt(h.qty||0)}</td>
+          <td>${escapeHtml(h.unit||'')}</td>
+          <td>${escapeHtml(h.type||'')}</td>
           <td>${escapeHtml(h.note||'')}</td>
           <td></td>
         </tr>
       `).join('');
-    }catch(e){
-      console.error(e);
+    }catch{
       toast('履歴の読み込みに失敗しました。');
     }
   }
 
-  /***********************
-   * IO (scan cepat)
-   ***********************/
   let IO_SCANNER = null;
 
   async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 170 : 190)) {
@@ -631,7 +583,6 @@
       mount.style.position = 'relative';
     }
 
-    // BarcodeDetector lebih cepat bila ada
     if ('BarcodeDetector' in window) {
       try { return await startNativeDetector(mountId, onScan, boxSize); }
       catch (e) { console.warn('BarcodeDetector fallback ke html5-qrcode', e); }
@@ -769,11 +720,7 @@
     }
   }
 
-  /***********************
-   * Boot
-   ***********************/
   window.addEventListener('DOMContentLoaded', ()=>{
-    // set logo dari CONFIG.LOGO_URL (dashboard.html punya <img id="brand-logo">)
     const logo = document.getElementById('brand-logo');
     if (logo && window.CONFIG && CONFIG.LOGO_URL){
       logo.src = CONFIG.LOGO_URL;
