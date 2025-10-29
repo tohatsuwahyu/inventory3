@@ -14,39 +14,76 @@
   <link rel="stylesheet" href="print.css" media="print">
 
   <style>
-    /* Small helpers to make it sleek */
-    body{ background:#0b0d12; color:#e8ebf0; }
-    header.navbar{ background:linear-gradient(90deg,#0f1320,#0b0d12); border-bottom:1px solid rgba(255,255,255,.06) }
-    .brand { display:flex; align-items:center; gap:.5rem; font-weight:700; letter-spacing:.2px }
-    .brand img { width:28px; height:28px; filter:drop-shadow(0 0 12px rgba(255,255,255,.25)); }
-    .sidebar{ width:260px; background:#0d111a; border-right:1px solid rgba(255,255,255,.06); position:fixed; top:56px; bottom:0; left:0; padding:12px 8px; overflow:auto; }
-    .sidebar a{ display:flex; align-items:center; gap:.6rem; color:#b7c1d1; text-decoration:none; padding:.55rem .8rem; border-radius:.6rem; }
-    .sidebar a.active, .sidebar a:hover{ background:#111626; color:#fff; }
+    /* ========= LIGHT & SOFT THEME ========= */
+    :root{
+      --bg:#f6f8fb;
+      --card:#ffffff;
+      --ink:#263238;
+      --muted:#6b7a8a;
+      --border:#e6ecf2;
+      --accent:#4f8ef7;
+      --accent-soft:#e8f1ff;
+    }
+    body{ background:var(--bg); color:var(--ink); }
+    header.navbar{
+      background:#ffffff;
+      border-bottom:1px solid var(--border);
+    }
+    .brand{ display:flex; align-items:center; gap:.5rem; font-weight:700; letter-spacing:.2px; color:var(--ink) }
+    .brand img{ width:28px; height:28px; filter:drop-shadow(0 0 10px rgba(79,142,247,.25)); }
+
+    .sidebar{
+      width:260px; background:#ffffff; border-right:1px solid var(--border);
+      position:fixed; top:56px; bottom:0; left:0; padding:12px 8px; overflow:auto;
+    }
+    .sidebar a{
+      display:flex; align-items:center; gap:.6rem; color:var(--muted);
+      text-decoration:none; padding:.56rem .8rem; border-radius:.65rem; font-weight:600;
+    }
+    .sidebar a.active, .sidebar a:hover{
+      background:var(--accent-soft); color:var(--accent);
+    }
     main{ margin-left:260px; padding:16px; }
-    @media (max-width:991.98px){ .sidebar{ transform:translateX(-100%); transition:.25s; z-index:1050 } .sidebar.open{ transform:none } main{ margin-left:0; } }
-    .metric{ background:linear-gradient(180deg, #0f1628 0%, #0d1220 100%); border:1px solid rgba(255,255,255,.06); border-radius:16px; }
-    .metric .title{ color:#aeb8cc; font-size:.9rem }
-    .glow-card{ box-shadow:0 0 0 1px rgba(255,255,255,.05), 0 12px 40px rgba(0,0,0,.45) }
-    table thead th{ color:#9fb0c9; font-weight:600 }
-    .qrbox{ display:flex; flex-direction:column; align-items:center; gap:.25rem }
-    .qrbox .caption{ font-size:.78rem; color:#98a7c6; max-width:160px; text-align:center }
-    .thumb{ width:56px; height:40px; object-fit:cover; border-radius:8px; border:1px solid rgba(255,255,255,.08) }
-    .d-none-print{ }
-    @media print{ .d-none-print{ display:none !important } }
-    .drawer-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; }
+    @media (max-width:991.98px){
+      .sidebar{ transform:translateX(-100%); transition:.25s; z-index:1050 }
+      .sidebar.open{ transform:none }
+      main{ margin-left:0; }
+    }
+    .drawer-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.25); display:none; }
     .drawer-backdrop.show{ display:block }
+
+    .metric{
+      background:var(--card); border:1px solid var(--border); border-radius:16px;
+      box-shadow:0 6px 20px rgba(28,60,107,.06);
+    }
+    .metric .title{ color:var(--muted); font-size:.92rem }
+    .glow-card{ box-shadow:0 8px 24px rgba(28,60,107,.08) }
+
+    .table thead th{ color:#7b8ea4; font-weight:700; border-bottom:1px solid var(--border) }
     .table> :not(caption)>*>*{ background:transparent !important; }
-    .table tr:hover{ background:rgba(255,255,255,.03) !important; cursor:pointer }
-    .card .card-header{ background:transparent; border-bottom:1px solid rgba(255,255,255,.06) }
-    .btn-outline-secondary, .btn-outline-primary, .btn-outline-danger{ --bs-btn-hover-bg: rgba(255,255,255,.08); --bs-btn-color:#cbd5e1; --bs-btn-border-color:rgba(255,255,255,.15) }
+    .table tr:hover{ background:#f3f7ff !important; cursor:pointer }
+
+    .qrbox{ display:flex; flex-direction:column; align-items:center; gap:.25rem }
+    .qrbox .caption{ font-size:.78rem; color:#7b8ea4; max-width:160px; text-align:center }
+    .thumb{ width:56px; height:40px; object-fit:cover; border-radius:8px; border:1px solid var(--border) }
+
+    .card .card-header{ background:transparent; border-bottom:1px solid var(--border) }
+    .btn-outline-secondary, .btn-outline-primary, .btn-outline-danger{
+      --bs-btn-border-color:#cdd9e6;
+      --bs-btn-hover-bg:#f3f7ff;
+      --bs-btn-color:#37506e;
+    }
+
+    .badge-soft{ background:var(--accent-soft); color:var(--accent); border:1px solid #d9e6ff }
+    @media print{ .d-none-print{ display:none !important } }
   </style>
 </head>
 <body>
 
   <!-- Topbar -->
-  <header class="navbar navbar-dark sticky-top px-3">
+  <header class="navbar sticky-top px-3">
     <div class="d-flex align-items-center gap-2">
-      <button id="burger" class="btn btn-sm btn-outline-light d-lg-none d-inline-flex align-items-center"><i class="bi bi-list"></i></button>
+      <button id="burger" class="btn btn-sm btn-outline-secondary d-lg-none d-inline-flex align-items-center"><i class="bi bi-list"></i></button>
       <div class="brand">
         <img id="brand-logo" src="" alt="logo">
         <span>Inventory Control</span>
@@ -54,7 +91,7 @@
     </div>
     <div class="ms-auto d-flex align-items-center gap-3">
       <div class="small text-muted">ログイン: <span id="who">—</span></div>
-      <button id="btn-logout" class="btn btn-sm btn-outline-light"><i class="bi bi-box-arrow-right me-1"></i> ログアウト</button>
+      <button id="btn-logout" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-right me-1"></i> ログアウト</button>
     </div>
   </header>
 
@@ -263,6 +300,7 @@
         <div class="d-flex align-items-center gap-2">
           <div class="fw-semibold">ユーザー / QR</div>
           <div class="ms-auto d-flex gap-2">
+            <span class="badge badge-soft d-none" id="users-tip">admin only</span>
             <button id="btn-open-new-user" class="btn btn-sm btn-primary d-none"><i class="bi bi-person-plus me-1"></i> 新規ユーザー</button>
             <button id="btn-print-qr-users" class="btn btn-sm btn-outline-secondary d-none"><i class="bi bi-printer me-1"></i> 印刷（A4）</button>
           </div>
@@ -421,7 +459,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-  <!-- QR library (your local) -->
+  <!-- QR library (local) -->
   <script src="qrlib.js"></script>
 
   <!-- Config & App -->
