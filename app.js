@@ -66,27 +66,93 @@ window.addEventListener('keydown', e=>{ if(e.key==='Escape') openMenu(false); })
 // =====================================================
 // html5-qrcode loader (root → vendor → CDN)  **FIXED**
 // =====================================================
-let html5qrcodeReady = false;
+// ——— Loader html5-qrcode dengan fallback ———
+let html5qrcodeReady = !!window.Html5Qrcode;
 function loadScriptOnce(src){
   return new Promise((res, rej)=>{
-    const s=document.createElement('script'); s.src=src; s.async=true;
-    s.onload=()=>res(); s.onerror=()=>rej(new Error('load failed: '+src));
+    const s = document.createElement('script');
+    s.src = src; s.async = true;
+    s.onload = res; s.onerror = ()=>rej(new Error('load failed: '+src));
     document.head.appendChild(s);
   });
 }
 async function ensureHtml5Qrcode(){
-  if (html5qrcodeReady && window.Html5Qrcode) return;
-  if (window.Html5Qrcode){ html5qrcodeReady = true; return; }
+  if (window.Html5Qrcode) { html5qrcodeReady = true; return; }
+  // coba CDN → fallback vendor (jaga-jaga kalau urutan <script> berubah)
+  try { await loadScriptOnce('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js'); } catch {}
+  if (!window.Html5Qrcode) {
+    try { await loadScriptOnce('./vendor/html5-qrcode.min.js'); } catch {}
+  }
+  html5qrcodeReady = !!window.Html5Qrcode;
+}
 
-  loading(true,'カメラ機能を読み込み中…');
-  try{
-    if(!window.Html5Qrcode){ try{ await loadScriptOnce('./html5-qrcode.min.js'); }catch{} }
-    if(!window.Html5Qrcode){ try{ await loadScriptOnce('./vendor/html5-qrcode.min.js'); }catch{} }
-    // gunakan "latest" agar tidak 404 pada versi tertentu
-    if(!window.Html5Qrcode){ try{ await loadScriptOnce('https://cdn.jsdelivr.net/npm/html5-qrcode@latest/minified/html5-qrcode.min.js'); }catch{} }
-    if(!window.Html5Qrcode){ try{ await loadScriptOnce('https://unpkg.com/html5-qrcode@latest/minified/html5-qrcode.min.js'); }catch{} }
-  } finally { loading(false); }
-  if(window.Html5Qrcode) html5qrcodeReady = true;
+// ——— Start scan kamera belakang TANPA enum yang deprecated ———
+async function startBackCameraScan(mountId, onScan, boxSize = 300){
+  // 1) Coba native BarcodeDetector bila ada
+  if ('BarcodeDetector' in window) {
+    try { return await startNativeDetector(mountId, onScan, boxSize); }
+    catch (e) { console.warn('BarcodeDetector gagal, fallback ke html5-qrcode', e); }
+  }
+
+  // 2) html5-qrcode
+  await ensureHtml5Qrcode();
+  if (!window.Html5Qrcode) throw new Error('ライブラリ html5-qrcode を読み込めませんでした。');
+
+  const cfg = { fps: 10, qrbox: { width: boxSize, height: boxSize } };
+  const scanner = new Html5Qrcode(mountId);
+
+  try {
+    // Prefer facingMode: environment (ini pengganti Html5QrcodeScanType.BACK_CAMERA)
+    await scanner.start({ facingMode: 'environment' }, cfg, (txt)=>onScan(txt));
+    return scanner;
+  } catch (err1) {
+    // Fallback pilih deviceId terakhir (seringkali kamera belakang)
+    try {
+      const cams = await Html5Qrcode.getCameras();
+      if (!cams || !cams.length) throw err1;
+      const back = cams.find(c => /back|rear|environment/i.test(c.label)) || cams.at(-1);
+      await scanner.start({ deviceId: { exact: back.id } }, cfg, (txt)=>onScan(txt));
+      return scanner;
+    } catch (err2) {
+      await scanner?.stop?.(); scanner?.clear?.();
+      console.error('html5-qrcode failed', err2);
+      throw new Error('カメラが見つかりません。ブラウザ権限やネットワークをご確認ください。');
+    }
+  }
+}
+
+// ——— Native detector (tetap dipertahankan) ———
+async function startNativeDetector(mountId, onScan, boxSize = 300){
+  const mount = document.getElementById(mountId);
+  mount.innerHTML = '';
+  const video = document.createElement('video');
+  video.setAttribute('playsinline','');
+  video.style.width = '100%';
+  video.style.maxWidth = boxSize + 'px';
+  mount.appendChild(video);
+
+  const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
+  video.srcObject = stream; await video.play();
+
+  const detector = new BarcodeDetector({ formats: ['qr_code','code_128','code_39','ean_13','ean_8'] });
+  let stopped = false, last = '';
+  async function tick(){
+    if (stopped) return;
+    try {
+      const codes = await detector.detect(video);
+      const v = codes?.[0]?.rawValue || '';
+      if (v && v !== last) { last = v; onScan(v); }
+    } catch {}
+    requestAnimationFrame(tick);
+  }
+  tick();
+
+  function stop(){
+    stopped = true;
+    try { video.pause(); (stream.getTracks()||[]).forEach(t=>t.stop()); } catch {}
+    mount.innerHTML = '';
+  }
+  return { stop, clear: ()=>{} };
 }
 
 // API
