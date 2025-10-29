@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>在庫管理 - ダッシュボード</title>
 
-  <!-- Bootstrap & Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
+  <!-- Bootstrap CSS (CDN, lalu fallback lokal jika gagal) -->
+  <link id="bs-css" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        onerror="this.onerror=null;this.href='vendor/bootstrap.min.css'"/>
+  <!-- Bootstrap Icons (CDN → lokal) -->
+  <link id="bs-icons" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"
+        onerror="this.onerror=null;this.href='vendor/bootstrap-icons.css'"/>
 
   <!-- App styles -->
   <link href="styles.css" rel="stylesheet"/>
   <link href="print.css" rel="stylesheet"/>
-
   <style>
-    /* kecilkan margin default container */
-    .content{ padding:16px; }
     header.appbar{ position:sticky; top:0; z-index:1020; background:#fff; border-bottom:1px solid #e5e7eb; }
     header .brand{ display:flex; align-items:center; gap:.6rem; }
     header .brand img{ height:32px; }
@@ -29,10 +29,10 @@
     }
     main{ flex:1; }
     .layout{ display:flex; min-height:100vh; gap:0; }
+    .content{ padding:16px; }
   </style>
 </head>
 <body>
-
   <!-- Appbar -->
   <header class="appbar">
     <div class="container-fluid py-2">
@@ -76,30 +76,22 @@
         <!-- ========= Dashboard ========= -->
         <section id="view-dashboard" class="active">
           <div class="row g-3 mb-3">
-            <div class="col-md-3">
-              <div class="card p-3">
-                <div class="text-muted small">アイテム数</div>
-                <div id="metric-total-items" class="fs-3 fw-bold">0</div>
-              </div>
-            </div>
-            <div class="col-md-3">
-              <div class="card p-3">
-                <div class="text-muted small">最小在庫以下</div>
-                <div id="metric-low-stock" class="fs-3 fw-bold">0</div>
-              </div>
-            </div>
-            <div class="col-md-3">
-              <div class="card p-3">
-                <div class="text-muted small">ユーザー</div>
-                <div id="metric-users" class="fs-3 fw-bold">0</div>
-              </div>
-            </div>
-            <div class="col-md-3">
-              <div class="card p-3">
-                <div class="text-muted small">直近30日の取引</div>
-                <div id="metric-txn" class="fs-3 fw-bold">0</div>
-              </div>
-            </div>
+            <div class="col-md-3"><div class="card p-3">
+              <div class="text-muted small"><i class="bi bi-boxes me-1"></i>アイテム数</div>
+              <div id="metric-total-items" class="fs-3 fw-bold text-primary">0</div>
+            </div></div>
+            <div class="col-md-3"><div class="card p-3">
+              <div class="text-muted small"><i class="bi bi-graph-down-arrow me-1"></i>最小在庫以下</div>
+              <div id="metric-low-stock" class="fs-3 fw-bold text-danger">0</div>
+            </div></div>
+            <div class="col-md-3"><div class="card p-3">
+              <div class="text-muted small"><i class="bi bi-people me-1"></i>ユーザー</div>
+              <div id="metric-users" class="fs-3 fw-bold text-success">0</div>
+            </div></div>
+            <div class="col-md-3"><div class="card p-3">
+              <div class="text-muted small"><i class="bi bi-arrow-left-right me-1"></i>直近30日の取引</div>
+              <div id="metric-txn" class="fs-3 fw-bold text-info">0</div>
+            </div></div>
           </div>
 
           <div class="row g-3">
@@ -121,7 +113,9 @@
             <div class="d-flex items-toolbar">
               <div class="left"><div class="fw-semibold">当月アイテム別の動き</div></div>
               <div class="right">
-                <button id="btn-export-mov" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+                <button id="btn-export-mov" class="btn btn-sm btn-outline-secondary">
+                  <i class="bi bi-filetype-csv me-1"></i>CSV
+                </button>
               </div>
             </div>
             <div class="table-responsive">
@@ -154,44 +148,18 @@
               </div>
             </div>
             <form id="form-io" class="row g-3">
-              <div class="col-md-4">
-                <label class="form-label">コード</label>
-                <input id="io-code" class="form-control" placeholder="例: 0001"/>
+              <div class="col-md-4"><label class="form-label">コード</label><input id="io-code" class="form-control"/></div>
+              <div class="col-md-4"><label class="form-label">名称</label><input id="io-name" class="form-control" readonly/></div>
+              <div class="col-md-2"><label class="form-label">価格</label><input id="io-price" class="form-control" readonly/></div>
+              <div class="col-md-2"><label class="form-label">在庫</label><input id="io-stock" class="form-control" readonly/></div>
+              <div class="col-md-3"><label class="form-label">数量</label><input id="io-qty" type="number" class="form-control" required/></div>
+              <div class="col-md-3"><label class="form-label">単位</label>
+                <select id="io-unit" class="form-select"><option>pcs</option><option>kg</option><option>m</option></select>
               </div>
-              <div class="col-md-4">
-                <label class="form-label">名称</label>
-                <input id="io-name" class="form-control" readonly/>
+              <div class="col-md-3"><label class="form-label">種別</label>
+                <select id="io-type" class="form-select"><option>IN</option><option>OUT</option></select>
               </div>
-              <div class="col-md-2">
-                <label class="form-label">価格</label>
-                <input id="io-price" class="form-control" readonly/>
-              </div>
-              <div class="col-md-2">
-                <label class="form-label">在庫</label>
-                <input id="io-stock" class="form-control" readonly/>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">数量</label>
-                <input id="io-qty" type="number" class="form-control" required/>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">単位</label>
-                <select id="io-unit" class="form-select">
-                  <option value="pcs">pcs</option>
-                  <option value="kg">kg</option>
-                  <option value="m">m</option>
-                </select>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">種別</label>
-                <select id="io-type" class="form-select">
-                  <option value="IN">IN</option>
-                  <option value="OUT">OUT</option>
-                </select>
-              </div>
-              <div class="col-12">
-                <button class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i> 登録</button>
-              </div>
+              <div class="col-12"><button class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i> 登録</button></div>
             </form>
           </div>
         </section>
@@ -217,17 +185,9 @@
               </div>
             </div>
             <div class="row g-3 mb-2">
-              <div class="col-md-4">
-                <label class="form-label">コード</label>
-                <input id="st-code" class="form-control"/>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">実在数量</label>
-                <input id="st-qty" type="number" class="form-control"/>
-              </div>
-              <div class="col-md-2 d-flex align-items-end">
-                <button id="st-add" class="btn btn-primary w-100">追加</button>
-              </div>
+              <div class="col-md-4"><label class="form-label">コード</label><input id="st-code" class="form-control"/></div>
+              <div class="col-md-3"><label class="form-label">実在数量</label><input id="st-qty" type="number" class="form-control"/></div>
+              <div class="col-md-2 d-flex align-items-end"><button id="st-add" class="btn btn-primary w-100">追加</button></div>
             </div>
             <div class="table-responsive">
               <table class="table table-sm align-middle">
@@ -295,22 +255,18 @@
           </div>
 
           <div class="row g-3">
-            <div class="col-lg-7">
-              <div class="card p-3">
-                <div class="table-responsive">
-                  <table class="table table-sm align-middle">
-                    <thead><tr><th style="width:170px">QR</th><th>ID</th><th>名前</th><th>権限</th><th class="text-end">DL</th></tr></thead>
-                    <tbody id="tbl-userqr"></tbody>
-                  </table>
-                </div>
+            <div class="col-lg-7"><div class="card p-3">
+              <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                  <thead><tr><th style="width:170px">QR</th><th>ID</th><th>名前</th><th>権限</th><th class="text-end">DL</th></tr></thead>
+                  <tbody id="tbl-userqr"></tbody>
+                </table>
               </div>
-            </div>
-            <div class="col-lg-5">
-              <div class="card p-3">
-                <div class="fw-semibold mb-2">印刷プレビュー</div>
-                <div id="print-qr-users-grid" class="d-flex flex-wrap gap-2"></div>
-              </div>
-            </div>
+            </div></div>
+            <div class="col-lg-5"><div class="card p-3">
+              <div class="fw-semibold mb-2">印刷プレビュー</div>
+              <div id="print-qr-users-grid" class="d-flex flex-wrap gap-2"></div>
+            </div></div>
           </div>
         </section>
 
@@ -339,7 +295,7 @@
     </main>
   </div>
 
-  <!-- ===== Modals ===== -->
+  <!-- ===== Modals (Item/User/History) ===== -->
   <!-- New Item -->
   <div class="modal fade" id="dlg-new-item" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -357,9 +313,7 @@
             <div class="col-md-6"><label class="form-label">ロット単位</label><input id="i-lotUnit" class="form-control" value="pcs"/></div>
             <div class="col-md-6"><label class="form-label">ロット数量</label><input id="i-lotQty" type="number" class="form-control" value="0"/></div>
           </div>
-          <div class="mt-3">
-            <button type="button" id="btn-item-makeqr" class="btn btn-outline-secondary"><i class="bi bi-qr-code me-1"></i>QRプレビュー</button>
-          </div>
+          <div class="mt-3"><button type="button" id="btn-item-makeqr" class="btn btn-outline-secondary"><i class="bi bi-qr-code me-1"></i>QRプレビュー</button></div>
         </div>
         <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
       </form>
@@ -399,10 +353,7 @@
             <div class="col-md-6"><label class="form-label">名前</label><input id="u-name" class="form-control" required/></div>
             <div class="col-md-6"><label class="form-label">ID</label><input id="u-id" class="form-control" required/></div>
             <div class="col-md-6"><label class="form-label">権限</label>
-              <select id="u-role" class="form-select">
-                <option value="user">user</option>
-                <option value="admin">admin</option>
-              </select>
+              <select id="u-role" class="form-select"><option value="user">user</option><option value="admin">admin</option></select>
             </div>
             <div class="col-md-6"><label class="form-label">PIN</label><input id="u-pin" class="form-control"/></div>
           </div>
@@ -424,9 +375,7 @@
             <div class="col-md-4"><label class="form-label">コード</label><input id="h-code" class="form-control"/></div>
             <div class="col-md-4"><label class="form-label">数量</label><input id="h-qty" type="number" class="form-control"/></div>
             <div class="col-md-6"><label class="form-label">単位</label><input id="h-unit" class="form-control" value="pcs"/></div>
-            <div class="col-md-6"><label class="form-label">種別</label>
-              <select id="h-type" class="form-select"><option>IN</option><option>OUT</option></select>
-            </div>
+            <div class="col-md-6"><label class="form-label">種別</label><select id="h-type" class="form-select"><option>IN</option><option>OUT</option></select></div>
             <div class="col-12"><label class="form-label">備考</label><input id="h-note" class="form-control"/></div>
           </div>
         </div>
@@ -443,17 +392,20 @@
     </div>
   </div>
 
-  <!-- ===== Scripts ===== -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- ===== Core Libraries (CDN → fallback lokal via onerror) ===== -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+          onerror="this.onerror=null;this.src='vendor/chart.umd.min.js'"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
+          onerror="this.onerror=null;this.src='vendor/xlsx.full.min.js'"></script>
 
-  <!-- QR generator (local lib) -->
+  <!-- QRCode generator untuk render gambar QR (HARUS sebelum app.js) -->
   <script src="qrlib.js"></script>
 
-  <!-- PRIORITAS LOKAL html5-qrcode (taruh file ini di repo). 
-       Jika jaringan memblok CDN, ini yang dipakai oleh app.js -->
-  <script src="vendor/html5-qrcode.min.js"></script>
+  <!-- html5-qrcode: root → vendor → (CDN backup disuntik via app.js jika perlu) -->
+  <script src="html5-qrcode.min.js"></script>
+  <script>if(!window.Html5Qrcode){var s=document.createElement('script');s.src='vendor/html5-qrcode.min.js';document.head.appendChild(s);}</script>
 
   <!-- Config & App -->
   <script src="config.js"></script>
