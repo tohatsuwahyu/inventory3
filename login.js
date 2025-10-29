@@ -97,9 +97,9 @@
 
       // ——— setting cepat: fps tinggi + resolusi 640x480 + kotak kecil
       const cfg = {
-        fps: 24,
-        qrbox: { width: (innerWidth<480? 160:180), height: (innerWidth<480? 160:180) },
-        aspectRatio: 1.33,
+  fps: 24,
+  qrbox: { width: 150, height: 150 },   // ← kecilkan ke 150
+  aspectRatio: 1.33,
         rememberLastUsedCamera: true,
         disableFlip: true,
         videoConstraints:{
@@ -130,7 +130,7 @@
         // dorong autofocus/autoexposure/zoom (jika didukung)
         try{
           await scanner.applyVideoConstraints({
-            advanced: [{focusMode:'continuous'},{exposureMode:'continuous'},{zoom:2}]
+            advanced: [{focusMode:'continuous'},{exposureMode:'continuous'},{zoom:3}]
           }).catch(()=>{});
         }catch{}
         return scanner;
