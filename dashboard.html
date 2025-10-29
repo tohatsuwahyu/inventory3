@@ -296,7 +296,7 @@
     </main>
   </div>
 
-  <!-- ===== Global Loading (opsional) ===== -->
+  <!-- ===== Global Loading ===== -->
   <div id="global-loading" class="d-none">
     <div class="box">
       <div class="spinner"></div>
@@ -304,55 +304,36 @@
     </div>
   </div>
 
- <!-- Core libs (CDN + fallback ke vendor) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
-<!-- … head/HTML kamu … -->
+  <!-- Core libs -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-<!-- libs dulu -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- qrlib.js HARUS sebelum app.js -->
+  <script src="./qrlib.js"></script>
 
-<!-- qrlib.js HARUS sebelum app.js -->
-<script src="./qrlib.js"></script>
+  <!-- html5-qrcode (prefetch; app.js juga akan fallback jika tidak ada) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 
-<!-- html5-qrcode opsional (akan di-load otomatis juga, ini hanya prefetch) -->
-<script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
+  <!-- Konfigurasi & App -->
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
 
-<!-- app -->
-<script src="./config.js"></script>
-<script src="./app.js"></script>
-
-
-
-  <!-- ===== Minimal nav & sidebar handler (agar menu pasti bisa diklik) ===== -->
+  <!-- Burger/open sidebar minimal (cadangan, aman bersama app.js) -->
   <script>
-  (function(){
-    const sb = document.getElementById('sb');
-    const bd = document.getElementById('sb-backdrop');
-    const burger = document.getElementById('burger');
-    const btnMenu = document.getElementById('btn-menu');
-    function closeSB(){ sb.classList.remove('open'); bd.classList.remove('show'); }
-    function toggleSB(){ sb.classList.toggle('open'); bd.classList.toggle('show'); }
-    if (burger) burger.addEventListener('click', toggleSB);
-    if (btnMenu) btnMenu.addEventListener('click', toggleSB);
-    if (bd) bd.addEventListener('click', closeSB);
-
-    document.addEventListener('click', (e)=>{
-      const a = e.target.closest('aside nav a[data-view]');
-      if (!a) return;
-      e.preventDefault();
-      document.querySelectorAll('aside nav a').forEach(n=>n.classList.remove('active'));
-      a.classList.add('active');
-      const id = a.getAttribute('data-view');
-      document.querySelectorAll('main section').forEach(s=>s.classList.add('d-none'));
-      const sec = document.getElementById(id);
-      if (sec) sec.classList.remove('d-none');
-      const title = a.textContent.trim();
-      const h = document.getElementById('page-title'); if (h) h.textContent = title;
-      closeSB();
-    });
-  })();
+    (function(){
+      const sb = document.getElementById('sb');
+      const bd = document.getElementById('sb-backdrop');
+      const burger = document.getElementById('burger');
+      const btnMenu = document.getElementById('btn-menu');
+      function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
+      function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
+      burger?.addEventListener('click', toggleSB);
+      btnMenu?.addEventListener('click', toggleSB);
+      bd?.addEventListener('click', closeSB);
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSB(); });
+    })();
   </script>
 </body>
 </html>
