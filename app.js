@@ -546,12 +546,20 @@ function openItemDetail(code){
 // === GANTI seluruh fungsi makeItemLabelDataURL dengan versi ini ===
 async function makeItemLabelDataURL(item){
   // Kanvas dasar
-  const W = 760, H = 260, pad = 16;
-  const imgW = 200;                // kolom gambar
-  const gap  = 14;
-  const qrBox = H - 2*pad;         // tinggi penuh kolom QR
-  const qrSize = Math.min(180, qrBox); // ukuran QR (dibuat sedikit lebih kecil dari kolom)
-  const gridX = pad + imgW + gap + qrSize + gap;
+  // --- ukuran & layout
+const W = 760, H = 260, pad = 16;
+const imgW = 200;                 // kolom gambar kiri
+const gap  = 14;
+const qrBox  = H - 2*pad;         // tinggi ruang QR (kolom tengah)
+const qrSize = Math.min(180, qrBox);
+const QUIET  = 10;                // quiet-zone QR (px) → dihitung ke lebar kolom!
+
+// total lebar kolom QR (inti + quiet di kiri dan kanan)
+const colQRW = qrSize + 2*QUIET;
+
+// GRID kanan harus mulai setelah seluruh kolom QR (termasuk quiet)
+const gridX = pad + imgW + gap + colQRW + gap;
+
 
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
@@ -567,17 +575,20 @@ async function makeItemLabelDataURL(item){
   await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
 
   // 2) QR CODE (tengah) — dengan quiet zone & presisi -------
-  const qx = rx + rw + gap + Math.max(0, (qrBox - qrSize)/2);
-  const qy = pad + Math.max(0, (qrBox - qrSize)/2);
-  // quiet zone 8px
-  g.fillStyle = '#fff';
-  g.fillRect(qx-8, qy-8, qrSize+16, qrSize+16);
-  try {
-    // buat QR pada resolusi final biar tajam
-    const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
-    const qimg = new Image(); qimg.src = du;
-    await imgLoaded(qimg);
-    g.drawImage(qimg, qx, qy, qrSize, qrSize);
+ // posisi QR (dengan quiet-zone di dalam kolom)
+const qx = pad + imgW + gap + QUIET + Math.max(0, (qrBox - qrSize)/2);
+const qy = pad + Math.max(0, (qrBox - qrSize)/2);
+
+// quiet zone
+g.fillStyle = '#fff';
+g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2*QUIET, qrSize + 2*QUIET);
+
+// gambar QR
+const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
+const qimg = new Image(); qimg.src = du;
+await imgLoaded(qimg);
+g.drawImage(qimg, qx, qy, qrSize, qrSize);
+
   } catch {}
 
   // 3) GRID INFO KANAN --------------------------------------
