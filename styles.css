@@ -1,64 +1,206 @@
-/* ===== Login page ===== */
-.login-page, .login-page * { box-sizing: border-box; }
-.login-page { min-height: 100dvh; font-family: "Noto Sans JP", system-ui, sans-serif; }
+/* ===========================
+   Inventory UI – styles.css
+   Modern, rapi, dan konsisten
+   =========================== */
 
-.login-bg {
-  position: fixed; inset: 0;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.95) 0%, rgba(255,255,255,.85) 30%, rgba(255,255,255,.85) 100%),
-    /* gunakan gambar dari tohatsu.co.jp (bebas ganti path gambar lain di domain tsb) */
-    url('https://www.tohatsu.co.jp/asset/images/product/hero_01.jpg')
-    center/cover no-repeat;
-  z-index: 0;  /* paling belakang */
+/* ---- CSS Variables ---- */
+:root{
+  --bg: #0f172a;            /* slate-900 */
+  --panel: #ffffff;
+  --muted: #64748b;         /* slate-500 */
+  --accent: #2563eb;        /* blue-600 */
+  --accent-weak:#e0edff;
+  --danger:#ef4444;         /* red-500 */
+  --success:#16a34a;        /* green-600 */
+  --border:#e5e7eb;         /* gray-200 */
+  --border-strong:#cbd5e1;  /* slate-300 */
+  --radius: 14px;
+  --shadow: 0 8px 24px rgba(15,23,42,.08);
 }
-.login-overlay { display: none; } /* tidak perlu overlay kedua */
 
-.appbar{
-  position: relative;
-  z-index: 2;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; gap: 12px;
-  background: transparent;
+/* ---- Base ---- */
+html,body{ height:100%; }
+body{
+  background:#f7f8fb;
+  color:#0f172a;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
 }
-.appbar .brand{ display: inline-flex; gap:10px; align-items:center; }
-.appbar .brand img{ width:28px; height:28px; }
-.appbar .brand span{ font-weight:700; letter-spacing:.02em; }
 
-.burger{
-  display:none; border:0; background:#f1f5f9; border-radius:10px; padding:6px 10px; cursor:pointer;
+/* ---- Panels & Cards ---- */
+.card, .panel{
+  background:var(--panel);
+  border-radius:var(--radius);
+  border:1px solid var(--border);
+  box-shadow:var(--shadow);
 }
-.topnav a{ display:inline-block; padding:8px 12px; border-radius:10px; background:#f1f5f9; }
 
-/* login card */
-.login-wrap{
-  position: relative; z-index: 2;
-  min-height: calc(100dvh - 60px);
-  display: grid; place-items: center; padding: 24px 16px;
+.section-title{
+  font-weight:700;
+  letter-spacing:.02em;
 }
-.login-card{
-  width: min(560px, 96vw);
-  background: #fff; border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(15,23,42,.08);
-  padding: 24px;
-}
-.login-card h1{ font-size: 22px; margin:0 0 8px; }
-.login-card .lbl{ display:block; margin: 14px 0; font-size: 14px; }
-.login-card input{
-  width: 100%; margin-top: 6px; padding: 12px 14px;
-  border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;
-}
-.login-card .actions{ display:flex; gap:10px; justify-content:flex-end; margin-top: 8px; }
-.login-card .primary{ background:#2563eb; color:#fff; border:0; padding:10px 14px; border-radius: 12px; cursor:pointer; }
-.login-card .ghost{ background:#f1f5f9; color:#111827; border:0; padding:10px 14px; border-radius: 12px; cursor:pointer; }
 
-/* QR dialog */
-.qr-dialog::backdrop { background: rgba(0,0,0,.25); }
-.qr-dialog { border:0; border-radius: 16px; width: min(520px, 96vw); padding: 16px; }
-
-/* responsive */
-@media (max-width: 640px){
-  .burger{ display:block; }
-  .topnav{ position:absolute; top:52px; left:16px; right:16px; display:none; }
-  .topnav.open{ display:flex; background:#fff; border-radius: 12px; box-shadow: 0 10px 30px rgba(15,23,42,.08); }
-  .topnav a{ margin:8px; }
+/* ---- Sidebar (optional class names) ---- */
+.sidebar{
+  background:#111827;
+  color:#e5e7eb;
 }
+.sidebar a{
+  color:#cbd5e1;
+  text-decoration:none;
+  display:flex;
+  align-items:center;
+  gap:.6rem;
+  padding:.6rem .9rem;
+  border-radius:10px;
+}
+.sidebar a:hover{ background:rgba(255,255,255,.06); color:#fff; }
+.sidebar a.active{ background:#1f2937; color:#fff; }
+
+/* ---- Main view transitions ---- */
+main section{ opacity:0; transform:translateY(8px); transition:.18s ease; }
+main section.active{ opacity:1; transform:none; }
+
+/* ---- Table ---- */
+.table{
+  border-color:var(--border);
+  --bs-table-bg: #fff;
+}
+.table thead th{
+  background:#f3f6ff;
+  color:#334155;
+  border-bottom:1px solid var(--border-strong);
+  font-weight:600;
+}
+.table td, .table th{ vertical-align:middle; }
+
+/* right aligned numbers helper */
+.text-end{ text-align:right !important; }
+
+/* ---- 商品一覧 toolbar (rapi & responsif) ---- */
+.items-toolbar{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.6rem;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:.75rem;
+}
+.items-toolbar .left,
+.items-toolbar .right{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.6rem;
+  align-items:center;
+}
+.items-toolbar .search{
+  min-width:240px;
+}
+@media (max-width: 768px){
+  .items-toolbar{ gap:.8rem; }
+  .items-toolbar .search{ min-width: 180px; flex:1; }
+}
+
+/* ---- QR preview cell ---- */
+.qr-cell{ width: 160px; min-width:160px; }
+.qrbox{
+  display:flex; flex-direction:column; align-items:center; gap:.4rem;
+}
+.qrbox canvas, .qrbox img{
+  width:84px; height:84px;
+  image-rendering: pixelated;
+}
+.qrbox .caption{
+  font-size:.8rem; color:var(--muted); text-align:center;
+}
+
+/* ---- Item thumbnail ---- */
+.thumb{
+  width:56px; height:56px; object-fit:cover;
+  border-radius:10px; border:1px solid var(--border);
+  box-shadow:0 2px 8px rgba(2,6,23,.06);
+}
+
+/* ---- Clickable text (nama item) ---- */
+.clickable{ cursor:pointer; }
+.clickable:hover{ text-decoration:underline; color:var(--accent); }
+
+/* ---- Action buttons group ---- */
+.btn-group.btn-group-sm .btn{
+  border-radius:10px !important;
+}
+.btn-outline-success{ --bs-btn-color: var(--success); --bs-btn-border-color: var(--success); }
+.btn-outline-danger{ --bs-btn-color: var(--danger);  --bs-btn-border-color: var(--danger); }
+
+/* ---- Item detail card ---- */
+#card-item-detail .small{ color:var(--muted); }
+
+/* ---- Loading overlay (global) ---- */
+#global-loading{
+  position:fixed; inset:0; z-index:2000;
+  background:rgba(15,23,42,.42);
+  display:flex; align-items:center; justify-content:center;
+  backdrop-filter: blur(2px);
+}
+#global-loading .box{
+  background:#fff; border-radius:16px; padding:18px 22px;
+  display:flex; align-items:center; gap:12px;
+  box-shadow: var(--shadow);
+  border:1px solid var(--border);
+}
+#global-loading .spinner{
+  width:22px; height:22px; border:3px solid #e2e8f0; border-top-color:var(--accent);
+  border-radius:50%; animation:spin .8s linear infinite;
+}
+#global-loading .text{ font-weight:600; color:#1f2937; }
+@keyframes spin{ to{ transform:rotate(360deg) } }
+
+/* ---- Print: user QR sheet cards ---- */
+.qr-card{
+  width: 170px; padding:10px; border:1px dashed var(--border-strong);
+  border-radius:12px; background:#fff; text-align:center;
+}
+.qr-card .title{
+  font-size:.9rem; margin-top:.35rem; color:#334155;
+}
+.qr-card canvas, .qr-card img{ width:110px; height:110px; }
+
+/* ---- Forms & inputs ---- */
+.form-control, .form-select{
+  border-radius:10px; border-color:var(--border-strong);
+}
+.form-control:focus, .form-select:focus{
+  border-color:var(--accent); box-shadow:0 0 0 .15rem rgba(37,99,235,.15);
+}
+
+/* ---- Buttons polish ---- */
+.btn{
+  border-radius:12px;
+}
+.btn-primary{
+  background:var(--accent); border-color:var(--accent);
+}
+.btn-primary:hover{ filter:brightness(0.95); }
+
+/* ---- Chips / badges (opsional) ---- */
+.badge-soft{
+  background:var(--accent-weak); color:#1e40af; border-radius:999px; padding:.25rem .55rem;
+}
+
+/* ---- Small utilities ---- */
+.gap-6{ gap:.6rem !important; }
+.minw-160{ min-width:160px; }
+.maxw-320{ max-width:320px; }
+
+/* ---- Responsive tweaks ---- */
+@media (max-width: 992px){
+  .qr-cell{ width:130px; min-width:130px; }
+  .thumb{ width:48px; height:48px; }
+}
+
+/* ---- Print tweaks (umum) ---- */
+@media print{
+  body{ background:#fff; }
+  .sidebar, header, nav, .items-toolbar, .no-print{ display:none !important; }
+}
+
