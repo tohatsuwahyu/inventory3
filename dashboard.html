@@ -209,6 +209,11 @@
           <button id="btn-items-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i> CSV</button>
           <button id="btn-items-xlsx" class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-excel me-1"></i> Excel</button>
           <button id="btn-open-new-item" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg me-1"></i> 新規</button>
+          <!-- …di dalam div tombol di view-items -->
+<button id="btn-items-print-all" class="btn btn-sm btn-outline-secondary">
+  <i class="bi bi-printer me-1"></i> 全件ラベルを印刷
+</button>
+
         </div>
       </div>
       <div class="table-responsive mt-2">
@@ -282,6 +287,12 @@
       </div>
       <div id="item-detail-body" class="mt-2"></div>
     </div>
+    <!-- Print area (hidden) -->
+<div id="print-all-labels" class="d-none">
+  <div class="p-4" id="print-labels-grid"
+       style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px"></div>
+</div>
+
   </section>
 
   <!-- ===== ユーザー / QR ===== -->
