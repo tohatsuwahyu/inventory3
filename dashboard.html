@@ -1,4 +1,4 @@
-<!doctype html>
+  <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8"/>
@@ -336,34 +336,55 @@
   <!-- Nav fail-safe: pastikan selalu tampil -->
   <script>
   (function(){
-    const links = document.querySelectorAll('aside nav a[data-view]');
-    const sections = document.querySelectorAll('main section');
-    const titleEl = document.getElementById('page-title');
-    const sb = document.getElementById('sb');
-    const bd = document.getElementById('sb-backdrop');
-    const burger = document.getElementById('burger');
-    const btnMenu = document.getElementById('btn-menu');
-    function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
-    function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
-    burger?.addEventListener('click', toggleSB); btnMenu?.addEventListener('click', toggleSB);
-    bd?.addEventListener('click', closeSB);
+  const links   = document.querySelectorAll('aside nav a[data-view]');
+  const sections= document.querySelectorAll('main section');
+  const titleEl = document.getElementById('page-title');
+  const sb = document.getElementById('sb');
+  const bd = document.getElementById('sb-backdrop');
+  const burger = document.getElementById('burger');
+  const btnMenu = document.getElementById('btn-menu');
 
-    function show(id){ sections.forEach(s=>s.classList.add('d-none')); document.getElementById(id)?.classList.remove('d-none'); }
-    links.forEach(a=>{
-      a.addEventListener('click',(e)=>{
-        e.preventDefault();
-        links.forEach(n=>n.classList.remove('active'));
-        a.classList.add('active');
-        const id=a.dataset.view; show(id);
-        if(titleEl) titleEl.textContent=a.textContent.trim();
-        closeSB();
-      });
+  function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
+  function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
+  burger?.addEventListener('click', toggleSB);
+  btnMenu?.addEventListener('click', toggleSB);
+  bd?.addEventListener('click', closeSB);
+
+  function show(id){
+    sections.forEach(s=>s.classList.add('d-none'));
+    document.getElementById(id)?.classList.remove('d-none');
+
+    // Panggil renderer sesuai view
+    try{
+      switch(id){
+        case 'view-dashboard':  window.renderDashboard?.(); break;
+        case 'view-items':      window.renderItems?.();     break;
+        case 'view-users':      window.renderUsers?.();     break;
+        case 'view-history':    window.renderHistory?.();   break;
+        case 'view-io':         /* IO render malas (on demand) */ break;
+        case 'view-shelf':      /* stocktake on demand */ break;
+      }
+    }catch(e){ console.error(e); }
+  }
+
+  links.forEach(a=>{
+    a.addEventListener('click',(e)=>{
+      e.preventDefault();
+      links.forEach(n=>n.classList.remove('active'));
+      a.classList.add('active');
+      const id=a.dataset.view;
+      show(id);
+      if (titleEl) titleEl.textContent=a.textContent.trim();
+      closeSB();
     });
-    if (![...sections].some(s=>!s.classList.contains('d-none'))) {
-      show('view-dashboard');
-      document.querySelector('aside nav a[data-view="view-dashboard"]')?.classList.add('active');
-    }
-  })();
+  });
+
+  // First paint
+  if (![...sections].some(s=>!s.classList.contains('d-none'))) {
+    show('view-dashboard');
+    document.querySelector('aside nav a[data-view="view-dashboard"]')?.classList.add('active');
+  }
+})();
   </script>
 </body>
 </html>
