@@ -119,8 +119,12 @@ async function ensureQRCode(){
 }
 
 // ======= Scanner start (kecil & fokus, guard constant) =======
-async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 180 : 220)) {
-  // batasi ukuran container
+async function startBackCameraScan(
+  mountId,
+  onScan,
+  boxSize = (isMobile() ? 200 : 240)
+){
+  // batas tampilan (biar tidak memenuhi layar)
   const mount = document.getElementById(mountId);
   if (mount){
     mount.style.maxWidth = isMobile() ? '360px' : '420px';
@@ -129,37 +133,51 @@ async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 180 :
     mount.style.position = 'relative';
   }
 
+  // 1) Coba BarcodeDetector (akurat & ringan)
   if ('BarcodeDetector' in window) {
     try { return await startNativeDetector(mountId, onScan, boxSize); }
     catch (e) { console.warn('BarcodeDetector gagal, fallback ke html5-qrcode', e); }
   }
 
+  // 2) Fallback html5-qrcode dengan konfigurasi yang “ketat”
   await ensureHtml5Qrcode();
   if (!window.Html5Qrcode) throw new Error('ライブラリ html5-qrcode を読み込めませんでした。');
 
+  // hanya QR_CODE (lebih cepat daripada multi-format)
   const formatsOpt = (window.Html5QrcodeSupportedFormats && Html5QrcodeSupportedFormats.QR_CODE)
     ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] }
     : {};
 
+  // Konfigurasi penting untuk akurasi
   const cfg = {
-    fps: 8,
-    qrbox: { width: boxSize, height: boxSize },   // kotak deteksi kecil
+    fps: 12,                            // sedikit lebih tinggi
+    qrbox: { width: boxSize, height: boxSize },  // kotak fokus kecil
     aspectRatio: 1.33,
     rememberLastUsedCamera: true,
-    verbose: false,
+    disableFlip: true,                  // JANGAN mirror; beberapa kamera terbalik
+    // Paksa kamera belakang + resolusi/fokus yang bagus
+    videoConstraints: {
+      facingMode: { ideal: 'environment' },
+      width:  { ideal: 1280 },
+      height: { ideal: 720 },
+      // browser yang mendukung akan memakai ini:
+      focusMode: 'continuous'          // continuous autofocus
+    },
     ...formatsOpt
   };
 
   const scanner = new Html5Qrcode(mountId, { useBarCodeDetectorIfSupported: true });
+
+  // start dengan facingMode (umum), jika gagal → pilih deviceId belakang
   try {
-    await scanner.start({ facingMode: 'environment' }, cfg, (txt)=>onScan(txt));
+    await scanner.start({ facingMode: 'environment' }, cfg, txt => onScan(txt));
     return scanner;
   } catch (err1) {
     try {
       const cams = await Html5Qrcode.getCameras();
       if (!cams?.length) throw err1;
-      const back = cams.find(c => /back|rear|environment/i.test(c.label)) || cams.at(-1);
-      await scanner.start({ deviceId: { exact: back.id } }, cfg, (txt)=>onScan(txt));
+      const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams.at(-1);
+      await scanner.start({ deviceId: { exact: back.id } }, cfg, txt => onScan(txt));
       return scanner;
     } catch (err2) {
       await scanner?.stop?.(); scanner?.clear?.();
@@ -167,6 +185,7 @@ async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 180 :
     }
   }
 }
+
 
 async function startNativeDetector(mountId, onScan, boxSize = 240){
   const mount = document.getElementById(mountId);
