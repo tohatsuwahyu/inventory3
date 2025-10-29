@@ -5,21 +5,22 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>在庫管理 - ダッシュボード</title>
 
-  <!-- Bootstrap CSS (CDN → fallback lokal) -->
+  <!-- Bootstrap (CDN → fallback lokal) -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
         onerror="this.onerror=null;this.href='vendor/bootstrap.min.css'"/>
-  <!-- Bootstrap Icons (CDN → lokal) -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"
         onerror="this.onerror=null;this.href='vendor/bootstrap-icons.css'"/>
 
-  <!-- App styles -->
-  <link href="styles.css?v=20251029" rel="stylesheet"/>
-  <link href="print.css?v=20251029" rel="stylesheet"/>
+  <!-- Apps CSS -->
+  <link href="styles.css?v=20251030" rel="stylesheet"/>
+  <link href="print.css?v=20251030" rel="stylesheet"/>
 
   <style>
+    /* Layout & Sidebar */
     header.appbar{position:sticky;top:0;z-index:1020;background:#fff;border-bottom:1px solid #e5e7eb}
     header .brand{display:flex;align-items:center;gap:.6rem}
     header .brand img{height:32px}
+    .layout{display:flex;min-height:100vh;gap:0}
     .sidebar{min-width:240px;max-width:260px;padding:14px}
     @media (max-width:992px){
       .layout{display:block}
@@ -28,35 +29,23 @@
       #sb-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.3);display:none;z-index:1030}
       #sb-backdrop.show{display:block}
     }
-    main{flex:1}
-    .layout{display:flex;min-height:100vh;gap:0}
     .content{padding:16px}
-    /* ==== Scan area: kecil & tetap proporsional ==== */
-#io-scan-area,
-#scan-area{
-  width:100%;
-  max-width:420px;        /* atur ukuran di sini (320–480px) */
-  margin:0 auto;
-  aspect-ratio: 4 / 3;    /* proporsi kamera */
-  position:relative;
-  overflow:hidden;
-  background:#0b0b0b10;
-  border-radius:12px;
-}
 
-/* library html5-qrcode sering set width:100% -> tetapkan ke container */
-#io-scan-area video,
-#io-scan-area canvas,
-#io-scan-area img,
-#scan-area video,
-#scan-area canvas,
-#scan-area img{
-  width:100% !important;
-  height:100% !important;
-  object-fit:cover;
-}
-.html5-qrcode-element{ display:none !important; } /* sembunyikan tombol default lib */
+    /* Tabel 置場 (kolom ke-8) agar presisi */
+    #view-items thead th:nth-child(8),
+    #view-items tbody td:nth-child(8){
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing:.5px; white-space:nowrap; vertical-align:middle; min-width:96px;
+    }
 
+    /* Chart box supaya tinggi stabil */
+    .chart-box{ height: 340px; }
+    @media (max-width: 991.98px){ .chart-box{ height: 300px; } }
+    .chart-box canvas{ width:100%!important; height:100%!important; }
+
+    /* IO / Stocktake scan area */
+    #io-scan-area,#scan-area{ width:100%; max-width:420px; aspect-ratio:4/3; margin:0 auto; overflow:hidden; border-radius:12px; }
+    #io-scan-area video,#io-scan-area canvas,#scan-area video,#scan-area canvas{ width:100%!important; height:100%!important; object-fit:cover; }
   </style>
 </head>
 <body>
@@ -81,14 +70,14 @@
 
   <div class="layout">
     <!-- Sidebar -->
-    <aside id="sb" class="sidebar">
+    <aside id="sb" class="sidebar text-white">
       <nav class="d-flex flex-column gap-1">
-        <a data-view="view-dashboard" class="active"><i class="bi bi-speedometer2"></i> ダッシュボード</a>
-        <a data-view="view-io"><i class="bi bi-box-seam"></i> 入出庫（QR対応）</a>
-        <a data-view="view-shelf"><i class="bi bi-clipboard-check"></i> 棚卸</a>
-        <a data-view="view-items"><i class="bi bi-boxes"></i> 商品一覧</a>
-        <a data-view="view-users"><i class="bi bi-person-badge"></i> ユーザー / QR</a>
-        <a data-view="view-history"><i class="bi bi-clock-history"></i> 履歴</a>
+        <a href="#" data-view="view-dashboard" class="active"><i class="bi bi-speedometer2"></i> ダッシュボード</a>
+        <a href="#" data-view="view-io"><i class="bi bi-box-seam"></i> 入出庫（QR対応）</a>
+        <a href="#" data-view="view-shelf"><i class="bi bi-clipboard-check"></i> 棚卸</a>
+        <a href="#" data-view="view-items"><i class="bi bi-boxes"></i> 商品一覧</a>
+        <a href="#" data-view="view-users"><i class="bi bi-person-badge"></i> ユーザー / QR</a>
+        <a href="#" data-view="view-history"><i class="bi bi-clock-history"></i> 履歴</a>
       </nav>
     </aside>
 
@@ -101,7 +90,7 @@
         </div>
 
         <!-- ========= Dashboard ========= -->
-        <section id="view-dashboard" class="active">
+        <section id="view-dashboard">
           <div class="row g-3 mb-3">
             <div class="col-md-3"><div class="card p-3">
               <div class="text-muted small"><i class="bi bi-boxes me-1"></i>アイテム数</div>
@@ -131,7 +120,7 @@
             <div class="col-lg-4">
               <div class="card p-3">
                 <div class="text-muted small mb-2">当月比率</div>
-               <div class="chart-box"><canvas id="chart-pie"></canvas></div>
+                <div class="chart-box"><canvas id="chart-pie"></canvas></div>
               </div>
             </div>
           </div>
@@ -157,7 +146,7 @@
         <!-- ========= 入出庫 ========= -->
         <section id="view-io" class="d-none">
           <div class="card p-3 mb-3">
-            <div class="items-toolbar">
+            <div class="items-toolbar d-flex justify-content-between align-items-center">
               <div class="left"><div class="fw-semibold">スキャン</div></div>
               <div class="right">
                 <button id="btn-io-scan" class="btn btn-sm btn-primary"><i class="bi bi-camera-video me-1"></i> 開始</button>
@@ -168,7 +157,7 @@
           </div>
 
           <div class="card p-3">
-            <div class="items-toolbar">
+            <div class="items-toolbar d-flex justify-content-between align-items-center">
               <div class="left"><div class="fw-semibold">入出庫入力</div></div>
               <div class="right">
                 <button id="btn-io-lookup" class="btn btn-sm btn-outline-secondary"><i class="bi bi-search me-1"></i>照会</button>
@@ -194,7 +183,7 @@
         <!-- ========= 棚卸 ========= -->
         <section id="view-shelf" class="d-none">
           <div class="card p-3 mb-3">
-            <div class="items-toolbar">
+            <div class="items-toolbar d-flex justify-content-between align-items-center">
               <div class="left"><div class="fw-semibold">スキャン</div></div>
               <div class="right">
                 <button id="btn-start-scan" class="btn btn-sm btn-primary"><i class="bi bi-camera-video me-1"></i> 開始</button>
@@ -205,7 +194,7 @@
           </div>
 
           <div class="card p-3">
-            <div class="items-toolbar">
+            <div class="items-toolbar d-flex justify-content-between align-items-center">
               <div class="left"><div class="fw-semibold">手入力</div></div>
               <div class="right">
                 <button id="st-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
@@ -227,10 +216,10 @@
 
         <!-- ========= 商品一覧 ========= -->
         <section id="view-items" class="d-none">
-          <div class="items-toolbar card p-3 mb-3">
-            <div class="left gap-6">
+          <div class="items-toolbar card p-3 mb-3 d-flex justify-content-between align-items-center">
+            <div class="left d-flex align-items-center gap-3">
               <div class="fw-semibold">商品一覧</div>
-              <input id="items-search" class="form-control search" placeholder="名称で検索…"/>
+              <input id="items-search" class="form-control search" placeholder="名称で検索…" style="max-width:260px"/>
             </div>
             <div class="right">
               <button id="btn-items-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
@@ -273,7 +262,7 @@
 
         <!-- ========= ユーザー / QR ========= -->
         <section id="view-users" class="d-none">
-          <div class="items-toolbar card p-3 mb-3">
+          <div class="items-toolbar card p-3 mb-3 d-flex justify-content-between align-items-center">
             <div class="left"><div class="fw-semibold">ユーザー / QR</div></div>
             <div class="right">
               <button id="btn-print-qr-users" class="btn btn-sm btn-outline-secondary d-none"><i class="bi bi-printer me-1"></i> 印刷</button>
@@ -299,9 +288,9 @@
 
         <!-- ========= 履歴 ========= -->
         <section id="view-history" class="d-none">
-          <div class="items-toolbar card p-3 mb-3">
+          <div class="items-toolbar card p-3 mb-3 d-flex justify-content-between align-items-center">
             <div class="left"><div class="fw-semibold">履歴</div></div>
-            <div class="right"><span class="badge-soft">最新400件を表示</span></div>
+            <div class="right"><span class="badge text-bg-light">最新400件を表示</span></div>
           </div>
 
           <div class="card p-3">
@@ -322,7 +311,7 @@
     </main>
   </div>
 
-  <!-- ===== Global Loading ===== -->
+  <!-- Global Loading -->
   <div id="global-loading" class="d-none">
     <div class="box">
       <div class="spinner"></div>
@@ -336,29 +325,45 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-
-  <!-- html5-qrcode (prefetch; app.js juga akan fallback jika tidak ada) -->
+  <!-- QR libs (prefetch) -->
+  <script src="./qrlib.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 
-  <!-- Konfigurasi & App -->
+  <!-- app -->
   <script src="./config.js"></script>
   <script src="./app.js"></script>
 
-  <!-- Burger/open sidebar minimal (cadangan, aman bersama app.js) -->
+  <!-- Nav fail-safe: pastikan selalu tampil -->
   <script>
-    (function(){
-      const sb = document.getElementById('sb');
-      const bd = document.getElementById('sb-backdrop');
-      const burger = document.getElementById('burger');
-      const btnMenu = document.getElementById('btn-menu');
-      function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
-      function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
-      burger?.addEventListener('click', toggleSB);
-      btnMenu?.addEventListener('click', toggleSB);
-      bd?.addEventListener('click', closeSB);
-      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSB(); });
-    })();
+  (function(){
+    const links = document.querySelectorAll('aside nav a[data-view]');
+    const sections = document.querySelectorAll('main section');
+    const titleEl = document.getElementById('page-title');
+    const sb = document.getElementById('sb');
+    const bd = document.getElementById('sb-backdrop');
+    const burger = document.getElementById('burger');
+    const btnMenu = document.getElementById('btn-menu');
+    function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
+    function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
+    burger?.addEventListener('click', toggleSB); btnMenu?.addEventListener('click', toggleSB);
+    bd?.addEventListener('click', closeSB);
+
+    function show(id){ sections.forEach(s=>s.classList.add('d-none')); document.getElementById(id)?.classList.remove('d-none'); }
+    links.forEach(a=>{
+      a.addEventListener('click',(e)=>{
+        e.preventDefault();
+        links.forEach(n=>n.classList.remove('active'));
+        a.classList.add('active');
+        const id=a.dataset.view; show(id);
+        if(titleEl) titleEl.textContent=a.textContent.trim();
+        closeSB();
+      });
+    });
+    if (![...sections].some(s=>!s.classList.contains('d-none'))) {
+      show('view-dashboard');
+      document.querySelector('aside nav a[data-view="view-dashboard"]')?.classList.add('active');
+    }
+  })();
   </script>
 </body>
 </html>
