@@ -304,26 +304,25 @@
     </div>
   </div>
 
-  <!-- ===== Core JS (CDN → fallback) ===== -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-          onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
-          onerror="this.onerror=null;this.src='vendor/chart.umd.min.js'"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
-          onerror="this.onerror=null;this.src='vendor/xlsx.full.min.js'"></script>
+ <!-- Core libs (CDN + fallback ke vendor) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+        onerror="this.onerror=null;this.src='vendor/chart.umd.min.js'"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
+        onerror="this.onerror=null;this.src='vendor/xlsx.full.min.js'"></script>
 
-  <!-- ===== QR Libraries (CDN stabil + fallback lokal) ===== -->
-  <!-- Generator -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <script>if(typeof QRCode==='undefined'){var s=document.createElement('script');s.src='vendor/qrcode.min.js?v=20251029';document.head.appendChild(s);}</script>
-  <!-- Scanner -->
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@latest/minified/html5-qrcode.min.js"></script>
-  <script>if(typeof Html5Qrcode==='undefined'){var s=document.createElement('script');s.src='vendor/html5-qrcode.min.js?v=20251029';document.head.appendChild(s);}</script>
+<!-- Generator QR yang kamu punya sendiri -->
+<script src="qrlib.js"></script>
 
-  <!-- ===== App files ===== -->
-  <script src="qrlib.js?v=20251029"></script>
-  <script src="config.js?v=20251029"></script>
-  <script src="app.js?v=20251029"></script>
+<!-- Scanner QR (CDN stabil → fallback lokal vendor) -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"
+        onerror="this.onerror=null;this.src='vendor/html5-qrcode.min.js'"></script>
+
+<!-- Config & App (SELALU terakhir) -->
+<script src="config.js"></script>
+<script src="app.js"></script>
+
 
   <!-- ===== Minimal nav & sidebar handler (agar menu pasti bisa diklik) ===== -->
   <script>
