@@ -119,7 +119,16 @@ async function ensureQRCode(){
 }
 
 // ======= Scanner start (kecil & fokus, guard constant) =======
-async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 200 : 240)) {
+async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 180 : 220)) {
+  // batasi ukuran container
+  const mount = document.getElementById(mountId);
+  if (mount){
+    mount.style.maxWidth = isMobile() ? '360px' : '420px';
+    mount.style.margin   = '0 auto';
+    mount.style.aspectRatio = '4 / 3';
+    mount.style.position = 'relative';
+  }
+
   if ('BarcodeDetector' in window) {
     try { return await startNativeDetector(mountId, onScan, boxSize); }
     catch (e) { console.warn('BarcodeDetector gagal, fallback ke html5-qrcode', e); }
@@ -128,14 +137,13 @@ async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 200 :
   await ensureHtml5Qrcode();
   if (!window.Html5Qrcode) throw new Error('ライブラリ html5-qrcode を読み込めませんでした。');
 
-  // gunakan formatsToSupport hanya jika tersedia
   const formatsOpt = (window.Html5QrcodeSupportedFormats && Html5QrcodeSupportedFormats.QR_CODE)
     ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] }
     : {};
 
   const cfg = {
     fps: 8,
-    qrbox: { width: boxSize, height: boxSize },
+    qrbox: { width: boxSize, height: boxSize },   // kotak deteksi kecil
     aspectRatio: 1.33,
     rememberLastUsedCamera: true,
     verbose: false,
@@ -159,6 +167,7 @@ async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 200 :
     }
   }
 }
+
 async function startNativeDetector(mountId, onScan, boxSize = 240){
   const mount = document.getElementById(mountId);
   mount.innerHTML = '';
