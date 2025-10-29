@@ -123,15 +123,31 @@
       const a = e.target.closest('aside nav a[data-view]');
       if(!a) return;
       e.preventDefault();
+
+      // aktifkan link
       $$('aside nav a').forEach(n=>n.classList.remove('active'));
       a.classList.add('active');
+
+      // Sembunyikan semua section & hapus .active
+      $$('main section').forEach(s=>{
+        s.classList.add('d-none');
+        s.classList.remove('active'); // penting: hilangkan opacity:0 default (styles.css)
+      });
+
+      // Tampilkan target + beri .active agar tidak transparan
       const id = a.getAttribute('data-view');
-      $$('main section').forEach(s=>s.classList.add('d-none'));
       const sec = document.getElementById(id);
-      if(sec) sec.classList.remove('d-none');
+      if(sec){
+        sec.classList.remove('d-none');
+        sec.classList.add('active'); // <- fix utama agar tidak “blank”
+      }
+
+      // Judul
       const title = a.textContent.trim();
       const h = $('#page-title'); if(h) h.textContent = title;
+
       closeSB();
+
       // lazy load render
       if(id==='view-items') renderItems();
       if(id==='view-users') renderUsers();
@@ -143,63 +159,62 @@
    * Charts (Dashboard)
    ***********************/
   let chartLine=null, chartPie=null;
- async function renderDashboard(){
-  const who = getCurrentUser();
-  if (who) $('#who').textContent = `${who.name || who.id || 'user'} (${who.id} | ${who.role||'user'})`;
+  async function renderDashboard(){
+    const who = getCurrentUser();
+    if (who) $('#who').textContent = `${who.name || who.id || 'user'} (${who.id} | ${who.role||'user'})`;
 
-  try{
-    const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([
-      api('items',{method:'GET'}).catch(()=>[]),
-      api('users',{method:'GET'}).catch(()=>[]),
-      api('statsMonthlySeries',{method:'GET'}).catch(()=>[])
-    ]);
+    try{
+      const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([
+        api('items',{method:'GET'}).catch(()=>[]),
+        api('users',{method:'GET'}).catch(()=>[]),
+        api('statsMonthlySeries',{method:'GET'}).catch(()=>[])
+      ]);
 
-    const items  = Array.isArray(itemsRaw)  ? itemsRaw  : [];
-    const users  = Array.isArray(usersRaw)  ? usersRaw  : [];
-    const series = Array.isArray(seriesRaw) ? seriesRaw : [];
+      const items  = Array.isArray(itemsRaw)  ? itemsRaw  : [];
+      const users  = Array.isArray(usersRaw)  ? usersRaw  : [];
+      const series = Array.isArray(seriesRaw) ? seriesRaw : [];
 
-    // metrics
-    $('#metric-total-items').textContent = items.length;
-    const low = items.filter(it => Number(it.stock||0) <= Number(it.min||0)).length;
-    $('#metric-low-stock').textContent = low;
-    $('#metric-users').textContent = users.length;
+      // metrics
+      $('#metric-total-items').textContent = items.length;
+      const low = items.filter(it => Number(it.stock||0) <= Number(it.min||0)).length;
+      $('#metric-low-stock').textContent = low;
+      $('#metric-users').textContent = users.length;
 
-    // chart: guard bila kosong
-    const ctx1 = $('#chart-monthly');
-    if (ctx1){
-      chartLine?.destroy();
-      chartLine = new Chart(ctx1, {
-        type:'line',
-        data:{
-          labels: series.map(s=>s.month || ''),
-          datasets:[
-            { label:'IN',  data: series.map(s=>Number(s.in  || 0)), borderWidth:2 },
-            { label:'OUT', data: series.map(s=>Number(s.out || 0)), borderWidth:2 }
-          ]
-        },
-        options:{ responsive:true, maintainAspectRatio:false }
-      });
+      // chart: guard bila kosong
+      const ctx1 = $('#chart-monthly');
+      if (ctx1){
+        chartLine?.destroy();
+        chartLine = new Chart(ctx1, {
+          type:'line',
+          data:{
+            labels: series.map(s=>s.month || ''),
+            datasets:[
+              { label:'IN',  data: series.map(s=>Number(s.in  || 0)), borderWidth:2 },
+              { label:'OUT', data: series.map(s=>Number(s.out || 0)), borderWidth:2 }
+            ]
+          },
+          options:{ responsive:true, maintainAspectRatio:false }
+        });
+      }
+      const ctx2 = $('#chart-pie');
+      if (ctx2){
+        chartPie?.destroy();
+        const last = series.length ? series[series.length-1] : {in:0,out:0};
+        chartPie = new Chart(ctx2, {
+          type:'pie',
+          data:{ labels:['IN','OUT'], datasets:[{ data:[Number(last.in||0), Number(last.out||0)] }] },
+          options:{ responsive:true, maintainAspectRatio:false }
+        });
+      }
+
+      // movement table (opsional)
+      $('#tbl-mov').innerHTML = '';
+
+    }catch(e){
+      console.error(e);
+      toast('ダッシュボードの読み込みに失敗しました。');
     }
-    const ctx2 = $('#chart-pie');
-    if (ctx2){
-      chartPie?.destroy();
-      const last = series.length ? series[series.length-1] : {in:0,out:0};
-      chartPie = new Chart(ctx2, {
-        type:'pie',
-        data:{ labels:['IN','OUT'], datasets:[{ data:[Number(last.in||0), Number(last.out||0)] }] },
-        options:{ responsive:true, maintainAspectRatio:false }
-      });
-    }
-
-    // movement table (opsional)
-    $('#tbl-mov').innerHTML = '';
-
-  }catch(e){
-    console.error(e);
-    toast('ダッシュボードの読み込みに失敗しました。');
   }
-}
-
 
   /***********************
    * Items list + Edit + Label
@@ -296,7 +311,7 @@
     }
   }
 
-  function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
+  function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;","&gt;":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
   function escapeAttr(s){ return escapeHtml(s); }
 
   // === Edit item (modal sederhana) ===
@@ -468,12 +483,13 @@
       }
       try{
         const im=new Image(); im.crossOrigin='anonymous'; im.src=url; await imgLoaded(im);
-        const s=Math.min(w/im.width,h/im.height), iw=im.width*s, ih=im.height*s;
-        const ix=x+(w-iw)/2, iy=y+(h-ih)/2;
+        const s=Math.min(w/im.width,h/im.height), iw=im.width*s, ih=im.height+s*0; // keep ratio
+        const s2=Math.min(w/im.width,h/im.height); const iw2=im.width*s2, ih2=im.height*s2;
+        const ix=x+(w-iw2)/2, iy=y+(h-ih2)/2;
         ctx.save(); ctx.beginPath();
         ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr);
         ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); ctx.clip();
-        ctx.drawImage(im, ix,iy, iw,ih); ctx.restore();
+        ctx.drawImage(im, ix,iy, iw2,ih2); ctx.restore();
       }catch(e){}
     }
     function drawSingleLineFit(ctx, text, x, y, maxW){
@@ -523,7 +539,6 @@
     return await new Promise((resolve)=>{
       const tmp = document.createElement('div');
       const qr = new QRCode(tmp, { text, width:size, height:size, correctLevel:QRCode.CorrectLevel.M });
-      // ambil canvas/img
       setTimeout(()=>{
         const img = tmp.querySelector('img') || tmp.querySelector('canvas');
         let url='';
@@ -673,7 +688,6 @@
   }
 
   async function startNativeDetector(mountId, onScan, boxSize){
-    // simple preview via getUserMedia + canvas (maksimal)
     const mount = document.getElementById(mountId);
     mount.innerHTML='';
     const video=document.createElement('video'); video.playsInline=true; video.autoplay=true; video.muted=true;
@@ -702,7 +716,6 @@
     return { stop:()=>{ cancelAnimationFrame(raf); stream.getTracks().forEach(t=>t.stop()); }, clear:()=>{ mount.innerHTML=''; } };
   }
 
-  // hook di tab 入出庫
   (function bindIO(){
     const btnStart = $('#btn-io-scan'), btnStop = $('#btn-io-stop'), area = $('#io-scan-area');
     if(!btnStart || !btnStop || !area) return;
@@ -711,7 +724,6 @@
       try{
         area.textContent = 'カメラ起動中…';
         IO_SCANNER = await startBackCameraScan('io-scan-area', (text)=>{
-          // ex: ITEM|0001
           const code = (String(text||'').split('|')[1]||'').trim();
           if(code){ $('#io-code').value = code; findItemIntoIO(code); }
         });
@@ -742,28 +754,34 @@
   })();
 
   async function findItemIntoIO(code){
-  try{
-    // cari di cache dulu; kalau tidak ada, panggil API benar (POST + body code)
-    let it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
-    if (!it) {
-      const r = await api('itemByCode',{method:'POST', body:{ code }});
-      it = r && r.ok ? r.item : null;
+    try{
+      let it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
+      if (!it) {
+        const r = await api('itemByCode',{method:'POST', body:{ code }});
+        it = r && r.ok ? r.item : null;
+      }
+      if(!it) return;
+      $('#io-name').value  = it.name  || '';
+      $('#io-price').value = it.price || 0;
+      $('#io-stock').value = it.stock || 0;
+    }catch(e){
+      console.warn(e);
     }
-    if(!it) return;
-    $('#io-name').value  = it.name  || '';
-    $('#io-price').value = it.price || 0;
-    $('#io-stock').value = it.stock || 0;
-  }catch(e){
-    console.warn(e);
   }
-}
 
   /***********************
    * Boot
    ***********************/
   window.addEventListener('DOMContentLoaded', ()=>{
+    // set logo dari CONFIG.LOGO_URL (dashboard.html punya <img id="brand-logo">)
+    const logo = document.getElementById('brand-logo');
+    if (logo && window.CONFIG && CONFIG.LOGO_URL){
+      logo.src = CONFIG.LOGO_URL;
+      logo.alt = 'logo';
+      logo.onerror = ()=>{ logo.style.display='none'; };
+    }
+
     renderDashboard();
-    // tombol logout
     $('#btn-logout')?.addEventListener('click', logout);
   });
 
