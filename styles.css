@@ -101,3 +101,12 @@ main section.active{ opacity:1; transform:none; }
 #scan-area video,   #scan-area canvas{
   width:100%!important; height:100%!important; object-fit:cover;
 }
+/* Kolom "置場" di tabel 商品一覧 (kolom ke-8) */
+#view-items thead th:nth-child(8),
+#view-items tbody td:nth-child(8){
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .5px;
+  white-space: nowrap;     /* hapus jika ingin bisa baris-baru */
+  vertical-align: middle;
+  min-width: 96px;         /* opsional: kasih lebar minimum biar tidak mepet */
+}
