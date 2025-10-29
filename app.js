@@ -1,5 +1,11 @@
 /*************************************************
  * app.js — Inventory Dashboard (pro upgrade + robust loader)
+ * - IO lookup (itemByCode)
+ * - 商品一覧: filter, Edit/削除/詳細, 置場, Label PNG, Print All
+ * - 履歴: 編集（在庫を自動調整）
+ * - 新規: location/lotUnit/lotQty
+ * - Loading overlay di semua proses
+ * - Scanner: html5-qrcode (CDN) -> fallback BarcodeDetector -> fallback file lokal
  **************************************************/
 
 // === Auth guard
@@ -21,7 +27,7 @@ const isMobile = ()=> window.innerWidth < 992;
 const today = ()=> new Date();
 const safeFile = (s)=> String(s||'').replace(/[\s\\/:*?"<>|]+/g,'_');
 
-// === Global loading notifier
+// === Global loading notifier (pakai #global-loading dari HTML)
 let loadingCount = 0;
 function loading(on, text='読み込み中…'){
   const host = qs('#global-loading'); if(!host) return;
@@ -30,7 +36,7 @@ function loading(on, text='読み込み中…'){
   else { loadingCount = Math.max(0, loadingCount-1); if(loadingCount===0) host.classList.add('d-none'); }
 }
 
-// === Brand
+// === Brand (opsional via config.js)
 (function setBrand(){ try{
   const url = (window.CONFIG && CONFIG.LOGO_URL) || './assets/tsh.png';
   const img = qs('#brand-logo'); if(img) img.src = url;
@@ -71,20 +77,16 @@ function loadScriptOnce(src){
 }
 async function ensureHtml5Qrcode(){
   if (html5qrcodeReady && window.Html5Qrcode) return;
-  // Jika sudah ada globalnya, langsung pakai
   if (window.Html5Qrcode){ html5qrcodeReady = true; return; }
-  loading(true, 'カメラ機能を読み込み中…');
+
+  // 1) jsDelivr → 2) UNPKG → 3) lokal ./vendor/html5-qrcode.min.js
+  loading(true,'カメラ機能を読み込み中…');
   try{
-    // Coba CDN 1 → jsDelivr
-    await loadScriptOnce('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js');
-  }catch(_){
-    // Fallback CDN 2 → UNPKG
-    await loadScriptOnce('https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js');
-  }finally{
-    loading(false);
-  }
-  if(!window.Html5Qrcode) throw new Error('Html5Qrcode library not available');
-  html5qrcodeReady = true;
+    try{ await loadScriptOnce('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js'); }
+    catch(_1){ try{ await loadScriptOnce('https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js'); }
+      catch(_2){ try{ await loadScriptOnce('./vendor/html5-qrcode.min.js'); }catch(_3){} } }
+  } finally { loading(false); }
+  if(window.Html5Qrcode) html5qrcodeReady = true;
 }
 
 // === API
@@ -149,7 +151,7 @@ async function loadAll(){
   }
 }
 
-// === Charts & metrics (sama)
+// === Charts & metrics
 function parseTs(s){ if(!s) return null; const p = s.replace(' ','T'); const d = new Date(p); return isNaN(+d) ? null : d; }
 function renderMetrics(){
   qs('#metric-total-items').textContent = fmt(state.items.length);
@@ -231,6 +233,7 @@ function renderItems(){
           <button class="btn btn-outline-primary" data-act="edit" data-code="${codeStr}">✏️</button>
           <button class="btn btn-outline-danger" data-act="del" data-code="${codeStr}">🗑️</button>
           <button class="btn btn-outline-secondary" data-act="detail" data-code="${codeStr}">🔍</button>
+          <button class="btn btn-outline-success" data-act="label" data-code="${codeStr}">QRラベル</button>
         </div>
       </td>`;
     tb.appendChild(tr);
@@ -242,6 +245,7 @@ function renderItems(){
     }
   });
 
+  // DL QR (kecil)
   tb.querySelectorAll('button[data-act="dl"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const hid = btn.getAttribute('data-code');
@@ -256,9 +260,11 @@ function renderItems(){
       const a=document.createElement('a'); a.href=URL.createObjectURL(awaitBlob(dataUrl)); a.download=`QR_${safeFile(code)}_${safeFile(name)}.png`; a.click();
     });
   });
+  // Edit
   tb.querySelectorAll('button[data-act="edit"]').forEach(btn=>{
     btn.addEventListener('click', ()=> openEditItem(btn.getAttribute('data-code')));
   });
+  // Delete
   tb.querySelectorAll('button[data-act="del"]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const code = btn.getAttribute('data-code');
@@ -269,8 +275,25 @@ function renderItems(){
       }catch(e){ alert(e.message||e); }
     });
   });
+  // Detail / klik nama
   tb.querySelectorAll('button[data-act="detail"], td.item-name').forEach(el=>{
     el.addEventListener('click', ()=> openItemDetail(el.getAttribute('data-code')));
+  });
+  // Label PNG per item
+  tb.querySelectorAll('button[data-act="label"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const code = btn.getAttribute('data-code');
+      const item = state.items.find(x=>String(x.code)===String(code));
+      if(!item) return;
+      loading(true,'ラベルを生成中…');
+      try{
+        const c = makeItemLabelCanvas(item);
+        const a=document.createElement('a');
+        a.href = c.toDataURL('image/png');
+        a.download = `LABEL_${safeFile(item.code)}.png`;
+        a.click();
+      } finally { loading(false); }
+    });
   });
 
   // Filter (once)
@@ -281,14 +304,14 @@ function renderItems(){
   }, { once:true });
 }
 
-// convert dataURL to Blob on the fly (for big QR, avoid memory spikes)
+// convert dataURL to Blob
 function awaitBlob(dataUrl){
   const bin = atob(dataUrl.split(',')[1]); const len = bin.length; const u8 = new Uint8Array(len);
   for(let i=0;i<len;i++) u8[i] = bin.charCodeAt(i);
   return new Blob([u8], {type:'image/png'});
 }
 
-/* === Users (same, with loading when export/print if needed) === */
+/* === Users === */
 function renderUsers(){
   const btnAdd = qs('#btn-open-new-user');
   const btnPrint = qs('#btn-print-qr-users');
@@ -317,6 +340,7 @@ function renderUsers(){
       new QRCode(div, { text: userQrText(idStr), width:84, height:84, correctLevel: QRCode.CorrectLevel.M });
     }
 
+    // print grid
     const card=document.createElement('div'); card.className='qr-card';
     const v=document.createElement('div'); v.id=`p-${holderId}`;
     const title=document.createElement('div'); title.className='title'; title.textContent=`${u.name||''}（${u.id||''}｜${u.role||'user'}）`;
@@ -339,7 +363,7 @@ function renderUsers(){
   });
 }
 
-/* === History with edit (same) === */
+/* === History with edit === */
 function renderHistory(){
   const tb=qs('#tbl-history'); if(!tb) return; tb.innerHTML='';
   state.history.slice(-400).reverse().forEach(h=>{
@@ -374,36 +398,85 @@ function renderHistory(){
   });
 }
 
-/* === Scan helpers === */
+/* ====== Scanner adaptor ====== */
 async function startBackCameraScan(mountId, onScan, boxSize=300){
-  await ensureHtml5Qrcode(); // <-- inilah kunci fix
-  const cfg = { fps:10, qrbox:{ width:boxSize, height:boxSize } };
-  const scanner = new Html5Qrcode(mountId);
-  try{
-    await scanner.start({ facingMode:'environment' }, cfg, onScan);
-    return scanner;
-  }catch(err1){
+  await ensureHtml5Qrcode();
+  if (window.Html5Qrcode) {
+    const cfg = { fps:10, qrbox:{ width:boxSize, height:boxSize } };
+    const scanner = new Html5Qrcode(mountId);
     try{
-      const cams = await Html5Qrcode.getCameras();
-      if(!cams || !cams.length) throw new Error('カメラが見つかりません（権限をご確認ください）');
-      const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams[cams.length-1] || cams[0];
-      await scanner.start({ deviceId:{ exact: back.id } }, cfg, onScan);
+      loading(true, 'カメラを起動中…');
+      await scanner.start({ facingMode:'environment' }, cfg, onScan);
       return scanner;
-    }catch(err2){
-      throw (err2 || err1);
+    }catch(err1){
+      try{
+        const cams = await Html5Qrcode.getCameras();
+        if(!cams || !cams.length) throw err1;
+        const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams.at(-1);
+        await scanner.start({ deviceId:{ exact: back.id } }, cfg, onScan);
+        return scanner;
+      }catch(err2){
+        await scanner?.stop?.(); scanner?.clear?.();
+        console.warn('html5-qrcode gagal, fallback BarcodeDetector', err2);
+        return startNativeDetector(mountId, onScan, boxSize);
+      }finally{ loading(false); }
     }
+  } else {
+    return startNativeDetector(mountId, onScan, boxSize);
   }
 }
+async function startNativeDetector(mountId, onScan, boxSize=300){
+  if (!('BarcodeDetector' in window)) {
+    throw new Error('スキャナライブラリが読み込めません（ネットワーク規制の可能性）。Chromeの更新またはローカルライブラリを有効化してください。');
+  }
+  const mount = document.getElementById(mountId);
+  mount.innerHTML = '';
+  const video = document.createElement('video');
+  video.setAttribute('playsinline','');
+  video.style.width = '100%';
+  video.style.maxWidth = boxSize+'px';
+  mount.appendChild(video);
+
+  const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
+  video.srcObject = stream; await video.play();
+
+  const detector = new BarcodeDetector({ formats: ['qr_code','code_128','code_39','ean_13','ean_8'] });
+  let stopped = false, last = '';
+
+  async function tick(){
+    if (stopped) return;
+    try{
+      const codes = await detector.detect(video);
+      const first = codes?.[0]?.rawValue || '';
+      if (first && first !== last){
+        last = first;
+        onScan(first);
+      }
+    }catch(_){}
+    requestAnimationFrame(tick);
+  }
+  tick();
+
+  function stop(){
+    stopped = true;
+    video.pause();
+    (stream.getTracks()||[]).forEach(t=>t.stop());
+    mount.innerHTML = '';
+  }
+  return { stop, clear: ()=>{} };
+}
+
+/* ====== IO scan hooks ====== */
 function fillIoForm(it){ qs('#io-code').value=it.code||''; qs('#io-name').value=it.name||''; qs('#io-price').value=it.price||''; qs('#io-stock').value=it.stock||''; }
 async function startIoScan(){
   try{
     loading(true, 'カメラを起動中…');
-    state.ioScanner=await startBackCameraScan('io-scan-area', onScanIo, (isMobile()?240:300));
+    state.ioScanner = await startBackCameraScan('io-scan-area', onScanIo, (isMobile()?240:300));
   }catch(e){
     alert('カメラが見つかりません: '+(e?.message||e));
   }finally{ loading(false); }
 }
-async function stopIoScan(){ try{ await state.ioScanner?.stop(); state.ioScanner?.clear(); }catch(_){ } state.ioScanner=null; }
+async function stopIoScan(){ try{ await state.ioScanner?.stop?.(); state.ioScanner?.clear?.(); }catch(_){ } state.ioScanner=null; }
 function onScanIo(text){
   try{
     let code='';
@@ -434,7 +507,7 @@ async function startScanner(){
     alert('カメラが見つかりません: '+(e?.message||e));
   }finally{ loading(false); }
 }
-async function stopScanner(){ try{ await state.scanner?.stop(); state.scanner?.clear(); }catch(_){ } state.scanner=null; }
+async function stopScanner(){ try{ await state.scanner?.stop?.(); state.scanner?.clear?.(); }catch(_){ } state.scanner=null; }
 function onScanStocktake(text){
   try{
     let code='';
@@ -460,7 +533,7 @@ function pushStocktake(code,name,book,real){
   });
 }
 
-/* === Item detail & edit (same) === */
+/* === Item detail & edit === */
 function openItemDetail(code){
   const it = state.items.find(x=>String(x.code)===String(code));
   if(!it){ alert('商品が見つかりません'); return; }
@@ -509,7 +582,78 @@ function openEditItem(code){
   new bootstrap.Modal('#dlg-edit-item').show();
 }
 
-// === events
+/* === Label generator sesuai contoh (QR + コード/商品名/置場) === */
+function makeItemLabelCanvas(item){
+  const W = 720, H = 240;  // rasio ~3:1
+  const pad = 16;
+  const qrSize = 150;
+  const thumb = { x: pad, y: pad, w: 150, h: 150, r: 28 };
+  const qr    = { x: thumb.x + thumb.w + 20, y: pad, w: qrSize, h: qrSize };
+  const rightX = qr.x + qr.w + 24;
+
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+
+  // border
+  g.fillStyle = '#fff';
+  g.fillRect(0,0,W,H);
+  g.strokeStyle = '#000';
+  g.lineWidth = 2;
+  g.strokeRect(1,1,W-2,H-2);
+
+  // thumb rounded (placeholder biru)
+  g.fillStyle = '#3B82F6';
+  roundRect(g, thumb.x, thumb.y, thumb.w, thumb.h, thumb.r, true, true);
+  g.fillStyle = '#fff';
+  g.font = 'bold 26px "Noto Sans JP", system-ui, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('映像', thumb.x + thumb.w/2, thumb.y + thumb.h/2);
+
+  // QR code
+  const tmp = document.createElement('div');
+  if (typeof QRCode !== 'undefined'){
+    new QRCode(tmp, { text: `ITEM|${item.code}`, width: qr.w, height: qr.h, correctLevel: QRCode.CorrectLevel.M });
+    const img = tmp.querySelector('img') || tmp.querySelector('canvas');
+    const dataUrl = img?.src || img?.toDataURL?.('image/png') || '';
+    const qimg = new Image(); qimg.src = dataUrl;
+    qimg.onload = ()=> g.drawImage(qimg, qr.x, qr.y, qr.w, qr.h);
+  }
+
+  // garis pemisah
+  g.beginPath(); g.moveTo(rightX-12, pad); g.lineTo(rightX-12, H-pad); g.stroke();
+
+  // teks kanan
+  g.fillStyle = '#000';
+  g.font = '20px "Noto Sans JP", system-ui, sans-serif';
+  g.textAlign = 'left'; g.textBaseline = 'middle';
+
+  const lineH = 54;
+  g.fillText('コード：', rightX, pad + lineH*0.5);
+  g.fillText('商品名：', rightX, pad + lineH*1.5);
+  g.fillText('置場：',  rightX, pad + lineH*2.5);
+
+  g.font = 'bold 22px "Noto Sans JP", system-ui, sans-serif';
+  g.fillText(String(item.code||''), rightX + 120, pad + lineH*0.5);
+  g.fillText(String(item.name||''), rightX + 120, pad + lineH*1.5);
+  g.fillText(String(item.location||''), rightX + 120, pad + lineH*2.5);
+
+  return c;
+
+  function roundRect(ctx, x, y, w, h, r, fill, stroke){
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+  }
+}
+
+/* === DOMContentLoaded: wire semua tombol === */
 window.addEventListener('DOMContentLoaded', async ()=>{
   updateWho();
   qsa('aside nav a').forEach(a=>a.addEventListener('click',()=>showView(a.getAttribute('data-view'), a.textContent.trim())));
@@ -562,6 +706,33 @@ window.addEventListener('DOMContentLoaded', async ()=>{
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Items');
       XLSX.writeFile(wb, 'items.xlsx');
+    } finally { loading(false); }
+  });
+
+  // Print all labels button (tambahkan tombolnya di HTML: #btn-items-print-all)
+  qs('#btn-items-print-all')?.addEventListener('click', ()=>{
+    if(!state.items.length) return;
+    loading(true,'ラベルを準備中…');
+    try{
+      const grid = document.createElement('div');
+      grid.style.display='grid';
+      grid.style.gridTemplateColumns='repeat(2, 1fr)';
+      grid.style.gap='10mm';
+
+      state.items.forEach(it=>{
+        const c = makeItemLabelCanvas(it);
+        const img = new Image(); img.src = c.toDataURL('image/png'); img.style.width='100%';
+        const cell = document.createElement('div'); cell.appendChild(img);
+        grid.appendChild(cell);
+      });
+
+      const w = window.open('', 'printlabels');
+      w.document.write(`<html><head><title>Labels</title>
+        <style>@page{ size:A4; margin:12mm } body{font-family:sans-serif}
+        .grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10mm }
+        img{ width:100%; page-break-inside:avoid; }</style></head><body>
+        <div class="grid">${grid.innerHTML}</div></body></html>`);
+      w.document.close(); w.focus(); w.print();
     } finally { loading(false); }
   });
 
