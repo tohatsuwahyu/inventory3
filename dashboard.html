@@ -400,18 +400,17 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
         onerror="this.onerror=null;this.src='vendor/xlsx.full.min.js'"></script>
 
-<!-- QRCode engine (WAJIB, sebelum qrlib.js) -->
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js?v=20251029"
+<!-- QRCode engine (generator untuk gambar QR) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"
         onerror="this.onerror=null;this.src='vendor/qrcode.min.js'"></script>
 
-<!-- Wrapper milikmu yang memanggil new QRCode(...) -->
+<!-- Html5Qrcode (scanner kamera) : fallback ke CDN lain lalu ke lokal -->
+<script src="https://unpkg.com/html5-qrcode@2.3.9/minified/html5-qrcode.min.js"
+        onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.9/minified/html5-qrcode.min.js'"></script>
+<script>if(!window.Html5Qrcode){document.write('<script src="vendor/html5-qrcode.min.js"><\/script>')}</script>
+
+<!-- Wrapper QR milikmu, lalu app -->
 <script src="qrlib.js?v=20251029"></script>
-
-<!-- Scanner (CDN → fallback vendor) -->
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js?v=20251029"
-        onerror="this.onerror=null;this.src='vendor/html5-qrcode.min.js'"></script>
-
-<!-- Config & App (WAJIB terakhir) -->
 <script src="config.js?v=20251029"></script>
 <script src="app.js?v=20251029"></script>
 
