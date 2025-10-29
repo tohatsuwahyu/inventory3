@@ -400,15 +400,15 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
           onerror="this.onerror=null;this.src='vendor/xlsx.full.min.js'"></script>
 
-  <!-- QRCode generator untuk render gambar QR (HARUS sebelum app.js) -->
-  <script src="qrlib.js"></script>
+  <!-- QRCode generator (rename file ini jadi qrlib.js) -->
+<script src="qrlib.js"></script>
 
-  <!-- html5-qrcode: root → vendor → (CDN backup disuntik via app.js jika perlu) -->
-  <script src="html5-qrcode.min.js"></script>
-  <script>if(!window.Html5Qrcode){var s=document.createElement('script');s.src='vendor/html5-qrcode.min.js';document.head.appendChild(s);}</script>
+<!-- Scanner html5-qrcode: pakai vendor saja -->
+<script src="vendor/html5-qrcode.min.js"></script>
 
-  <!-- Config & App -->
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+<!-- Config & App (WAJIB terakhir) -->
+<script src="config.js"></script>
+<script src="app.js"></script>
+
 </body>
 </html>
