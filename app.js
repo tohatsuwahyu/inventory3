@@ -637,22 +637,38 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   // Items exports & print-all
   qs('#btn-items-export')?.addEventListener('click',()=>{ loading(true,'CSVを生成中…'); try{ const head='code,name,price,stock,min,location,lotUnit,lotQty\n'; const lines=state.items.map(r=>[r.code,r.name,r.price,r.stock,r.min,r.location||'',r.lotUnit||'',r.lotQty||0].join(',')).join('\n'); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='items.csv'; a.click(); }finally{ loading(false); } });
   qs('#btn-items-xlsx')?.addEventListener('click',()=>{ loading(true,'Excelを生成中…'); try{ const data=state.items.map(r=>({code:r.code,name:r.name,price:r.price,stock:r.stock,min:r.min,location:r.location,lotUnit:r.lotUnit,lotQty:r.lotQty})); const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Items'); XLSX.writeFile(wb,'items.xlsx'); }finally{ loading(false); } });
-  qs('#btn-items-print-all')?.addEventListener('click',()=>{ if(!state.items.length) return; loading(true,'ラベルを準備中…'); try{ const grid=document.createElement('div'); grid.style.display='grid'; grid.style.gridTemplateColumns='repeat(2,1fr)'; grid.style.gap='10mm'; state.items.forEach(it=>{ const img=new Image(); img.src=''; }); state.items.forEach(it=>{ /* prebuild images */ }); const w=window.open('','printlabels'); const cells=state.items.map(it=>`<div><img style="width:100%" src="${''}" /></div>`); // will replace soon
-    // generate synchronously to avoid popup blockers
-    const htmlHead = `<html><head><title>Labels</title><style>@page{size:A4;margin:12mm} body{font-family:sans-serif}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10mm} img{width:100%;page-break-inside:avoid;}</style></head><body><div class="grid">`;
+  // GANTI seluruh listener ini di app.js
+qs('#btn-items-print-all')?.addEventListener('click', async ()=>{
+  if(!state.items.length) return;
+  loading(true,'ラベルを準備中…');
+  let w;
+  try{
+    w = window.open('','printlabels');
+    const htmlHead = `
+      <html><head><title>Labels</title>
+      <style>
+        @page{size:A4;margin:12mm}
+        body{font-family:sans-serif}
+        .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10mm}
+        img{width:100%;page-break-inside:avoid;}
+      </style></head><body><div class="grid">`;
     const htmlTail = `</div></body></html>`;
+
     w.document.write(htmlHead);
-    // generate one-by-one to avoid heavy memory
-    (async ()=>{
-      for(const it of state.items){
-        const du = await makeItemLabelDataURL(it);
-        w.document.write(`<div><img src="${du}" /></div>`);
-      }
-      w.document.write(htmlTail);
-      w.document.close(); w.focus(); w.print();
-      loading(false);
-    })();
-  });
+    // generate satu-per-satu agar ringan
+    for(const it of state.items){
+      const du = await makeItemLabelDataURL(it);
+      w.document.write(`<div><img src="${du}" /></div>`);
+    }
+    w.document.write(htmlTail);
+    w.document.close(); w.focus(); w.print();
+  }catch(err){
+    alert('印刷の準備に失敗しました: '+(err?.message||err));
+  }finally{
+    loading(false);
+  }
+});
+
 
   // Modals (jika ada di HTML)
   const modalItem=document.getElementById('dlg-new-item')?new bootstrap.Modal('#dlg-new-item'):null;
