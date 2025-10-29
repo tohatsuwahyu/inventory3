@@ -63,7 +63,9 @@ function openMenu(open){
 (qs('#sb-backdrop')||qs('#backdrop'))?.addEventListener('click', ()=>openMenu(false));
 window.addEventListener('keydown', e=>{ if(e.key==='Escape') openMenu(false); });
 
-// html5-qrcode loader (root → vendor → CDN)
+// =====================================================
+// html5-qrcode loader (root → vendor → CDN)  **FIXED**
+// =====================================================
 let html5qrcodeReady = false;
 function loadScriptOnce(src){
   return new Promise((res, rej)=>{
@@ -80,7 +82,9 @@ async function ensureHtml5Qrcode(){
   try{
     if(!window.Html5Qrcode){ try{ await loadScriptOnce('./html5-qrcode.min.js'); }catch{} }
     if(!window.Html5Qrcode){ try{ await loadScriptOnce('./vendor/html5-qrcode.min.js'); }catch{} }
-    if(!window.Html5Qrcode){ try{ await loadScriptOnce('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js'); }catch{} }
+    // gunakan "latest" agar tidak 404 pada versi tertentu
+    if(!window.Html5Qrcode){ try{ await loadScriptOnce('https://cdn.jsdelivr.net/npm/html5-qrcode@latest/minified/html5-qrcode.min.js'); }catch{} }
+    if(!window.Html5Qrcode){ try{ await loadScriptOnce('https://unpkg.com/html5-qrcode@latest/minified/html5-qrcode.min.js'); }catch{} }
   } finally { loading(false); }
   if(window.Html5Qrcode) html5qrcodeReady = true;
 }
@@ -237,7 +241,7 @@ function renderItems(){
   // Actions
   tb.querySelectorAll('button[data-act="dl"]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      const code=btn.getAttribute('data-code'); const it=state.items.find(x=>String(x.code)===code); if(!it) return;
+      const code=btn.getAttribute('data-code'); const it=state.items.find(x=>String(x.code)===String(code)); if(!it) return;
       loading(true,'ラベルを生成中…');
       try{
         const dataUrl=await makeItemLabelDataURL(it);
@@ -315,48 +319,114 @@ function renderHistory(){
   });
 }
 
-/* Scanner adaptor */
+// =====================================================
+// Konfigurasi scan QR (lebih stabil)  **BARU**
+// =====================================================
+const QR_VIDEO_CONSTRAINTS = {
+  facingMode: "environment",
+  width: { ideal: 1280 },
+  height: { ideal: 720 }
+};
+const QR_SCAN_CONFIG = {
+  fps: 12,
+  qrbox: { width: isMobile()?240:300, height: isMobile()?240:300 },
+  rememberLastUsedCamera: true,
+  aspectRatio: 1.33,
+  supportedScanTypes: [ Html5QrcodeScanType.SCAN_TYPE_CAMERA ],
+  formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] // fokus hanya QR
+};
+
+/* Scanner adaptor  **DIPERBARUI** */
 async function startBackCameraScan(mountId, onScan, boxSize=300){
-  // Prefer native
+  // 1) Coba BarcodeDetector (native)
   if('BarcodeDetector' in window){
-    try{ loading(true,'カメラを起動中…'); return await startNativeDetector(mountId,onScan,boxSize); }
-    catch(e){ console.warn('BarcodeDetector gagal, try html5-qrcode',e); }
-    finally{ loading(false); }
-  }
-  // html5-qrcode
-  await ensureHtml5Qrcode();
-  if(window.Html5Qrcode){
-    const cfg={ fps:10, qrbox:{width:boxSize,height:boxSize} };
-    const scanner=new Html5Qrcode(mountId);
     try{
       loading(true,'カメラを起動中…');
-      await scanner.start({ facingMode:'environment' }, cfg, txt=>onScan(txt));
-      return scanner;
-    }catch(err1){
-      try{
-        const cams=await Html5Qrcode.getCameras(); if(!cams||!cams.length) throw err1;
-        const back=cams.find(c=>/back|rear|environment/i.test(c.label))||cams.at(-1);
-        await scanner.start({ deviceId:{exact:back.id} }, cfg, txt=>onScan(txt));
-        return scanner;
-      }catch(err2){
-        await scanner?.stop?.(); scanner?.clear?.();
-        console.error('html5-qrcode failed',err2);
-        throw new Error('カメラが見つかりません。ブラウザ権限/ネットワークをご確認ください。');
-      }finally{ loading(false); }
+      return await startNativeDetector(mountId,onScan,boxSize);
+    }catch(e){
+      console.warn('BarcodeDetector gagal, fallback ke html5-qrcode:', e);
+    }finally{
+      loading(false);
     }
   }
-  throw new Error('スキャナライブラリが読み込めません（ネットワーク/端末制限）。');
+
+  // 2) Fallback html5-qrcode (hanya QR)
+  await ensureHtml5Qrcode();
+  if(!window.Html5Qrcode) throw new Error('スキャナライブラリが読み込めません。');
+
+  const mount = document.getElementById(mountId);
+  if (!mount) throw new Error('Mount element not found: '+mountId);
+  mount.innerHTML = '';
+
+  const scanner = new Html5Qrcode(mountId, { useBarCodeDetectorIfSupported: true });
+  try{
+    loading(true,'カメラを起動中…');
+
+    // pertama: coba dengan facingMode environment
+    await scanner.start(
+      QR_VIDEO_CONSTRAINTS,
+      { ...QR_SCAN_CONFIG, qrbox:{ width: boxSize, height: boxSize } },
+      (text/*, result*/)=>{ onScan(text); },
+      (_err)=>{} // jangan spam UI untuk tiap frame gagal
+    );
+    return scanner;
+
+  }catch(err1){
+    try{
+      // kedua: enumerasi kamera lalu pilih belakang
+      const cams = await Html5Qrcode.getCameras();
+      if(!cams || !cams.length) throw err1;
+      const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams.at(-1);
+      await scanner.start(
+        { deviceId: { exact: back.id } },
+        { ...QR_SCAN_CONFIG, qrbox:{ width: boxSize, height: boxSize } },
+        (text)=>{ onScan(text); },
+        (_)=>{}
+      );
+      return scanner;
+    }catch(err2){
+      await scanner?.stop?.(); scanner?.clear?.();
+      console.error('html5-qrcode failed:', err2);
+      throw new Error('カメラが見つかりません。ブラウザ権限/ネットワークをご確認ください。');
+    }finally{
+      loading(false);
+    }
+  }
 }
+
 async function startNativeDetector(mountId,onScan,boxSize=300){
   if(!('BarcodeDetector' in window)) throw new Error('BarcodeDetector 未対応');
-  const mount=document.getElementById(mountId); mount.innerHTML='';
-  const video=document.createElement('video'); video.setAttribute('playsinline',''); video.style.width='100%'; video.style.maxWidth=boxSize+'px'; mount.appendChild(video);
-  const stream=await navigator.mediaDevices.getUserMedia({ video:{facingMode:'environment'}, audio:false }); video.srcObject=stream; await video.play();
-  const detector=new BarcodeDetector({ formats:['qr_code','code_128','code_39','ean_13','ean_8'] });
-  let stopped=false,last='';
-  async function tick(){ if(stopped) return; try{ const codes=await detector.detect(video); const v=codes?.[0]?.rawValue||''; if(v && v!==last){ last=v; onScan(v);} }catch{} requestAnimationFrame(tick); }
+  const mount=document.getElementById(mountId); 
+  if(!mount) throw new Error('Mount element not found: '+mountId);
+  mount.innerHTML='';
+
+  const video=document.createElement('video');
+  video.setAttribute('playsinline','');
+  video.style.width='100%';
+  video.style.maxWidth=boxSize+'px';
+  mount.appendChild(video);
+
+  const stream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
+  video.srcObject=stream; await video.play();
+
+  const detector=new BarcodeDetector({ formats:['qr_code'] }); // QR saja
+  let stopped=false, last='';
+
+  async function tick(){
+    if(stopped) return;
+    try{
+      const codes=await detector.detect(video);
+      const v=codes?.[0]?.rawValue||'';
+      if(v && v!==last){ last=v; onScan(v); }
+    }catch{}
+    requestAnimationFrame(tick);
+  }
   tick();
-  function stop(){ stopped=true; video.pause(); (stream.getTracks()||[]).forEach(t=>t.stop()); mount.innerHTML=''; }
+
+  function stop(){
+    stopped=true; video.pause(); (stream.getTracks()||[]).forEach(t=>t.stop());
+    mount.innerHTML='';
+  }
   return { stop, clear:()=>{} };
 }
 
