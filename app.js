@@ -1,5 +1,5 @@
 /*************************************************
- * app.js — Inventory Dashboard (pro upgrade)
+ * app.js — Inventory Dashboard (pro upgrade + robust loader)
  **************************************************/
 
 // === Auth guard
@@ -21,6 +21,16 @@ const isMobile = ()=> window.innerWidth < 992;
 const today = ()=> new Date();
 const safeFile = (s)=> String(s||'').replace(/[\s\\/:*?"<>|]+/g,'_');
 
+// === Global loading notifier
+let loadingCount = 0;
+function loading(on, text='読み込み中…'){
+  const host = qs('#global-loading'); if(!host) return;
+  const label = qs('#loading-text'); if(label && text) label.textContent = text;
+  if(on){ loadingCount++; host.classList.remove('d-none'); }
+  else { loadingCount = Math.max(0, loadingCount-1); if(loadingCount===0) host.classList.add('d-none'); }
+}
+
+// === Brand
 (function setBrand(){ try{
   const url = (window.CONFIG && CONFIG.LOGO_URL) || './assets/tsh.png';
   const img = qs('#brand-logo'); if(img) img.src = url;
@@ -50,25 +60,58 @@ function openMenu(open){
 (qs('#sb-backdrop')||qs('#backdrop'))?.addEventListener('click', ()=>openMenu(false));
 window.addEventListener('keydown', e=>{ if(e.key==='Escape') openMenu(false); });
 
+// === Robust lazy loader for html5-qrcode
+let html5qrcodeReady = false;
+function loadScriptOnce(src){
+  return new Promise((res, rej)=>{
+    const tag = document.createElement('script');
+    tag.src = src; tag.async = true; tag.onload = ()=>res(); tag.onerror=()=>rej(new Error('load failed: '+src));
+    document.head.appendChild(tag);
+  });
+}
+async function ensureHtml5Qrcode(){
+  if (html5qrcodeReady && window.Html5Qrcode) return;
+  // Jika sudah ada globalnya, langsung pakai
+  if (window.Html5Qrcode){ html5qrcodeReady = true; return; }
+  loading(true, 'カメラ機能を読み込み中…');
+  try{
+    // Coba CDN 1 → jsDelivr
+    await loadScriptOnce('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js');
+  }catch(_){
+    // Fallback CDN 2 → UNPKG
+    await loadScriptOnce('https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js');
+  }finally{
+    loading(false);
+  }
+  if(!window.Html5Qrcode) throw new Error('Html5Qrcode library not available');
+  html5qrcodeReady = true;
+}
+
 // === API
-async function api(action, {method='GET', body}={}){
+async function api(action, {method='GET', body, showLoading=true, loadingText='通信中…'}={}){
   if(!window.CONFIG || !CONFIG.BASE_URL) throw new Error('config.js belum diisi (BASE_URL kosong)');
   const apikey = encodeURIComponent(CONFIG.API_KEY||'');
   const url = `${CONFIG.BASE_URL}?action=${encodeURIComponent(action)}&apikey=${apikey}&_=${Date.now()}`;
 
-  if(method==='GET'){
-    const r = await fetch(url, { mode:'cors', cache:'no-cache' });
-    if(!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
-    return await r.json();
+  try{
+    if(showLoading) loading(true, loadingText);
+    if(method==='GET'){
+      const r = await fetch(url, { mode:'cors', cache:'no-cache' });
+      if(!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
+      return await r.json();
+    } else {
+      const r = await fetch(url, {
+        method:'POST',
+        mode:'cors',
+        headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+        body: JSON.stringify({ ...(body||{}), apikey: CONFIG.API_KEY })
+      });
+      if(!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
+      return await r.json();
+    }
+  } finally {
+    if(showLoading) loading(false);
   }
-  const r = await fetch(url, {
-    method:'POST',
-    mode:'cors',
-    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-    body: JSON.stringify({ ...(body||{}), apikey: CONFIG.API_KEY })
-  });
-  if(!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
-  return await r.json();
 }
 function normArr(resp, key){
   if (Array.isArray(resp)) return resp;
@@ -79,12 +122,13 @@ function normArr(resp, key){
 
 // === LOAD ALL
 async function loadAll(){
+  loading(true, 'データ読込中…');
   try{
     const [items, users, history, monthly] = await Promise.all([
-      api('items').catch(()=>[]),
-      api('users').catch(()=>[]),
-      api('history').catch(()=>[]),
-      api('statsMonthlySeries').catch(()=>[]),
+      api('items',  {showLoading:false}),
+      api('users',  {showLoading:false}),
+      api('history',{showLoading:false}),
+      api('statsMonthlySeries',{showLoading:false}),
     ]);
     state.items   = normArr(items,   'items');
     state.users   = normArr(users,   'users');
@@ -98,11 +142,14 @@ async function loadAll(){
     renderMovementsThisMonth();
     renderItems(); renderUsers(); renderHistory();
   }catch(err){
-    alert('Gagal ambil data dari backend.\nCek Console untuk detail dan periksa config.js / deployment GAS.');
+    alert('Gagal ambil data dari backend.\nPeriksa config.js / deployment GAS.\nDetail: '+(err?.message||err));
+    console.error(err);
+  }finally{
+    loading(false);
   }
 }
 
-// === Charts, metrics (sama seperti versi sebelumnya) ===
+// === Charts & metrics (sama)
 function parseTs(s){ if(!s) return null; const p = s.replace(' ','T'); const d = new Date(p); return isNaN(+d) ? null : d; }
 function renderMetrics(){
   qs('#metric-total-items').textContent = fmt(state.items.length);
@@ -147,13 +194,16 @@ function renderMovementsThisMonth(){
     tb.appendChild(tr);
   });
   qs('#btn-export-mov')?.addEventListener('click', ()=>{
-    const head='code,name,IN,OUT,NET\n';
-    const lines = [...byCode.values()].map(r=>[r.code, r.name, r.IN, r.OUT, r.IN - r.OUT].join(',')).join('\n');
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='movements_this_month.csv'; a.click();
+    loading(true, 'CSVを生成中…');
+    try{
+      const head='code,name,IN,OUT,NET\n';
+      const lines = [...byCode.values()].map(r=>[r.code, r.name, r.IN, r.OUT, r.IN - r.OUT].join(',')).join('\n');
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='movements_this_month.csv'; a.click();
+    } finally { loading(false); }
   }, { once:true });
 }
 
-/* === QR === */
+/* === QR text helpers === */
 const itemQrText = (code)=>`ITEM|${String(code||'')}`;
 const userQrText = (id)=>`USER|${String(id||'')}`;
 
@@ -192,7 +242,6 @@ function renderItems(){
     }
   });
 
-  // DL QR
   tb.querySelectorAll('button[data-act="dl"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const hid = btn.getAttribute('data-code');
@@ -204,31 +253,27 @@ function renderItems(){
       const tr = btn.closest('tr');
       const code = tr?.children?.[1]?.textContent?.trim() || '';
       const name = tr?.children?.[2]?.textContent?.trim() || '';
-      const a=document.createElement('a'); a.href=dataUrl; a.download=`QR_${safeFile(code)}_${safeFile(name)}.png`; a.click();
+      const a=document.createElement('a'); a.href=URL.createObjectURL(awaitBlob(dataUrl)); a.download=`QR_${safeFile(code)}_${safeFile(name)}.png`; a.click();
     });
   });
-  // Edit
   tb.querySelectorAll('button[data-act="edit"]').forEach(btn=>{
     btn.addEventListener('click', ()=> openEditItem(btn.getAttribute('data-code')));
   });
-  // Delete
   tb.querySelectorAll('button[data-act="del"]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const code = btn.getAttribute('data-code');
       if(!confirm(`商品（${code}）を削除しますか？`)) return;
       try{
-        const r = await api('deleteItem',{ method:'POST', body:{ code } });
-        if(r && r.ok===false) throw new Error(r.error||'削除失敗');
+        await api('deleteItem',{ method:'POST', body:{ code }, loadingText:'削除中…' });
         await loadAll();
       }catch(e){ alert(e.message||e); }
     });
   });
-  // Detail
   tb.querySelectorAll('button[data-act="detail"], td.item-name').forEach(el=>{
     el.addEventListener('click', ()=> openItemDetail(el.getAttribute('data-code')));
   });
 
-  // Filter
+  // Filter (once)
   qs('#items-search')?.addEventListener('input', (e)=>{
     const q = String(e.target.value||'').toLowerCase();
     state.filteredItems = state.items.filter(i=> String(i.name||'').toLowerCase().includes(q));
@@ -236,7 +281,14 @@ function renderItems(){
   }, { once:true });
 }
 
-/* === Users (unchanged except visibility) === */
+// convert dataURL to Blob on the fly (for big QR, avoid memory spikes)
+function awaitBlob(dataUrl){
+  const bin = atob(dataUrl.split(',')[1]); const len = bin.length; const u8 = new Uint8Array(len);
+  for(let i=0;i<len;i++) u8[i] = bin.charCodeAt(i);
+  return new Blob([u8], {type:'image/png'});
+}
+
+/* === Users (same, with loading when export/print if needed) === */
 function renderUsers(){
   const btnAdd = qs('#btn-open-new-user');
   const btnPrint = qs('#btn-print-qr-users');
@@ -265,7 +317,6 @@ function renderUsers(){
       new QRCode(div, { text: userQrText(idStr), width:84, height:84, correctLevel: QRCode.CorrectLevel.M });
     }
 
-    // Print grid (A4)
     const card=document.createElement('div'); card.className='qr-card';
     const v=document.createElement('div'); v.id=`p-${holderId}`;
     const title=document.createElement('div'); title.className='title'; title.textContent=`${u.name||''}（${u.id||''}｜${u.role||'user'}）`;
@@ -283,12 +334,12 @@ function renderUsers(){
       if(!dataUrl) return;
       const code = btn.getAttribute('data-uid') || 'USER';
       const name = btn.getAttribute('data-name') || '';
-      const a=document.createElement('a'); a.href=dataUrl; a.download=`USER_${safeFile(code)}_${safeFile(name)}.png`; a.click();
+      const a=document.createElement('a'); a.href=URL.createObjectURL(awaitBlob(dataUrl)); a.download=`USER_${safeFile(code)}_${safeFile(name)}.png`; a.click();
     });
   });
 }
 
-/* === History with edit === */
+/* === History with edit (same) === */
 function renderHistory(){
   const tb=qs('#tbl-history'); if(!tb) return; tb.innerHTML='';
   state.history.slice(-400).reverse().forEach(h=>{
@@ -323,18 +374,35 @@ function renderHistory(){
   });
 }
 
-/* === IO: QR scan, manual lookup === */
+/* === Scan helpers === */
 async function startBackCameraScan(mountId, onScan, boxSize=300){
+  await ensureHtml5Qrcode(); // <-- inilah kunci fix
   const cfg = { fps:10, qrbox:{ width:boxSize, height:boxSize } };
   const scanner = new Html5Qrcode(mountId);
-  try{ await scanner.start({ facingMode:'environment' }, cfg, onScan); return scanner; }catch(_){}
-  const cams = await Html5Qrcode.getCameras();
-  if(!cams || !cams.length) throw new Error('カメラが見つかりません');
-  const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams[cams.length-1] || cams[0];
-  await scanner.start({ deviceId:{ exact: back.id } }, cfg, onScan); return scanner;
+  try{
+    await scanner.start({ facingMode:'environment' }, cfg, onScan);
+    return scanner;
+  }catch(err1){
+    try{
+      const cams = await Html5Qrcode.getCameras();
+      if(!cams || !cams.length) throw new Error('カメラが見つかりません（権限をご確認ください）');
+      const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams[cams.length-1] || cams[0];
+      await scanner.start({ deviceId:{ exact: back.id } }, cfg, onScan);
+      return scanner;
+    }catch(err2){
+      throw (err2 || err1);
+    }
+  }
 }
 function fillIoForm(it){ qs('#io-code').value=it.code||''; qs('#io-name').value=it.name||''; qs('#io-price').value=it.price||''; qs('#io-stock').value=it.stock||''; }
-async function startIoScan(){ try{ state.ioScanner=await startBackCameraScan('io-scan-area', onScanIo, (isMobile()?240:300)); }catch(e){ alert('カメラが見つかりません: '+(e?.message||e)) } }
+async function startIoScan(){
+  try{
+    loading(true, 'カメラを起動中…');
+    state.ioScanner=await startBackCameraScan('io-scan-area', onScanIo, (isMobile()?240:300));
+  }catch(e){
+    alert('カメラが見つかりません: '+(e?.message||e));
+  }finally{ loading(false); }
+}
 async function stopIoScan(){ try{ await state.ioScanner?.stop(); state.ioScanner?.clear(); }catch(_){ } state.ioScanner=null; }
 function onScanIo(text){
   try{
@@ -351,14 +419,21 @@ async function lookupIo(){
   const code = qs('#io-code').value.trim();
   if(!code) return;
   try{
-    const r = await api('itemByCode',{ method:'POST', body:{ code } });
+    const r = await api('itemByCode',{ method:'POST', body:{ code }, loadingText:'照会中…' });
     if(!r || r.ok===false) return alert(r?.error || '商品が見つかりません');
     fillIoForm(r.item || {});
   }catch(e){ alert(e.message||e); }
 }
 
-/* === Stocktake scan (no change except bugfix) === */
-async function startScanner(){ try{ state.scanner=await startBackCameraScan('scan-area', onScanStocktake, (isMobile()?240:300)); }catch(e){ alert('カメラが見つかりません: '+(e?.message||e)) } }
+/* === Stocktake scan === */
+async function startScanner(){
+  try{
+    loading(true, 'カメラを起動中…');
+    state.scanner=await startBackCameraScan('scan-area', onScanStocktake, (isMobile()?240:300));
+  }catch(e){
+    alert('カメラが見つかりません: '+(e?.message||e));
+  }finally{ loading(false); }
+}
 async function stopScanner(){ try{ await state.scanner?.stop(); state.scanner?.clear(); }catch(_){ } state.scanner=null; }
 function onScanStocktake(text){
   try{
@@ -385,7 +460,7 @@ function pushStocktake(code,name,book,real){
   });
 }
 
-/* === Item detail === */
+/* === Item detail & edit (same) === */
 function openItemDetail(code){
   const it = state.items.find(x=>String(x.code)===String(code));
   if(!it){ alert('商品が見つかりません'); return; }
@@ -419,8 +494,6 @@ function openItemDetail(code){
   qs('#btn-close-detail')?.addEventListener('click', ()=> host.classList.add('d-none'), { once:true });
   showView('view-items','商品一覧');
 }
-
-/* === Edit item modal === */
 function openEditItem(code){
   const it = state.items.find(x=>String(x.code)===String(code));
   if(!it) return alert('商品が見つかりません');
@@ -436,7 +509,7 @@ function openEditItem(code){
   new bootstrap.Modal('#dlg-edit-item').show();
 }
 
-/* === events === */
+// === events
 window.addEventListener('DOMContentLoaded', async ()=>{
   updateWho();
   qsa('aside nav a').forEach(a=>a.addEventListener('click',()=>showView(a.getAttribute('data-view'), a.textContent.trim())));
@@ -452,8 +525,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     const body={ userId:state.currentUser.id, code:qs('#io-code').value.trim(), qty:Number(qs('#io-qty').value||0), unit:qs('#io-unit').value, type:qs('#io-type').value };
     if(!body.code || !body.qty){ alert('コード/数量は必須'); return; }
     try{
-      const r=await api('log',{method:'POST',body});
-      if(r && r.ok===false) return alert(r.error||'エラー');
+      await api('log',{method:'POST',body, loadingText:'登録中…'});
       alert('登録しました');
       await loadAll(); showView('view-history','履歴');
       fillIoForm({code:'',name:'',price:'',stock:''}); qs('#io-qty').value='';
@@ -465,23 +537,32 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   qs('#btn-stop-scan')?.addEventListener('click', stopScanner);
   qs('#st-add')?.addEventListener('click', (e)=>{ e.preventDefault(); const code=qs('#st-code').value.trim(); const real=Number(qs('#st-qty').value||0); if(!code) return; const it=state.items.find(x=>String(x.code)===String(code)); pushStocktake(code, it?.name||'', Number(it?.stock||0), real); });
   qs('#st-export')?.addEventListener('click', ()=>{
-    const head='code,name,book,real,diff\n';
-    const lines=state.stocktakeRows.map(r=>[r.code,r.name,r.book,r.real,r.diff].join(',')).join('\n');
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='stocktake.csv'; a.click();
+    loading(true, 'CSVを生成中…');
+    try{
+      const head='code,name,book,real,diff\n';
+      const lines=state.stocktakeRows.map(r=>[r.code,r.name,r.book,r.real,r.diff].join(',')).join('\n');
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='stocktake.csv'; a.click();
+    } finally { loading(false); }
   });
 
   // Items export & add
   qs('#btn-items-export')?.addEventListener('click', ()=>{
-    const head='code,name,price,stock,min,location,lotUnit,lotQty\n';
-    const lines=state.items.map(r=>[r.code,r.name,r.price,r.stock,r.min,r.location||'',r.lotUnit||'',r.lotQty||0].join(',')).join('\n');
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='items.csv'; a.click();
+    loading(true, 'CSVを生成中…');
+    try{
+      const head='code,name,price,stock,min,location,lotUnit,lotQty\n';
+      const lines=state.items.map(r=>[r.code,r.name,r.price,r.stock,r.min,r.location||'',r.lotUnit||'',r.lotQty||0].join(',')).join('\n');
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+lines],{type:'text/csv'})); a.download='items.csv'; a.click();
+    } finally { loading(false); }
   });
   qs('#btn-items-xlsx')?.addEventListener('click', ()=>{
-    const data = state.items.map(r=>({ code:r.code, name:r.name, price:r.price, stock:r.stock, min:r.min, location:r.location, lotUnit:r.lotUnit, lotQty:r.lotQty }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Items');
-    XLSX.writeFile(wb, 'items.xlsx');
+    loading(true, 'Excelを生成中…');
+    try{
+      const data = state.items.map(r=>({ code:r.code, name:r.name, price:r.price, stock:r.stock, min:r.min, location:r.location, lotUnit:r.lotUnit, lotQty:r.lotQty }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Items');
+      XLSX.writeFile(wb, 'items.xlsx');
+    } finally { loading(false); }
   });
 
   // Modal Item (new)
@@ -514,16 +595,19 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     };
     if(!body.code || !body.name){ alert('コード/名称は必須'); return; }
     try{
-      const r=await api('addItem',{method:'POST',body});
-      if(r && r.ok===false) throw new Error(r.error||'登録失敗');
+      await api('addItem',{method:'POST',body, loadingText:'登録中…'});
       modalItem?.hide(); await loadAll(); showView('view-items','商品一覧');
     }catch(err){ alert(err.message); }
   });
   qs('#btn-item-makeqr')?.addEventListener('click', ()=>{
-    const i={ code:qs('#i-code').value.trim(), name:qs('#i-name').value.trim(), price:Number(qs('#i-price').value||0) };
-    const tmp=document.createElement('div'); if(typeof QRCode!=='undefined'){ new QRCode(tmp,{ text:itemQrText(i.code), width:240, height:240, correctLevel:QRCode.CorrectLevel.M }); }
-    const canvas=tmp.querySelector('canvas'); const dataUrl=canvas?canvas.toDataURL('image/png'):''; const w=window.open('','qrprev','width=420,height=520');
-    w.document.write(`<div style="padding:20px;text-align:center;font-family:sans-serif"><img src="${dataUrl}" style="width:240px;height:240px"/><div style="margin-top:8px">${i.name}（${i.code}） ¥${fmt(i.price||0)}</div></div>`); tmp.remove();
+    loading(true, 'QRを生成中…');
+    try{
+      const i={ code:qs('#i-code').value.trim(), name:qs('#i-name').value.trim(), price:Number(qs('#i-price').value||0) };
+      const tmp=document.createElement('div'); if(typeof QRCode!=='undefined'){ new QRCode(tmp,{ text:itemQrText(i.code), width:240, height:240, correctLevel:QRCode.CorrectLevel.M }); }
+      const canvas=tmp.querySelector('canvas'); const dataUrl=canvas?canvas.toDataURL('image/png'):'';
+      const w=window.open('','qrprev','width=420,height=520');
+      w.document.write(`<div style="padding:20px;text-align:center;font-family:sans-serif"><img src="${dataUrl}" style="width:240px;height:240px"/><div style="margin-top:8px">${i.name}（${i.code}） ¥${fmt(i.price||0)}</div></div>`); tmp.remove();
+    } finally { loading(false); }
   });
 
   // Modal Item (edit)
@@ -543,40 +627,18 @@ window.addEventListener('DOMContentLoaded', async ()=>{
       overwrite:true
     };
     try{
-      const r=await api('updateItem',{method:'POST',body});
-      if(r && r.ok===false) throw new Error(r.error||'更新失敗');
+      await api('updateItem',{method:'POST',body, loadingText:'保存中…'});
       modalEditItem?.hide(); await loadAll();
     }catch(err){ alert(err.message||err); }
   });
 
-  // Modal User (unchanged)
+  // Modal User
   const modalUser   = document.getElementById('dlg-new-user') ? new bootstrap.Modal('#dlg-new-user') : null;
   qs('#btn-open-new-user')?.addEventListener('click', ()=>modalUser?.show());
   qs('#form-user')?.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const body={ name:qs('#u-name').value.trim(), id:qs('#u-id').value.trim(), role:qs('#u-role').value, pin:qs('#u-pin').value.trim() };
-    try{ const r=await api('addUser',{method:'POST',body}); if(r && r.ok===false) throw new Error(r.error||'エラー'); modalUser?.hide(); await loadAll(); showView('view-users','ユーザー / QR'); }catch(err){ alert(err.message); }
-  });
-  qs('#btn-print-qr-users')?.addEventListener('click', ()=>{ /* A4 */ });
-
-  // Edit history submit
-  qs('#form-edit-history')?.addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const body={
-      row: Number(qs('#h-row').value),
-      userId: qs('#h-userId').value.trim(),
-      code:   qs('#h-code').value.trim(),
-      qty:    Number(qs('#h-qty').value||0),
-      unit:   qs('#h-unit').value.trim(),
-      type:   qs('#h-type').value,
-      note:   qs('#h-note').value.trim()
-    };
-    try{
-      const r = await api('historyEdit',{ method:'POST', body });
-      if(!r || r.ok===false) throw new Error(r?.error||'修正に失敗しました');
-      bootstrap.Modal.getInstance(document.getElementById('dlg-edit-history'))?.hide();
-      await loadAll(); showView('view-history','履歴');
-    }catch(err){ alert(err.message||err); }
+    try{ await api('addUser',{method:'POST',body, loadingText:'登録中…'}); modalUser?.hide(); await loadAll(); showView('view-users','ユーザー / QR'); }catch(err){ alert(err.message); }
   });
 
   // init
