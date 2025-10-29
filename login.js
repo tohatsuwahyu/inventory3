@@ -47,19 +47,45 @@
   function toast(m){ alert(m); }
 
   // dynamic loader utk html5-qrcode
-  function loadScriptOnce(src){
-    return new Promise((res, rej)=>{
-      if ([...document.scripts].some(s=>s.src.endsWith(src) || s.src===src)) return res();
-      const s=document.createElement('script'); s.src=src; s.async=true;
-      s.onload=res; s.onerror=()=>rej(new Error('Gagal memuat: '+src));
-      document.head.appendChild(s);
-    });
+ // --- loader universal (dipakai juga oleh ensureHtml5) ---
+function loadScriptOnce(src){
+  return new Promise((resolve, reject)=>{
+    // sudah ada?
+    if ([...document.scripts].some(s => s.src === src || s.src.endsWith(src))) return resolve();
+    const s = document.createElement('script');
+    s.src = src; s.async = true; s.crossOrigin = 'anonymous';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('gagal memuat: '+src));
+    document.head.appendChild(s);
+  });
+}
+
+// --- pastikan html5-qrcode tersedia (dengan multi fallback) ---
+async function ensureHtml5(){
+  if (window.Html5Qrcode) return;
+
+  // 1) coba file lokal (kalau Anda menaruhnya sendiri)
+  const locals = [
+    './vendor/html5-qrcode.min.js',
+    './html5-qrcode.min.js'
+  ];
+  for (const p of locals){
+    try { await loadScriptOnce(p); if (window.Html5Qrcode) return; } catch {}
   }
-  async function ensureHtml5(){
-    if (window.Html5Qrcode) return;
-    await loadScriptOnce('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js');
-    if (!window.Html5Qrcode) throw new Error('html5-qrcode tidak tersedia');
+
+  // 2) coba beberapa CDN (urutan berbeda supaya lolos blokir jaringan)
+  const cdns = [
+    'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js',
+    'https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js'
+  ];
+  for (const url of cdns){
+    try { await loadScriptOnce(url); if (window.Html5Qrcode) return; } catch {}
   }
+
+  throw new Error('html5-qrcode masih tidak tersedia');
+}
+
 
   // ---------- Login manual ----------
   const $id  = qs('#login-user');
