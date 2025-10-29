@@ -543,89 +543,149 @@ function openItemDetail(code){
 }
 
 // ======= Label generator (gambar + QR + teks rapi) =======
+// === GANTI seluruh fungsi makeItemLabelDataURL dengan versi ini ===
 async function makeItemLabelDataURL(item){
-  const W=760,H=260,pad=16,imgW=200,qrW=160;
-  const c=document.createElement('canvas'); c.width=W; c.height=H;
-  const g=c.getContext('2d');
+  // Kanvas dasar
+  const W = 760, H = 260, pad = 16;
+  const imgW = 200;                // kolom gambar
+  const gap  = 14;
+  const qrBox = H - 2*pad;         // tinggi penuh kolom QR
+  const qrSize = Math.min(180, qrBox); // ukuran QR (dibuat sedikit lebih kecil dari kolom)
+  const gridX = pad + imgW + gap + qrSize + gap;
 
-  // background & border
-  g.fillStyle='#fff'; g.fillRect(0,0,W,H);
-  g.strokeStyle='#000'; g.lineWidth=2; g.strokeRect(1,1,W-2,H-2);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false; // QR jadi tajam
 
-  // slot gambar (kiri)
-  const rx=pad,ry=pad,rw=imgW,rh=H-2*pad,r=18;
-  roundRect(g,rx,ry,rw,rh,r,true,true,'#eaf1ff','#cbd5e1');
+  // background + border
+  g.fillStyle = '#fff'; g.fillRect(0,0,W,H);
+  g.strokeStyle = '#000'; g.lineWidth = 2; g.strokeRect(1,1,W-2,H-2);
 
-  // gambar part (jika ada), jika tidak tampil "画像"
-  await drawImageIfAny(g, item.img, rx,ry,rw,rh,r);
+  // 1) SLOT GAMBAR KIRI (rounded) ---------------------------
+  const rx=pad, ry=pad, rw=imgW, rh=H-2*pad, r=18;
+  roundRect(g, rx, ry, rw, rh, r, true, true, '#eaf1ff', '#cbd5e1');
+  await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
 
-  // QR (tengah)
-  const qx=rx+rw+pad, qy=pad, qh=H-2*pad;
-  try{
-    const du = await generateQrDataUrl(`ITEM|${item.code}`, Math.min(qrW, qh));
-    const qimg=new Image(); qimg.src=du;
-    await imgLoaded(qimg); g.drawImage(qimg, qx, qy, qrW, qh);
-  }catch{}
+  // 2) QR CODE (tengah) — dengan quiet zone & presisi -------
+  const qx = rx + rw + gap + Math.max(0, (qrBox - qrSize)/2);
+  const qy = pad + Math.max(0, (qrBox - qrSize)/2);
+  // quiet zone 8px
+  g.fillStyle = '#fff';
+  g.fillRect(qx-8, qy-8, qrSize+16, qrSize+16);
+  try {
+    // buat QR pada resolusi final biar tajam
+    const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
+    const qimg = new Image(); qimg.src = du;
+    await imgLoaded(qimg);
+    g.drawImage(qimg, qx, qy, qrSize, qrSize);
+  } catch {}
 
-  // grid kanan
-  const gridX=qx+qrW+pad, cellH=(H-2*pad)/3;
+  // 3) GRID INFO KANAN --------------------------------------
+  const cellH = (H - 2*pad) / 3;
   g.strokeStyle='#000'; g.lineWidth=2;
-  g.strokeRect(gridX,pad, W-gridX-pad, H-2*pad);
+  g.strokeRect(gridX, pad, W - gridX - pad, H - 2*pad);
   for(let i=1;i<=2;i++){ const y=pad+cellH*i; g.beginPath(); g.moveTo(gridX,y); g.lineTo(W-pad,y); g.stroke(); }
 
-  const labelX=gridX+12,valX=gridX+112;
-  g.textAlign='left'; g.textBaseline='middle'; 
-  g.fillStyle='#000'; g.font='18px "Noto Sans JP", system-ui';
-  g.fillText('コード：', labelX, pad+cellH*0.5);
-  g.fillText('商品名：', labelX, pad+cellH*1.5);
-  g.fillText('置場：',   labelX, pad+cellH*2.5);
+  const labelX = gridX + 12;
+  const valX   = gridX + 112;
+  const valMaxW = W - pad - valX - 8;
 
+  g.textAlign='left'; g.textBaseline='middle'; g.fillStyle='#000';
+
+  // Label kecil
+  g.font='18px "Noto Sans JP", system-ui';
+  g.fillText('コード：', labelX, pad + cellH*0.5);
+  g.fillText('商品名：', labelX, pad + cellH*1.5);
+  g.fillText('置場：',   labelX, pad + cellH*2.5);
+
+  // Nilai
+  // — Code
   g.font='bold 22px "Noto Sans JP", system-ui';
-  fillTextMax(g, String(item.code||''), valX, pad+cellH*0.5, W-pad- valX);
-  fillTextMax(g, String(item.name||''), valX, pad+cellH*1.5, W-pad- valX);
+  drawSingleLineFit(g, String(item.code||''), valX, pad + cellH*0.5, valMaxW);
+
+  // — Nama (wrap 2 baris + autosize)
+  drawWrapAuto(g, String(item.name||''), valX, pad + cellH*1.5, valMaxW, {
+    maxLines: 2, base: 22, min: 16, lineGap: 4
+  });
+
+  // — Lokasi
   g.font='bold 20px "Noto Sans JP", system-ui';
-  fillTextMax(g, String(item.location||''), valX, pad+cellH*2.5, W-pad- valX);
+  drawSingleLineFit(g, String(item.location||''), valX, pad + cellH*2.5, valMaxW);
 
   return c.toDataURL('image/png');
 
-  // helpers
-  function roundRect(ctx,x,y,w,h,r,fill,stroke,fillColor,border){ ctx.save(); ctx.beginPath();
+  // ===================== Helpers ======================
+  function roundRect(ctx,x,y,w,h,r,fill,stroke,fillColor,border){
+    ctx.save(); ctx.beginPath();
     ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
     ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
-    if(fill){ctx.fillStyle=fillColor||'#eef';ctx.fill();}
-    if(stroke){ctx.strokeStyle=border||'#000';ctx.stroke();}
+    if(fill){ ctx.fillStyle=fillColor||'#eef'; ctx.fill(); }
+    if(stroke){ ctx.strokeStyle=border||'#000'; ctx.stroke(); }
     ctx.restore();
   }
-  function imgLoaded(im){ return new Promise((res)=>{ im.onload=()=>res(); im.onerror=()=>res(); }); }
-  async function drawImageIfAny(ctx, url, x,y,w,h,r){
+  function imgLoaded(im){ return new Promise(res=>{ im.onload=res; im.onerror=res; }); }
+  async function drawImageIfAny(ctx, url, x,y,w,h,rr){
     if(!url){
-      ctx.save();
-      ctx.fillStyle='#3B82F6'; ctx.font='bold 28px "Noto Sans JP", system-ui';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('画像', x+w/2, y+h/2);
-      ctx.restore(); return;
+      ctx.save(); ctx.fillStyle='#3B82F6'; ctx.font='bold 28px "Noto Sans JP", system-ui';
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('画像', x+w/2, y+h/2); ctx.restore(); return;
     }
     try{
-      const im=new Image(); im.crossOrigin='anonymous'; im.src=url;
-      await imgLoaded(im);
-      const s=Math.min(w/im.width,h/im.height);
-      const iw=im.width*s, ih=im.height*s;
+      const im=new Image(); im.crossOrigin='anonymous'; im.src=url; await imgLoaded(im);
+      const s=Math.min(w/im.width,h/im.height); const iw=im.width*s, ih=im.height*s;
       const ix=x+(w-iw)/2, iy=y+(h-ih)/2;
-      ctx.save(); // clip to rounded rect
-      ctx.beginPath();
-      ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
-      ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(im, ix, iy, iw, ih);
-      ctx.restore();
+      ctx.save(); ctx.beginPath();
+      ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr);
+      ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); ctx.clip();
+      ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
     }catch{}
   }
-  function fillTextMax(ctx, text, x, y, maxW){
-    let t=text; while (ctx.measureText(t).width > maxW && t.length>0) t=t.slice(0,-1);
-    if (t !== text && t.length>2) t=t.slice(0,-1)+'…';
-    ctx.fillText(t, x, y);
+  function drawSingleLineFit(ctx, text, x, y, maxW){
+    let size = 22; // default sesuai pemanggil
+    const fam = ctx.font.split(' ').slice(1).join(' ');
+    // coba perkecil bila melampaui lebar
+    while (ctx.measureText(text).width > maxW && size > 14){
+      size -= 1; ctx.font = `bold ${size}px ${fam}`;
+    }
+    ctx.fillText(text, x, y);
+  }
+  function splitByWidth(ctx, text, maxW){
+    const words = [...String(text)];
+    const lines = [];
+    let buf = '';
+    for (const ch of words){
+      const trial = buf + ch;
+      if (ctx.measureText(trial).width <= maxW) buf = trial;
+      else { if (buf) lines.push(buf); buf = ch; }
+    }
+    if (buf) lines.push(buf);
+    return lines;
+  }
+  function drawWrapAuto(ctx, text, x, centerY, maxW, opt){
+    const base = opt.base||22, min = opt.min||16, gap=opt.lineGap||4, maxLines=opt.maxLines||2;
+    const fam = ctx.font.split(' ').slice(1).join(' ');
+    let size = base, lines;
+
+    // turunkan ukuran sampai muat <= maxLines
+    while (true){
+      ctx.font = `bold ${size}px ${fam}`;
+      lines = splitByWidth(ctx, text, maxW);
+      if (lines.length <= maxLines || size <= min) break;
+      size -= 1;
+    }
+    // kalau masih lebih dari maxLines, potong baris terakhir dan tambah ellipsis
+    if (lines.length > maxLines){
+      lines = lines.slice(0, maxLines);
+      let last = lines[lines.length-1];
+      while (ctx.measureText(last + '…').width > maxW && last.length>0) last = last.slice(0,-1);
+      lines[lines.length-1] = last + '…';
+    }
+    // gambar terpusat vertikal di dalam sel
+    const totalH = lines.length*size + (lines.length-1)*gap;
+    let y = centerY - totalH/2 + size/2;
+    for (const ln of lines){ ctx.fillText(ln, x, y); y += size + gap; }
   }
 }
+
 
 // ======= View switcher =======
 function showView(id, title){
