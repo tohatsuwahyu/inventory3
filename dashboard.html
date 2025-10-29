@@ -392,23 +392,29 @@
     </div>
   </div>
 
-  <!-- ===== Core Libraries (CDN → fallback lokal via onerror) ===== -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-          onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
-          onerror="this.onerror=null;this.src='vendor/chart.umd.min.js'"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
-          onerror="this.onerror=null;this.src='vendor/xlsx.full.min.js'"></script>
+ <!-- ===== Core Libraries (CDN → fallback lokal via onerror) ===== -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+        onerror="this.onerror=null;this.src='vendor/chart.umd.min.js'"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
+        onerror="this.onerror=null;this.src='vendor/xlsx.full.min.js'"></script>
 
-  <!-- QRCode generator (rename file ini jadi qrlib.js) -->
-<script src="qrlib.js"></script>
+<!-- QRCode engine (WAJIB, sebelum qrlib.js) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js?v=20251029"
+        onerror="this.onerror=null;this.src='vendor/qrcode.min.js'"></script>
 
-<!-- Scanner html5-qrcode: pakai vendor saja -->
-<script src="vendor/html5-qrcode.min.js"></script>
+<!-- Wrapper milikmu yang memanggil new QRCode(...) -->
+<script src="qrlib.js?v=20251029"></script>
+
+<!-- Scanner (CDN → fallback vendor) -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js?v=20251029"
+        onerror="this.onerror=null;this.src='vendor/html5-qrcode.min.js'"></script>
 
 <!-- Config & App (WAJIB terakhir) -->
-<script src="config.js"></script>
-<script src="app.js"></script>
+<script src="config.js?v=20251029"></script>
+<script src="app.js?v=20251029"></script>
+
 
 </body>
 </html>
