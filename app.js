@@ -143,60 +143,63 @@
    * Charts (Dashboard)
    ***********************/
   let chartLine=null, chartPie=null;
-  async function renderDashboard(){
-    const who = getCurrentUser();
-    if (who) $('#who').textContent = `${who.name || who.id || 'user'} (${who.id} | ${who.role||'user'})`;
+ async function renderDashboard(){
+  const who = getCurrentUser();
+  if (who) $('#who').textContent = `${who.name || who.id || 'user'} (${who.id} | ${who.role||'user'})`;
 
-    try{
-      const [items, users, series] = await Promise.all([
-        api('items',{method:'GET'}),
-        api('users',{method:'GET'}),
-        api('statsMonthlySeries',{method:'GET'})
-      ]);
+  try{
+    const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([
+      api('items',{method:'GET'}).catch(()=>[]),
+      api('users',{method:'GET'}).catch(()=>[]),
+      api('statsMonthlySeries',{method:'GET'}).catch(()=>[])
+    ]);
 
-      // metrics
-      $('#metric-total-items').textContent = items.length;
-      const low = items.filter(it => Number(it.stock||0) <= Number(it.min||0)).length;
-      $('#metric-low-stock').textContent = low;
-      $('#metric-users').textContent = users.length;
-      $('#metric-txn').textContent = 0; // Anda bisa isi jika ingin total 30 hari
+    const items  = Array.isArray(itemsRaw)  ? itemsRaw  : [];
+    const users  = Array.isArray(usersRaw)  ? usersRaw  : [];
+    const series = Array.isArray(seriesRaw) ? seriesRaw : [];
 
-      // line
-      const ctx1 = $('#chart-monthly');
-      if (ctx1){
-        chartLine?.destroy();
-        chartLine = new Chart(ctx1, {
-          type:'line',
-          data:{
-            labels: series.map(s=>s.month),
-            datasets:[
-              { label:'IN', data: series.map(s=>s.in), borderWidth:2 },
-              { label:'OUT', data: series.map(s=>s.out), borderWidth:2 }
-            ]
-          },
-          options:{ responsive:true, maintainAspectRatio:false }
-        });
-      }
-      // pie dummy (bulan berjalan)
-      const ctx2 = $('#chart-pie');
-      if (ctx2){
-        chartPie?.destroy();
-        const last = series[series.length-1] || {in:0,out:0};
-        chartPie = new Chart(ctx2, {
-          type:'pie',
-          data:{ labels:['IN','OUT'], datasets:[{ data:[last.in,last.out] }] },
-          options:{ responsive:true, maintainAspectRatio:false }
-        });
-      }
+    // metrics
+    $('#metric-total-items').textContent = items.length;
+    const low = items.filter(it => Number(it.stock||0) <= Number(it.min||0)).length;
+    $('#metric-low-stock').textContent = low;
+    $('#metric-users').textContent = users.length;
 
-      // movement table (kosong dulu – bisa diisi dari history bila perlu)
-      $('#tbl-mov').innerHTML = '';
-
-    }catch(e){
-      console.error(e);
-      toast('ダッシュボードの読み込みに失敗しました。');
+    // chart: guard bila kosong
+    const ctx1 = $('#chart-monthly');
+    if (ctx1){
+      chartLine?.destroy();
+      chartLine = new Chart(ctx1, {
+        type:'line',
+        data:{
+          labels: series.map(s=>s.month || ''),
+          datasets:[
+            { label:'IN',  data: series.map(s=>Number(s.in  || 0)), borderWidth:2 },
+            { label:'OUT', data: series.map(s=>Number(s.out || 0)), borderWidth:2 }
+          ]
+        },
+        options:{ responsive:true, maintainAspectRatio:false }
+      });
     }
+    const ctx2 = $('#chart-pie');
+    if (ctx2){
+      chartPie?.destroy();
+      const last = series.length ? series[series.length-1] : {in:0,out:0};
+      chartPie = new Chart(ctx2, {
+        type:'pie',
+        data:{ labels:['IN','OUT'], datasets:[{ data:[Number(last.in||0), Number(last.out||0)] }] },
+        options:{ responsive:true, maintainAspectRatio:false }
+      });
+    }
+
+    // movement table (opsional)
+    $('#tbl-mov').innerHTML = '';
+
+  }catch(e){
+    console.error(e);
+    toast('ダッシュボードの読み込みに失敗しました。');
   }
+}
+
 
   /***********************
    * Items list + Edit + Label
@@ -739,14 +742,21 @@
   })();
 
   async function findItemIntoIO(code){
-    try{
-      const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code)) || (await api('itemByCode',{method:'GET'})).item;
-      if(!it) return;
-      $('#io-name').value = it.name || '';
-      $('#io-price').value = it.price || 0;
-      $('#io-stock').value = it.stock || 0;
-    }catch(e){}
+  try{
+    // cari di cache dulu; kalau tidak ada, panggil API benar (POST + body code)
+    let it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
+    if (!it) {
+      const r = await api('itemByCode',{method:'POST', body:{ code }});
+      it = r && r.ok ? r.item : null;
+    }
+    if(!it) return;
+    $('#io-name').value  = it.name  || '';
+    $('#io-price').value = it.price || 0;
+    $('#io-stock').value = it.stock || 0;
+  }catch(e){
+    console.warn(e);
   }
+}
 
   /***********************
    * Boot
