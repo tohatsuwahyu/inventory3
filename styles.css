@@ -110,3 +110,11 @@ main section.active{ opacity:1; transform:none; }
   vertical-align: middle;
   min-width: 96px;         /* opsional: kasih lebar minimum biar tidak mepet */
 }
+/* Tinggi area grafik agar tidak “turun” */
+.chart-box{ height: 300px; }
+@media (min-width: 992px){
+  /* sedikit lebih tinggi di layar lebar */
+  .chart-box{ height: 340px; }
+}
+/* Pastikan canvas mengikuti tinggi container */
+.chart-box canvas{ width:100% !important; height:100% !important; }
