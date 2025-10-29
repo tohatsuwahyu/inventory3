@@ -48,11 +48,12 @@ function openMenu(open){
   if(open){ sb?.classList.add('show','open'); bd?.classList.add('show'); document.body.classList.add('overflow-hidden'); }
   else{ sb?.classList.remove('show','open'); bd?.classList.remove('show'); document.body.classList.remove('overflow-hidden'); }
 }
-['#burger','#btn-menu'].forEach(id=>{
-  qs(id)?.addEventListener('click', (e)=>{ e.preventDefault(); openMenu(true); });
+['#burger','#btn-menu'].forEach(sel=>{
+  const el = qs(sel);
+  if (el) el.addEventListener('click', function(e){ e.preventDefault(); openMenu(true); });
 });
-(qs('#sb-backdrop')||qs('#backdrop'))?.addEventListener('click', ()=>openMenu(false));
-window.addEventListener('keydown', e=>{ if(e.key==='Escape') openMenu(false); });
+const bd = qs('#sb-backdrop') || qs('#backdrop');
+if (bd) bd.addEventListener('click', function(){ openMenu(false); });
 
 // === API
 async function api(action, {method='GET', body}={}){
