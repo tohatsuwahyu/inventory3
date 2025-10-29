@@ -341,15 +341,15 @@
     $('#md-save',wrap)?.addEventListener('click', async ()=>{
       try{
         const payload = {
-          code: $('#md-code',wrap).value,
-          name: $('#md-name',wrap).value,
-          price: Number($('#md-price',wrap).value||0),
-          stock: Number($('#md-stock',wrap).value||0),
-          min: Number($('#md-min',wrap).value||0),
-          img: $('#md-img',wrap).value,
-          location: $('#md-location',wrap).value,
-          overwrite: true
-        };
+  code: $('#md-code',wrap).value,
+  name: $('#md-name',wrap).value,
+  price: Number($('#md-price',wrap).value||0),
+  stock: Number($('#md-stock',wrap).value||0),
+  min:   Number($('#md-min',wrap).value||0),
+  img:   $('#md-img',wrap).value,
+  location: ($('#md-location',wrap).value||'').toUpperCase().trim(), // presisi + uppercase
+  overwrite: true
+};
         const r = await api('updateItem',{method:'POST', body: payload});
         if(r?.ok){
           modal.hide(); wrap.remove();
