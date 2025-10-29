@@ -1,124 +1,69 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>在庫管理 - ログイン</title>
 
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- Bootstrap (CDN → fallback lokal) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        onerror="this.onerror=null;this.href='vendor/bootstrap.min.css'"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"
+        onerror="this.onerror=null;this.href='vendor/bootstrap-icons.css'"/>
 
-  <!-- Bootstrap & Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css"/>
 
   <style>
-    :root{ --bg1:#f6f9ff; --bg2:#eef3ff; --bg3:#e9eefb; }
-    body.login-page{
-      min-height:100vh;
-      font-family:"Noto Sans JP",system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue","Hiragino Kaku Gothic ProN","Hiragino Sans",Meiryo,sans-serif;
-      background:
-        radial-gradient(1200px 600px at 10% -10%, #3b82f61a, transparent),
-        radial-gradient(1000px 500px at 110% 10%, #22d3ee1a, transparent),
-        linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 60%, var(--bg3) 100%);
-    }
-    .login-card{
-      max-width: 760px;
-      margin: 8vh auto;
-      border: none;
-      border-radius: 18px;
-      box-shadow: 0 24px 80px rgba(15,34,66,.12);
-      backdrop-filter: blur(6px);
-    }
-    .app-brand{ display:flex; align-items:center; gap:10px; padding:22px 28px }
-    .app-brand img{ width:28px; height:28px; object-fit:contain }
-    .muted{ color:#7a8499 }
-
-    /* Loading overlay */
-    .loading{
-      position:fixed; inset:0; z-index:2000;
-      display:flex; flex-direction:column; align-items:center; justify-content:center;
-      background:rgba(15,22,40,.45); backdrop-filter: blur(2px);
-    }
-    .loading.d-none{ display:none; }
-    .loading .spinner{
-      width:56px; height:56px; border-radius:50%;
-      border:6px solid #ffffff66; border-top-color:#4f8cff;
-      animation:spin .9s linear infinite;
-    }
-    .loading .text{ color:#fff; margin-top:12px; font-weight:600; letter-spacing:.02em }
-    @keyframes spin{ to{ transform:rotate(360deg) } }
+    body{ background:linear-gradient(180deg,#eef2ff,#f8fafc); min-height:100vh; }
+    .login-wrap{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .login-card{ width:100%; max-width:680px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.08); }
+    #qr-area{ display:none; width:100%; max-width:360px; aspect-ratio:4/3; margin:12px auto 0; border-radius:12px; overflow:hidden; background:#0b0b0b10; }
+    #qr-area video, #qr-area canvas{ width:100%!important; height:100%!important; object-fit:cover; }
   </style>
-
-  <script src="config.js"></script>
 </head>
-<body class="login-page">
+<body>
+  <div class="container login-wrap">
+    <div class="card login-card">
+      <div class="card-body p-4 p-md-5">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h3 class="m-0">ログイン</h3>
+          <a id="btn-qr" href="#" class="small text-decoration-none">QRログイン</a>
+        </div>
+        <p class="text-muted mb-4">ユーザーID か QR でログインできます。</p>
 
-  <header class="app-brand">
-    <img id="brand-logo" src="./assets/tsh.png" alt="logo">
-    <h5 class="mb-0">在庫管理</h5>
-    <div class="ms-auto pe-3"><a href="#" id="link-qr" class="small">QRログイン</a></div>
-  </header>
+        <div class="mb-3">
+          <label class="form-label">ユーザーID</label>
+          <input id="login-user" class="form-control" placeholder="USER001" autocomplete="username"/>
+        </div>
+        <div class="mb-4">
+          <label class="form-label">パスコード</label>
+          <input id="login-pin" class="form-control" placeholder="PIN" type="password" autocomplete="current-password"/>
+        </div>
 
-  <div class="card login-card p-4 p-md-5">
-    <h3 class="fw-bold mb-4">ログイン</h3>
-    <p class="text-muted">ユーザーID か QR でログインできます。</p>
+        <div class="d-flex gap-2">
+          <button id="btn-qr-alt" class="btn btn-outline-secondary d-none"><i class="bi bi-qr-code-scan me-1"></i> QRログイン</button>
+          <button id="btn-login" type="button" class="btn btn-primary"><i class="bi bi-box-arrow-in-right me-1"></i> ログイン</button>
+        </div>
 
-    <form id="form-login" class="mt-3">
-      <div class="mb-3">
-        <label class="form-label">ユーザーID</label>
-        <input id="login-id" class="form-control" placeholder="USER001" required>
+        <!-- Area kamera QR -->
+        <div id="qr-area" class="mt-3"></div>
+
+        <div class="text-muted small mt-4">© wahyu</div>
       </div>
-      <div class="mb-4">
-        <label class="form-label">パスコード</label>
-        <input id="login-pin" class="form-control" placeholder="PIN" type="password">
-      </div>
-      <div class="d-flex gap-2">
-        <button id="btn-qr" type="button" class="btn btn-outline-secondary">
-          <i class="bi bi-qr-code-scan me-1"></i> QRログイン
-        </button>
-        <button class="btn btn-primary">
-          <i class="bi bi-box-arrow-in-right me-1"></i> ログイン
-        </button>
-      </div>
-    </form>
-    <div class="small muted mt-4">© wahyu</div>
-  </div>
-
-  <!-- QR modal -->
-  <div class="modal fade" id="dlg-qr" tabindex="-1"><div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header"><h6 class="modal-title">QRログイン</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body"><div id="qr-login-area"></div></div>
     </div>
-  </div></div>
-
-  <!-- Global Loading -->
-  <div id="global-loading" class="loading d-none">
-    <div class="spinner"></div>
-    <div class="text" id="loading-text">読み込み中…</div>
   </div>
 
-  <!-- tambahkan/rapikan di bagian bawah <body> sebelum penutup </body> -->
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
-<script src="./config.js"></script>
-<script src="./login.js"></script>
+  <!-- JS libs -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
 
+  <!-- html5-qrcode harus ada sebelum login.js -->
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 
-  <!-- Brand & BG init + rel tombol -->
-  <script>
-    (function(){
-      try{
-        const url = (window.CONFIG && (CONFIG.LOGO_URL||'./assets/tsh.png')) || './assets/tsh.png';
-        const img = document.getElementById('brand-logo'); if(img) img.src = url;
-        if (CONFIG && CONFIG.LOGIN_BG_URL){
-          document.body.style.background =
-            `linear-gradient(180deg,#0b12241a,#0b122413), url('${CONFIG.LOGIN_BG_URL}') center/cover fixed no-repeat`;
-        }
-      }catch(_){}
-    })();
-    document.getElementById('btn-qr')?.addEventListener('click', ()=>document.getElementById('link-qr')?.click());
-  </script>
+  <!-- Konfigurasi GAS -->
+  <script src="./config.js"></script>
+
+  <!-- Script login (versi terbaru yang saya kirim) -->
+  <script src="./login.js"></script>
 </body>
 </html>
