@@ -84,6 +84,12 @@
       const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
       if(trg){ e.preventDefault(); toggleSB(); }
     });
+    // Tambah dukungan tap (mobile)
+document.addEventListener('touchend', (e)=>{
+  const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
+  if(trg){ e.preventDefault(); e.stopPropagation(); (sb?.classList.toggle('open'), bd?.classList.toggle('show')); }
+},{passive:false});
+
     bd?.addEventListener('click', closeSB);
 
     document.addEventListener('click', (e)=>{
