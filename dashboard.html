@@ -13,7 +13,7 @@
         onerror="this.onerror=null;this.href='vendor/bootstrap-icons.css'"/>
 
   <!-- App styles -->
-  <link href="styles.css?v=20251029" rel="stylesheet"/>
+  <link href="styles.css?v=20251030a" rel="stylesheet"/>
   <link href="print.css?v=20251029" rel="stylesheet"/>
 
   <style>
@@ -38,32 +38,17 @@
     main{flex:1}
     .layout{display:flex;min-height:100vh;gap:0}
     .content{padding:16px}
-    /* ==== Scan area: kecil & tetap proporsional ==== */
-#io-scan-area,
-#scan-area{
-  width:100%;
-  max-width:420px;        /* atur ukuran di sini (320–480px) */
-  margin:0 auto;
-  aspect-ratio: 4 / 3;    /* proporsi kamera */
-  position:relative;
-  overflow:hidden;
-  background:#0b0b0b10;
-  border-radius:12px;
-}
 
-/* library html5-qrcode sering set width:100% -> tetapkan ke container */
-#io-scan-area video,
-#io-scan-area canvas,
-#io-scan-area img,
-#scan-area video,
-#scan-area canvas,
-#scan-area img{
-  width:100% !important;
-  height:100% !important;
-  object-fit:cover;
-}
-.html5-qrcode-element{ display:none !important; } /* sembunyikan tombol default lib */
-
+    /* Scan area (IO & 棚卸) */
+    #io-scan-area, #scan-area{
+      width:100%; max-width:420px; margin:0 auto; aspect-ratio: 4/3;
+      position:relative; overflow:hidden; background:#0b0b0b10; border-radius:12px;
+    }
+    #io-scan-area video, #io-scan-area canvas, #io-scan-area img,
+    #scan-area video,   #scan-area canvas,   #scan-area img{
+      width:100% !important; height:100% !important; object-fit:cover;
+    }
+    .html5-qrcode-element{ display:none !important; } /* hide lib UI */
   </style>
 </head>
 <body>
@@ -72,7 +57,7 @@
     <div class="container-fluid py-2">
       <div class="d-flex align-items-center justify-content-between">
         <div class="brand">
-          <button id="burger" class="btn btn-outline-secondary d-lg-none"><i class="bi bi-list"></i></button>
+          <button id="burger" class="btn btn-outline-secondary d-lg-none" data-burger><i class="bi bi-list"></i></button>
           <img id="brand-logo" alt="logo"/>
           <div class="fw-bold">在庫管理</div>
         </div>
@@ -104,7 +89,7 @@
       <div class="content container-fluid">
         <div class="d-flex align-items-center justify-content-between mb-3">
           <h5 id="page-title" class="section-title m-0">ダッシュボード</h5>
-          <button id="btn-menu" class="btn btn-outline-secondary d-lg-none">メニュー</button>
+          <button id="btn-menu" class="btn btn-outline-secondary d-lg-none" data-burger>メニュー</button>
         </div>
 
         <!-- ========= Dashboard ========= -->
@@ -213,19 +198,26 @@
 
           <div class="card p-3">
             <div class="items-toolbar">
-              <div class="left"><div class="fw-semibold">手入力</div></div>
+              <div class="left">
+                <div class="fw-semibold">手入力</div>
+                <input id="st-filter" class="form-control search" placeholder="コード/名称で絞り込み…"/>
+              </div>
               <div class="right">
                 <button id="st-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
               </div>
             </div>
+
             <div class="row g-3 mb-2">
               <div class="col-md-4"><label class="form-label">コード</label><input id="st-code" class="form-control"/></div>
               <div class="col-md-3"><label class="form-label">実在数量</label><input id="st-qty" type="number" class="form-control"/></div>
               <div class="col-md-2 d-flex align-items-end"><button id="st-add" class="btn btn-primary w-100">追加</button></div>
             </div>
+
             <div class="table-responsive">
               <table class="table table-sm align-middle">
-                <thead><tr><th>コード</th><th>名称</th><th class="text-end">帳簿</th><th class="text-end">実在</th><th class="text-end">差異</th></tr></thead>
+                <thead><tr>
+                  <th>コード</th><th>名称</th><th class="text-end">帳簿</th><th class="text-end">実在</th><th class="text-end">差異</th><th class="text-end">操作</th>
+                </tr></thead>
                 <tbody id="tbl-stocktake"></tbody>
               </table>
             </div>
@@ -342,27 +334,25 @@
           onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-
-  <!-- html5-qrcode (prefetch; app.js juga akan fallback jika tidak ada) -->
+  <!-- html5-qrcode (prefetch; app.js juga fallback jika tidak ada) -->
   <script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 
   <!-- Konfigurasi & App -->
   <script src="./config.js"></script>
   <script src="./app.js"></script>
 
-  <!-- Burger/open sidebar minimal (cadangan, aman bersama app.js) -->
+  <!-- Burger/open sidebar cadangan -->
   <script>
     (function(){
       const sb = document.getElementById('sb');
       const bd = document.getElementById('sb-backdrop');
-      const burger = document.getElementById('burger');
-      const btnMenu = document.getElementById('btn-menu');
       function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
       function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
-      burger?.addEventListener('click', toggleSB);
-      btnMenu?.addEventListener('click', toggleSB);
+      document.addEventListener('click', (e)=>{
+        const trg = e.target.closest('[data-burger]');
+        if(trg){ e.preventDefault(); toggleSB(); }
+      });
       bd?.addEventListener('click', closeSB);
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSB(); });
     })();
