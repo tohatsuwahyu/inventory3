@@ -1,11 +1,12 @@
 /* =========================================================
- * login.js — Login USER+PIN & QR (versi cepat)
+ * login.js — Login USER+PIN & QR (versi cepat & stabil)
  * - Auto-load html5-qrcode (lokal + 3 CDN fallback)
- * - Scan lebih cepat: 640x480, fps 24, qrbox kecil, autofocus/autoexposure
- * - Manual login panggil GAS: action=login
+ * - Scan cepat: 1280x720, fps 24, qrbox kecil, autofocus/autoexposure, zoom
+ * - Manual login → GAS action=login
  * - QR login: USER|<id>  atau  LOGIN|<id>|<pin>  atau JSON setara
  * =======================================================*/
 (function(){
+  "use strict";
   const qs = (s, el=document)=>el.querySelector(s);
 
   /* ---------- GAS API ---------- */
@@ -31,8 +32,7 @@
   function loadScriptOnce(src){
     return new Promise((resolve,reject)=>{
       if ([...document.scripts].some(s=>s.src===src || s.src.endsWith(src))) return resolve();
-      const s=document.createElement('script');
-      s.src=src; s.async=true; s.crossOrigin='anonymous';
+      const s=document.createElement('script'); s.src=src; s.async=true; s.crossOrigin='anonymous';
       s.onload=()=>resolve(); s.onerror=()=>reject(new Error('gagal memuat: '+src));
       document.head.appendChild(s);
     });
@@ -67,7 +67,7 @@
   [$id,$pin].forEach(el=>el?.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $btn?.click(); }}));
 
   /* ---------- QR login (versi cepat) ---------- */
-  let scanner=null;
+  let scanner=null, nativeRunner=null, stream=null;
   const $btnQR = qs('#btn-qr');
   const $area  = (()=>{
     let a = qs('#qr-area');
@@ -90,62 +90,93 @@
     return null;
   }
 
-async function startQR(){
-  // 1) Native dulu
-  if(await startNative()) return;
-
-  // 2) Fallback html5-qrcode (tuning mobile)
-  try{
-    await ensureHtml5();
-    const area = document.getElementById('qr-area');
-    if(area) area.style.display='block';
-
-    const cfg = {
-      fps: 24,
-      qrbox: { width: 150, height: 150 },
-      aspectRatio: 1.33,
-      rememberLastUsedCamera: true,
-      disableFlip: true,
-      videoConstraints:{
-        facingMode:{ ideal:'environment' },
-        width:{ ideal:1280 }, height:{ ideal:720 },
-        focusMode:'continuous', exposureMode:'continuous'
-      }
-    };
-
-    scanner = new Html5Qrcode('qr-area', { useBarCodeDetectorIfSupported:true });
-    async function startWith(source){
-      await scanner.start(source, cfg, onScan);
-      try{
-        await scanner.applyVideoConstraints({
-          advanced:[{focusMode:'continuous'},{exposureMode:'continuous'},{zoom:3}]
-        }).catch(()=>{});
-      }catch(_){}
-      return scanner;
-    }
-
+  async function onScan(txt){
+    const p = parseQR(String(txt||''));
+    if(!p) return;
+    await stopQR();
     try{
-      await startWith({ facingMode:'environment' });
-    }catch(_){
-      const cams = await Html5Qrcode.getCameras();
-      const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams.at(-1);
-      await startWith({ deviceId:{ exact: back.id } });
-    }
-  }catch(err){
-    toast('QRログインを開始できませんでした: '+(err?.message||err));
-    try{ await stopQR(); }catch{}
+      const r = (p.kind==='byId')
+        ? await api('loginById',{method:'POST',body:{id:p.id}})
+        : await api('login',{method:'POST',body:{id:p.id,pass:p.pin}});
+      if(!r || r.ok===false) return toast(r?.error||'ログインに失敗しました。');
+      localStorage.setItem('currentUser', JSON.stringify(r.user));
+      location.href='dashboard.html';
+    }catch(err){ toast('QRログイン失敗: '+(err?.message||err)); }
   }
-}
 
+  async function startNative(){
+    if(!('BarcodeDetector' in window)) return false;
+    try{
+      $area.style.display='block';
+      const video=document.createElement('video'); video.playsInline=true; video.autoplay=true; video.muted=true;
+      Object.assign(video.style,{ width:'100%', height:'100%', objectFit:'cover' });
+      $area.innerHTML=''; $area.appendChild(video);
+
+      // pilih kamera belakang jika memungkinkan
+      const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+      const back = devs.find(d=>/back|rear|environment/i.test(d.label)) || devs.at(-1);
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        video:{
+          deviceId: back ? { exact: back.deviceId } : { ideal:'environment' },
+          width:{ ideal:1280 }, height:{ ideal:720 },
+          focusMode:'continuous', exposureMode:'continuous'
+        },
+        audio:false
+      });
+      video.srcObject=stream;
+
+      const det = new BarcodeDetector({ formats:['qr_code'] });
+      let raf=0, stopped=false;
+      const loop = async ()=>{
+        if(stopped) return;
+        try{
+          const codes = await det.detect(video);
+          if(codes?.length){
+            const txt = codes[0].rawValue || '';
+            if(txt){ stop(); await onScan(txt); return; }
+          }
+        }catch(_){}
+        raf = requestAnimationFrame(loop);
+      };
+      const stop = ()=>{ stopped=true; cancelAnimationFrame(raf); stream?.getTracks()?.forEach(t=>t.stop()); stream=null; $area.innerHTML=''; };
+      loop();
+      nativeRunner = { stop, clear:()=>{ try{$area.innerHTML='';}catch{} } };
+      return true;
+    }catch(_){ try{ nativeRunner?.stop?.(); nativeRunner?.clear?.(); }catch{} return false; }
+  }
+
+  async function startQR(){
+    // 1) Native dulu (lebih cepat dan hemat CPU)
+    if(await startNative()) return;
+
+    // 2) Fallback html5-qrcode (tuning mobile)
+    try{
+      await ensureHtml5();
+      $area.style.display='block';
+
+      const cfg = {
+        fps: 24,
+        qrbox: { width: 150, height: 150 },
+        aspectRatio: 1.33,
+        rememberLastUsedCamera: true,
+        disableFlip: true,
+        videoConstraints:{
+          facingMode:{ ideal:'environment' },
+          width:{ ideal:1280 }, height:{ ideal:720 },
+          focusMode:'continuous', exposureMode:'continuous'
+        }
+      };
+
+      scanner = new Html5Qrcode('qr-area', { useBarCodeDetectorIfSupported:true });
 
       async function startWith(source){
         await scanner.start(source, cfg, onScan);
-        // dorong autofocus/autoexposure/zoom (jika didukung)
         try{
           await scanner.applyVideoConstraints({
-            advanced: [{focusMode:'continuous'},{exposureMode:'continuous'},{zoom:3}]
+            advanced:[{focusMode:'continuous'},{exposureMode:'continuous'},{zoom:3}]
           }).catch(()=>{});
-        }catch{}
+        }catch(_){}
         return scanner;
       }
 
@@ -161,7 +192,16 @@ async function startQR(){
       try{ await stopQR(); }catch{}
     }
   }
-  async function stopQR(){ try{ await scanner?.stop?.(); scanner?.clear?.(); }catch{} scanner=null; $area.style.display='none'; }
 
-  $btnQR?.addEventListener('click',e=>{ e.preventDefault(); (scanner? stopQR(): startQR()); });
+  async function stopQR(){
+    try{ await scanner?.stop?.(); scanner?.clear?.(); }catch{}
+    try{ nativeRunner?.stop?.(); nativeRunner?.clear?.(); }catch{}
+    scanner=null; nativeRunner=null;
+    if($area) $area.style.display='none';
+  }
+
+  $btnQR?.addEventListener('click', e=>{
+    e.preventDefault();
+    (scanner || nativeRunner) ? stopQR() : startQR();
+  });
 })();
