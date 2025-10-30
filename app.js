@@ -1,5 +1,5 @@
 /* =========================================================
- * app.js — Inventory (GAS backend)
+ * app.js — Inventory (GAS backend) — Wahyu edition
  * =======================================================*/
 (function(){
   "use strict";
@@ -12,6 +12,7 @@
   const fmt = (n)=> new Intl.NumberFormat('ja-JP').format(Number(n||0));
   const isMobile = ()=> /Android|iPhone|iPad/i.test(navigator.userAgent);
   function toast(msg){ alert(msg); }
+  const isAdmin = ()=> (getCurrentUser()?.role||'').toLowerCase()==='admin';
 
   function setLoading(show, text){
     const el = $('#global-loading');
@@ -110,9 +111,7 @@
     function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
     function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
 
-    // pastikan dua-duanya bekerja (ikon kiri & tombol kanan)
     [burger, btnMenu].forEach(el=> el && el.addEventListener('click', (e)=>{ e.preventDefault(); toggleSB(); }));
-    // dukung elemen lain yang diberi data-burger
     document.addEventListener('click', (e)=>{
       const trg = e.target.closest('[data-burger], .btn-burger');
       if(trg){ e.preventDefault(); toggleSB(); }
@@ -148,6 +147,7 @@
       if(id==='view-items') renderItems();
       if(id==='view-users') renderUsers();
       if(id==='view-history') renderHistory();
+      if(id==='view-stocktake') initStocktake();
     });
   })();
 
@@ -208,12 +208,25 @@
   }
 
   /***********************
-   * Items list + Edit + Label
+   * Items list + Submenu + Role guard + Label
    ***********************/
   let _ITEMS_CACHE = [];
 
   function tplItemRow(it){
     const qrid = `qr-${it.code}`;
+    const admin = isAdmin();
+    // dropdown submenu elegan
+    const menu = `
+    <div class="btn-group">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">操作</button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        ${ admin ? `<li><a class="dropdown-item act-edit"   data-code="${escapeAttr(it.code)}">編集</a></li>` : ``}
+        ${ admin ? `<li><a class="dropdown-item act-adjust" data-code="${escapeAttr(it.code)}">在庫調整</a></li>` : ``}
+        <li><a class="dropdown-item act-preview" data-code="${escapeAttr(it.code)}">プレビュー</a></li>
+        <li><a class="dropdown-item act-dl"      data-code="${escapeAttr(it.code)}">ラベルDL</a></li>
+      </ul>
+    </div>`;
+
     return `<tr>
       <td style="width:110px">
         <div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div>
@@ -225,14 +238,7 @@
       <td class="text-end">${fmt(it.stock)}</td>
       <td class="text-end">${fmt(it.min)}</td>
       <td>${escapeHtml(it.location||'')}</td>
-      <td>
-        <div class="act-grid">
-          <button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>
-          <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ダウンロード">DL</button>
-          <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>
-        </div>
-      </td>
+      <td class="text-end">${menu}</td>
     </tr>`;
   }
 
@@ -251,30 +257,33 @@
         new QRCode(holder, { text:`ITEM|${it.code}`, width:64, height:64, correctLevel: QRCode.CorrectLevel.M });
       }
 
+      // submenu actions
       tbody.addEventListener('click', async (e)=>{
-        const btn = e.target.closest('button');
-        if(!btn) return;
+        const a = e.target.closest('.dropdown-item, .btn');
+        if(!a) return;
 
-        const code = btn.getAttribute('data-code');
-        if(btn.classList.contains('btn-edit')){
+        // role guard untuk edit/adjust (jika tombol disuntik lewat DOM)
+        if(a.classList.contains('act-edit') || a.classList.contains('act-adjust')){
+          if(!isAdmin()){ toast('アクセスが拒否されました（管理者のみ）'); return; }
+        }
+
+        const code = a.getAttribute('data-code');
+        if(a.classList.contains('act-edit')){
           openEditItem(code);
-        }else if(btn.classList.contains('btn-del')){
-          if(!confirm('削除しますか？')) return;
-          const r = await api('deleteItem',{method:'POST', body:{ code }});
-          if(r?.ok) renderItems();
-          else toast(r?.error||'削除失敗');
-        }else if(btn.classList.contains('btn-dl')){
+        }else if(a.classList.contains('act-adjust')){
+          openAdjustModal(code);
+        }else if(a.classList.contains('act-dl')){
           const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
           const url = await makeItemLabelDataURL(it);
-          const a = document.createElement('a');
-          a.href = url; a.download = `label_${it.code}.png`; a.click();
-        }else if(btn.classList.contains('btn-preview')){
+          const d=document.createElement('a'); d.href=url; d.download=`label_${it.code}.png`; d.click();
+        }else if(a.classList.contains('act-preview')){
           const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
           const url = await makeItemLabelDataURL(it);
           openPreview(url);
         }
       });
 
+      // link detail
       $$('#tbl-items .link-item').forEach(a=>{
         a.addEventListener('click', (ev)=>{
           ev.preventDefault();
@@ -284,12 +293,15 @@
         });
       });
 
+      // smarter search: nama/kode/lokasi
       $('#items-search')?.addEventListener('input', (e)=>{
-        const q = (e.target.value||'').toLowerCase();
+        const q = (e.target.value||'').toLowerCase().trim();
         const rows = $$('#tbl-items tr');
         rows.forEach(tr=>{
+          const code = (tr.children[1]?.textContent||'').toLowerCase();
           const name = (tr.children[2]?.textContent||'').toLowerCase();
-          tr.style.display = name.includes(q) ? '' : 'none';
+          const loc  = (tr.children[7]?.textContent||'').toLowerCase();
+          tr.style.display = (code.includes(q)||name.includes(q)||loc.includes(q)) ? '' : 'none';
         });
       });
 
@@ -303,6 +315,7 @@
 
   // === Edit item (modal) ===
   function openEditItem(code){
+    if(!isAdmin()){ toast('アクセスが拒否されました（管理者のみ）'); return; }
     const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
     if(!it) return;
     const wrap = document.createElement('div');
@@ -364,6 +377,49 @@
     wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
   }
 
+  // === Adjust (koreksi stok) — admin only ===
+  function openAdjustModal(code){
+    if(!isAdmin()){ toast('アクセスが拒否されました（管理者のみ）'); return; }
+    const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
+    if(!it) return;
+    const wrap = document.createElement('div');
+    wrap.className='modal fade';
+    wrap.innerHTML = `
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">在庫調整：${escapeHtml(it.name)} (${escapeHtml(it.code)})</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="mb-2">現在在庫：<b>${fmt(it.stock||0)}</b></div>
+      <label class="form-label">新しい在庫数</label>
+      <input id="adj-qty" type="number" class="form-control" value="${Number(it.stock||0)}">
+      <label class="form-label mt-3">備考</label>
+      <input id="adj-note" class="form-control" placeholder="棚卸し調整 など">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+      <button class="btn btn-warning" id="adj-save">調整</button>
+    </div>
+  </div>
+</div>`;
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap);
+    modal.show();
+
+    $('#adj-save',wrap)?.addEventListener('click', async ()=>{
+      const who = getCurrentUser();
+      try{
+        const newStock = Number($('#adj-qty',wrap).value||0);
+        const note = $('#adj-note',wrap).value||'Adjust';
+        const r = await api('adjustStock',{method:'POST', body:{ code: it.code, newStock, userId: who?.id, note }});
+        if(r?.ok){ toast('調整しました'); modal.hide(); wrap.remove(); renderItems(); renderDashboard(); }
+        else toast(r?.error||'調整失敗');
+      }catch(e){ toast('調整失敗: '+(e?.message||e)); }
+    });
+
+    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
+  }
+
   function showItemDetail(it){
     const card = $('#card-item-detail');
     if(!card) return;
@@ -409,24 +465,18 @@
     const c=document.createElement('canvas'); c.width=W; c.height=H;
     const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
 
-    // background & border luar
     g.fillStyle='#fff'; g.fillRect(0,0,W,H);
     g.strokeStyle='#000'; g.lineWidth=2; g.strokeRect(1,1,W-2,H-2);
 
-    // slot gambar kiri (rounded)
     const rx=pad, ry=pad, rw=imgW, rh=H-2*pad, r=18;
     roundRect(g, rx,ry,rw,rh,r, true,true,'#eaf1ff','#cbd5e1');
     await drawImageIfAny(g,item.img,rx,ry,rw,rh,r);
 
-    // area tengah (antara gambar dan kotak kanan)
     const colStart = pad + imgW + gap;
     const qrBoxH   = H - 2*pad;
     const qy       = pad + Math.max(0, (qrBoxH - qrSize)/2);
+    const qx       = colStart + gapQR + QUIET;
 
-    // posisi QR → jarak kiri = gapQR
-    const qx = colStart + gapQR + QUIET;
-
-    // quiet-zone + QR
     g.fillStyle='#fff';
     g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2*QUIET, qrSize + 2*QUIET);
     try{
@@ -435,7 +485,6 @@
       g.drawImage(im, qx, qy, qrSize, qrSize);
     }catch(e){}
 
-    // kotak grid kanan → jarak kanan dari QR = gapQR (simetris)
     const colQRW = qrSize + 2*QUIET;
     const gridX  = colStart + gapQR + colQRW + gapQR;
 
@@ -448,22 +497,21 @@
     const valMaxW = W - pad - valX - 8;
 
     g.textAlign='left'; g.textBaseline='middle'; g.fillStyle='#000';
-    g.font='16px "Noto Sans JP", system-ui';
+    g.font='18px "Noto Sans JP", system-ui';
     g.fillText('コード：', labelX, pad + cellH*0.5);
     g.fillText('商品名：', labelX, pad + cellH*1.5);
     g.fillText('置場：',   labelX, pad + cellH*2.5);
 
-    g.font='bold 18px "Noto Sans JP", system-ui';
+    g.font='bold 22px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.code||''), valX, pad + cellH*0.5, valMaxW);
 
     drawWrapAuto(g, String(item.name||''), valX, pad + cellH*1.5, valMaxW, { maxLines:2, base:22, min:16, lineGap:4 });
 
-    g.font='bold 18px "Noto Sans JP", system-ui';
+    g.font='bold 20px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.location||'').toUpperCase(), valX, pad + cellH*2.5, valMaxW);
 
     return c.toDataURL('image/png');
 
-    // Helpers canvas
     function roundRect(ctx,x,y,w,h,r,fill,stroke,fillColor,border){
       ctx.save(); ctx.beginPath();
       ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
@@ -575,7 +623,7 @@
         new QRCode(el, { text:`USER|${u.id}`, width:64, height:64, correctLevel:QRCode.CorrectLevel.M });
       }
 
-      tbody.addEventListener('click', async (e)=>{
+      $('#tbl-userqr').addEventListener('click', async (e)=>{
         const b=e.target.closest('.btn-dl-user'); if(!b) return;
         const id = b.getAttribute('data-id');
         const url = await generateQrDataUrl(`USER|${id}`, 300);
@@ -618,19 +666,22 @@
   }
 
   /***********************
-   * IO (scan)
+   * IO (入出庫) & 棚卸 スキャナ
    ***********************/
   let IO_SCANNER = null;
+  let ST_SCANNER = null;
 
-  async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 170 : 190)) {
+  async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 190 : 200)) {
     const mount = document.getElementById(mountId);
     if (mount) {
-      mount.style.maxWidth = isMobile() ? '340px' : '400px';
+      mount.textContent = '';
+      mount.style.maxWidth = isMobile() ? '360px' : '420px';
       mount.style.margin = '0 auto';
       mount.style.aspectRatio = '4 / 3';
       mount.style.position = 'relative';
     }
 
+    // Prefer native BarcodeDetector (faster on mobile Safari/Chrome)
     if ('BarcodeDetector' in window) {
       try { return await startNativeDetector(mountId, onScan, boxSize); }
       catch (e) { console.warn('BarcodeDetector fallback ke html5-qrcode', e); }
@@ -640,7 +691,7 @@
     if (!window.Html5Qrcode) throw new Error('html5-qrcode tidak tersedia');
 
     const formatsOpt = (window.Html5QrcodeSupportedFormats && Html5QrcodeSupportedFormats.QR_CODE)
-      ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] }
+      ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.EAN_13 ] }
       : {};
 
     const cfg = {
@@ -651,10 +702,11 @@
       disableFlip: true,
       videoConstraints: {
         facingMode: { ideal: 'environment' },
-        width:  { ideal: 640 },
-        height: { ideal: 480 },
+        width:  { ideal: 1280 },
+        height: { ideal: 720  },
         focusMode: 'continuous',
-        exposureMode: 'continuous'
+        exposureMode: 'continuous',
+        advanced: [{ zoom:2 }]
       },
       ...formatsOpt
     };
@@ -694,18 +746,18 @@
     mount.appendChild(video);
 
     const stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:{ideal:'environment'}, width:{ideal:640}, height:{ideal:480} },
+      video:{ facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} },
       audio:false
     });
     video.srcObject=stream;
 
-    const detector = new BarcodeDetector({ formats:['qr_code'] });
+    const detector = new BarcodeDetector({ formats:['qr_code','ean_13','code_128'] });
     let raf=0;
     const scan = async ()=>{
       try{
         const codes = await detector.detect(video);
         if(codes && codes.length){
-          const txt = codes[0].rawValue || '';
+          const txt = (codes[0].rawValue || '').trim();
           if(txt){ cancelAnimationFrame(raf); stream.getTracks().forEach(t=>t.stop()); onScan(txt); return; }
         }
       }catch(e){}
@@ -715,7 +767,8 @@
     return { stop:()=>{ cancelAnimationFrame(raf); stream.getTracks().forEach(t=>t.stop()); }, clear:()=>{ mount.innerHTML=''; } };
   }
 
-  (function bindIO(){
+  // 入出庫スキャン (sudah ada sebelumnya)
+  ;(function bindIO(){
     const btnStart = $('#btn-io-scan'), btnStop = $('#btn-io-stop'), area = $('#io-scan-area');
     if(!btnStart || !btnStop || !area) return;
 
@@ -723,7 +776,7 @@
       try{
         area.textContent = 'カメラ起動中…';
         IO_SCANNER = await startBackCameraScan('io-scan-area', (text)=>{
-          const code = (String(text||'').split('|')[1]||'').trim();
+          const code = (String(text||'').split('|')[1]||String(text||'')).trim();
           if(code){ $('#io-code').value = code; findItemIntoIO(code); }
         });
       }catch(e){ toast(e?.message||String(e)); }
@@ -751,6 +804,44 @@
       }catch(e){ toast('登録失敗: '+(e?.message||e)); }
     });
   })();
+
+  // === 棚卸 (Stocktake) ===
+  function initStocktake(){
+    const btnScan = $('#btn-st-scan'), btnStop = $('#btn-st-stop'), area = $('#st-scan-area');
+    if(!btnScan || !btnStop || !area) return;
+
+    // tombol scan
+    btnScan.onclick = async ()=>{
+      try{
+        area.textContent = 'カメラ起動中…';
+        ST_SCANNER = await startBackCameraScan('st-scan-area', (text)=>{
+          // dukung format "ITEM|CODE" dan barcode murni
+          const code = (String(text||'').split('|')[1]||String(text||'')).trim();
+          if(code){ $('#st-code').value = code; $('#st-qty')?.focus(); }
+        });
+      }catch(e){ toast(e?.message||String(e)); }
+    };
+
+    btnStop.onclick = async ()=>{
+      try{ await ST_SCANNER?.stop?.(); ST_SCANNER?.clear?.(); }catch(e){}
+      area.innerHTML = 'カメラ待機中…';
+    };
+
+    // submit penulisan hasil stocktake
+    $('#form-stocktake')?.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const who = getCurrentUser();
+      const code = ($('#st-code').value||'').trim();
+      const qty  = Number($('#st-qty').value||0);
+      const note = $('#st-note')?.value || '棚卸';
+      if(!code){ toast('コードを入力/スキャンしてください'); return; }
+      try{
+        const r = await api('stocktake',{method:'POST', body:{ userId: who?.id, code, qty, note }});
+        if(r?.ok){ toast('棚卸を登録しました'); $('#st-qty').value=''; renderItems(); renderDashboard(); }
+        else toast(r?.error||'登録失敗');
+      }catch(e){ toast('登録失敗: '+(e?.message||e)); }
+    });
+  }
 
   async function findItemIntoIO(code){
     try{
@@ -782,6 +873,9 @@
 
     renderDashboard();
     $('#btn-logout')?.addEventListener('click', logout);
+
+    // jika halaman default membuka menu 棚卸, bind langsung
+    initStocktake();
   });
 
 })();
