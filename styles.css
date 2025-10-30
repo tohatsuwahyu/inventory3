@@ -146,3 +146,10 @@ main section.active{ opacity:1; transform:none; }
 
 /* QR img kecil di tabel tidak merapat ke kiri */
 .tbl-qr-box{ display:flex; align-items:center; justify-content:center; }
+@media (max-width: 576px){
+  .content{ padding: 12px; }
+  .act-grid{ grid-template-columns: repeat(2,1fr); gap:.35rem .4rem; }
+  .act-grid .btn{ width:40px; height:34px; }
+  .table th:nth-child(1), .table td:nth-child(1){ width:90px; }
+  .table th:last-child, .table td:last-child{ width:128px; }
+}
