@@ -4,34 +4,22 @@
 (function(){
   "use strict";
 
-  /***********************
-   * Helpers
-   ***********************/
   const $  = (sel, el=document)=>el.querySelector(sel);
   const $$ = (sel, el=document)=>[...el.querySelectorAll(sel)];
   const fmt = (n)=> new Intl.NumberFormat('ja-JP').format(Number(n||0));
   const isMobile = ()=> /Android|iPhone|iPad/i.test(navigator.userAgent);
   function toast(msg){ alert(msg); }
-
   function setLoading(show, text){
-    const el = $('#global-loading');
-    if(!el) return;
+    const el = $('#global-loading'); if(!el) return;
     if(show){ el.classList.remove('d-none'); $('#loading-text').textContent = text||'読み込み中…'; }
-    else { el.classList.add('d-none'); }
+    else el.classList.add('d-none');
   }
 
-  /***********************
-   * API (GAS)
-   ***********************/
   async function api(action, { method='GET', body=null, silent=false }={}){
-    if(!window.CONFIG || !CONFIG.BASE_URL){
-      throw new Error('config.js BASE_URL belum di-set');
-    }
+    if(!window.CONFIG || !CONFIG.BASE_URL){ throw new Error('config.js BASE_URL belum di-set'); }
     const apikey = encodeURIComponent(CONFIG.API_KEY||'');
     const url = `${CONFIG.BASE_URL}?action=${encodeURIComponent(action)}&apikey=${apikey}&_=${Date.now()}`;
-
-    if(!silent) setLoading(true, '読み込み中…');
-
+    if(!silent) setLoading(true);
     try{
       if(method==='GET'){
         const r = await fetch(url, { mode:'cors', cache:'no-cache' });
@@ -46,25 +34,18 @@
         if(!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
         return await r.json();
       }
-    }finally{
-      if(!silent) setLoading(false);
-    }
+    }finally{ if(!silent) setLoading(false); }
   }
 
-  /***********************
-   * Script loaders
-   ***********************/
   function loadScriptOnce(src){
     return new Promise((resolve, reject)=>{
       if ([...document.scripts].some(s=>s.src===src || s.src.endsWith(src))) return resolve();
       const s=document.createElement('script');
       s.src=src; s.async=true; s.crossOrigin='anonymous';
-      s.onload=()=>resolve();
-      s.onerror=()=>reject(new Error('Gagal memuat: '+src));
+      s.onload=()=>resolve(); s.onerror=()=>reject(new Error('Gagal memuat: '+src));
       document.head.appendChild(s);
     });
   }
-
   async function ensureQRCode(){
     if (window.QRCode) return;
     const locals = ['./qrlib.js','./qrcode.min.js','./vendor/qrcode.min.js'];
@@ -77,7 +58,6 @@
     for(const u of cdns){ try{ await loadScriptOnce(u); if(window.QRCode) return; }catch(e){} }
     throw new Error('QRCode library tidak tersedia (qrlib.js)');
   }
-
   async function ensureHtml5Qrcode(){
     if (window.Html5Qrcode) return;
     const locals = ['./html5-qrcode.min.js','./vendor/html5-qrcode.min.js'];
@@ -91,70 +71,36 @@
     throw new Error('html5-qrcode tidak tersedia');
   }
 
-  /***********************
-   * Auth mini
-   ***********************/
-  function getCurrentUser(){
-    try{ return JSON.parse(localStorage.getItem('currentUser')||'null'); }catch(e){ return null; }
-  }
+  function getCurrentUser(){ try{ return JSON.parse(localStorage.getItem('currentUser')||'null'); }catch(e){ return null; } }
   function setCurrentUser(u){ localStorage.setItem('currentUser', JSON.stringify(u||null)); }
   function logout(){ setCurrentUser(null); location.href='index.html'; }
+  function isAdmin(){ return (getCurrentUser()?.role || 'user').toLowerCase() === 'admin'; }
 
-  function isAdmin(){
-    return (getCurrentUser()?.role || 'user').toLowerCase() === 'admin';
-  }
-
-  /***********************
-   * Sidebar / Nav
-   ***********************/
   (function navHandler(){
     const sb = $('#sb'), bd = $('#sb-backdrop');
-
     function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
     function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
-
-    // semua elemen bertanda data-burger akan toggle sidebar (ikon & tombol)
     document.addEventListener('click', (e)=>{
       const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
       if(trg){ e.preventDefault(); toggleSB(); }
     });
     bd?.addEventListener('click', closeSB);
 
-    // navigasi antar view
     document.addEventListener('click', (e)=>{
-      const a = e.target.closest('aside nav a[data-view]');
-      if(!a) return;
+      const a = e.target.closest('aside nav a[data-view]'); if(!a) return;
       e.preventDefault();
-
-      $$('aside nav a').forEach(n=>n.classList.remove('active'));
-      a.classList.add('active');
-
-      $$('main section').forEach(s=>{
-        s.classList.add('d-none');
-        s.classList.remove('active');
-      });
-
-      const id = a.getAttribute('data-view');
-      const sec = document.getElementById(id);
-      if(sec){
-        sec.classList.remove('d-none');
-        sec.classList.add('active');
-      }
-
-      const title = a.textContent.trim();
-      const h = $('#page-title'); if(h) h.textContent = title;
-
+      $$('aside nav a').forEach(n=>n.classList.remove('active')); a.classList.add('active');
+      $$('main section').forEach(s=>{ s.classList.add('d-none'); s.classList.remove('active'); });
+      const id = a.getAttribute('data-view'); const sec = document.getElementById(id);
+      if(sec){ sec.classList.remove('d-none'); sec.classList.add('active'); }
+      const title = a.textContent.trim(); const h = $('#page-title'); if(h) h.textContent = title;
       closeSB();
-
       if(id==='view-items') renderItems();
       if(id==='view-users') renderUsers();
       if(id==='view-history') renderHistory();
     });
   })();
 
-  /***********************
-   * Charts (Dashboard)
-   ***********************/
   let chartLine=null, chartPie=null;
   async function renderDashboard(){
     const who = getCurrentUser();
@@ -202,16 +148,21 @@
         });
       }
 
-      $('#tbl-mov').innerHTML = '';
+      // CSV monthly button (dummy source, bisa isi nanti)
+      $('#btn-export-mov')?.addEventListener('click', ()=>{
+        const csv = ['month,in,out'].concat(series.map(s=>[s.month,s.in||0,s.out||0].join(','))).join('\n');
+        const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=url; a.download='monthly.csv'; a.click(); URL.revokeObjectURL(url);
+      }, { once:true });
     }catch{
       toast('ダッシュボードの読み込みに失敗しました。');
     }
   }
 
-  /***********************
-   * Items list + Edit + Label
-   ***********************/
+  /* ================= Items ================= */
   let _ITEMS_CACHE = [];
+  function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;","&gt;":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
+  function escapeAttr(s){ return escapeHtml(s); }
 
   function tplItemRow(it){
     const qrid = `qr-${it.code}`;
@@ -230,7 +181,9 @@
         <div class="act-grid">
           <button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>
-          <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ダウンロード">DL</button>
+          <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ダウンロード">
+            <i class="bi bi-download"></i>
+          </button>
           <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>
         </div>
       </td>
@@ -247,34 +200,27 @@
       await ensureQRCode();
       for(const it of _ITEMS_CACHE){
         const holder = document.getElementById(`qr-${it.code}`);
-        if(!holder) continue;
-        holder.innerHTML = '';
+        if(!holder) continue; holder.innerHTML = '';
         new QRCode(holder, { text:`ITEM|${it.code}`, width:64, height:64, correctLevel: QRCode.CorrectLevel.M });
       }
 
-      tbody.addEventListener('click', async (e)=>{
-        const btn = e.target.closest('button');
-        if(!btn) return;
-
+      tbody.onclick = async (e)=>{
+        const btn = e.target.closest('button'); if(!btn) return;
         const code = btn.getAttribute('data-code');
-        if(btn.classList.contains('btn-edit')){
-          openEditItem(code);
-        }else if(btn.classList.contains('btn-del')){
+        if(btn.classList.contains('btn-edit')) openEditItem(code);
+        else if(btn.classList.contains('btn-del')){
           if(!confirm('削除しますか？')) return;
           const r = await api('deleteItem',{method:'POST', body:{ code }});
-          if(r?.ok) renderItems();
-          else toast(r?.error||'削除失敗');
+          r?.ok ? renderItems() : toast(r?.error||'削除失敗');
         }else if(btn.classList.contains('btn-dl')){
           const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
           const url = await makeItemLabelDataURL(it);
-          const a = document.createElement('a');
-          a.href = url; a.download = `label_${it.code}.png`; a.click();
+          const a = document.createElement('a'); a.href = url; a.download = `label_${it.code}.png`; a.click();
         }else if(btn.classList.contains('btn-preview')){
           const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
-          const url = await makeItemLabelDataURL(it);
-          openPreview(url);
+          const url = await makeItemLabelDataURL(it); openPreview(url);
         }
-      });
+      };
 
       $$('#tbl-items .link-item').forEach(a=>{
         a.addEventListener('click', (ev)=>{
@@ -287,26 +233,19 @@
 
       $('#items-search')?.addEventListener('input', (e)=>{
         const q = (e.target.value||'').toLowerCase();
-        const rows = $$('#tbl-items tr');
-        rows.forEach(tr=>{
+        $$('#tbl-items tr').forEach(tr=>{
           const name = (tr.children[2]?.textContent||'').toLowerCase();
-          tr.style.display = name.includes(q) ? '' : 'none';
+          const code = (tr.children[1]?.textContent||'').toLowerCase();
+          tr.style.display = (name.includes(q) || code.includes(q)) ? '' : 'none';
         });
       });
 
-    }catch{
-      toast('商品一覧の読み込みに失敗しました。');
-    }
+    }catch{ toast('商品一覧の読み込みに失敗しました。'); }
   }
 
-  function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;","&gt;":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
-  function escapeAttr(s){ return escapeHtml(s); }
-
-  // === Edit item (modal) ===
   function openEditItem(code){
-    if(!isAdmin()){ return toast('Akses ditolak (admin only)'); }
-    const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
-    if(!it) return;
+    if(!isAdmin()) return toast('Akses ditolak (admin only)');
+    const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code)); if(!it) return;
     const wrap = document.createElement('div');
     wrap.className='modal fade';
     wrap.innerHTML = `
@@ -334,12 +273,9 @@
   </div>
 </div>`;
     document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap);
-    modal.show();
+    const modal = new bootstrap.Modal(wrap); modal.show();
 
-    $('#md-location',wrap)?.addEventListener('input', (e)=>{
-      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,'');
-    });
+    $('#md-location',wrap)?.addEventListener('input',(e)=>{ e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,''); });
 
     $('#md-save',wrap)?.addEventListener('click', async ()=>{
       try{
@@ -354,22 +290,16 @@
           overwrite: true
         };
         const r = await api('updateItem',{method:'POST', body: payload});
-        if(r?.ok){
-          modal.hide(); wrap.remove();
-          renderItems();
-          renderShelfTable(); // refresh jika dibuka
-        }else toast(r?.error||'保存失敗');
-      }catch(e){
-        console.error(e); toast('保存失敗: '+(e?.message||e));
-      }
+        if(r?.ok){ modal.hide(); wrap.remove(); renderItems(); renderShelfTable(); }
+        else toast(r?.error||'保存失敗');
+      }catch(e){ toast('保存失敗: '+(e?.message||e)); }
     });
 
     wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
   }
 
   function showItemDetail(it){
-    const card = $('#card-item-detail');
-    if(!card) return;
+    const card = $('#card-item-detail'); if(!card) return;
     const body = $('#item-detail-body', card);
     body.innerHTML = `
       <div class="d-flex gap-3">
@@ -391,73 +321,43 @@
 
   function openPreview(url){
     const w = window.open('','_blank','width=900,height=600');
-    if(!w || !w.document){
-      const a=document.createElement('a');
-      a.href=url; a.target='_blank'; a.download='';
-      a.click();
-      return;
-    }
+    if(!w || !w.document){ const a=document.createElement('a'); a.href=url; a.target='_blank'; a.download=''; a.click(); return; }
     w.document.write(`<img src="${url}" style="max-width:100%">`);
   }
 
-  // === Label generator (unchanged) ===
   async function makeItemLabelDataURL(item){
-    const W=760, H=260, pad=18;
-    const imgW=200, gap=16;
-
-    const QUIET = 20;
-    const qrSize = 156;
-    const gapQR  = 18;
-
+    const W=760, H=260, pad=18, imgW=200, gap=16;
+    const QUIET=20, qrSize=156, gapQR=18;
     const c=document.createElement('canvas'); c.width=W; c.height=H;
     const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
-
-    g.fillStyle='#fff'; g.fillRect(0,0,W,H);
-    g.strokeStyle='#000'; g.lineWidth=2; g.strokeRect(1,1,W-2,H-2);
-
+    g.fillStyle='#fff'; g.fillRect(0,0,W,H); g.strokeStyle='#000'; g.lineWidth=2; g.strokeRect(1,1,W-2,H-2);
     const rx=pad, ry=pad, rw=imgW, rh=H-2*pad, r=18;
-    roundRect(g, rx,ry,rw,rh,r, true,true,'#eaf1ff','#cbd5e1');
-    await drawImageIfAny(g,item.img,rx,ry,rw,rh,r);
+    roundRect(g, rx,ry,rw,rh,r, true,true,'#eaf1ff','#cbd5e1'); await drawImageIfAny(g,item.img,rx,ry,rw,rh,r);
 
     const colStart = pad + imgW + gap;
-    const qrBoxH   = H - 2*pad;
-    const qy       = pad + Math.max(0, (qrBoxH - qrSize)/2);
-
+    const qy = pad + Math.max(0, ((H-2*pad) - qrSize)/2);
     const qx = colStart + gapQR + QUIET;
-
-    g.fillStyle='#fff';
-    g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2*QUIET, qrSize + 2*QUIET);
-    try{
-      const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
-      const im = new Image(); im.src=du; await imgLoaded(im);
-      g.drawImage(im, qx, qy, qrSize, qrSize);
-    }catch(e){}
+    g.fillStyle='#fff'; g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2*QUIET, qrSize + 2*QUIET);
+    try{ const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize); const im = new Image(); im.src=du; await imgLoaded(im); g.drawImage(im, qx, qy, qrSize, qrSize); }catch{}
 
     const colQRW = qrSize + 2*QUIET;
     const gridX  = colStart + gapQR + colQRW + gapQR;
-
     const cellH=(H-2*pad)/3;
     g.strokeStyle='#000'; g.lineWidth=2;
     g.strokeRect(gridX,pad, W-gridX-pad, H-2*pad);
     for(let i=1;i<=2;i++){ const y=pad+cellH*i; g.beginPath(); g.moveTo(gridX,y); g.lineTo(W-pad,y); g.stroke(); }
 
-    const labelX=gridX+12, valX=gridX+112;
-    const valMaxW = W - pad - valX - 8;
-
+    const labelX=gridX+12, valX=gridX+112, valMaxW=W - pad - valX - 8;
     g.textAlign='left'; g.textBaseline='middle'; g.fillStyle='#000';
     g.font='16px "Noto Sans JP", system-ui';
     g.fillText('コード：', labelX, pad + cellH*0.5);
     g.fillText('商品名：', labelX, pad + cellH*1.5);
     g.fillText('置場：',   labelX, pad + cellH*2.5);
-
     g.font='bold 18px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.code||''), valX, pad + cellH*0.5, valMaxW);
-
     drawWrapAuto(g, String(item.name||''), valX, pad + cellH*1.5, valMaxW, { maxLines:2, base:22, min:16, lineGap:4 });
-
     g.font='bold 18px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.location||'').toUpperCase(), valX, pad + cellH*2.5, valMaxW);
-
     return c.toDataURL('image/png');
 
     function roundRect(ctx,x,y,w,h,r,fill,stroke,fillColor,border){
@@ -472,8 +372,7 @@
     async function drawImageIfAny(ctx,url,x,y,w,h,rr){
       if(!url){
         ctx.save(); ctx.fillStyle='#3B82F6'; ctx.font='bold 28px "Noto Sans JP", system-ui';
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText('画像', x+w/2, y+h/2); ctx.restore(); return;
+        ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('画像', x+w/2, y+h/2); ctx.restore(); return;
       }
       try{
         const im=new Image(); im.crossOrigin='anonymous'; im.src=url; await imgLoaded(im);
@@ -488,66 +387,40 @@
     function drawSingleLineFit(ctx, text, x, y, maxW){
       let size = parseInt((ctx.font.match(/(\d+)px/)||[])[1]||22,10);
       const fam = ctx.font.split(' ').slice(1).join(' ');
-      while (ctx.measureText(text).width > maxW && size > 12){
-        size -= 1; ctx.font = `bold ${size}px ${fam}`;
-      }
+      while (ctx.measureText(text).width > maxW && size > 12){ size -= 1; ctx.font = `bold ${size}px ${fam}`; }
       ctx.fillText(text, x, y);
     }
     function splitByWidth(ctx, text, maxW){
-      const arr = [...String(text)];
-      const lines=[]; let buf='';
-      for(const ch of arr){
-        const trial = buf + ch;
-        if (ctx.measureText(trial).width <= maxW) buf = trial;
-        else { if(buf) lines.push(buf); buf = ch; }
-      }
-      if(buf) lines.push(buf);
-      return lines;
+      const arr = [...String(text)]; const lines=[]; let buf='';
+      for(const ch of arr){ const trial = buf + ch; if (ctx.measureText(trial).width <= maxW) buf = trial; else { if(buf) lines.push(buf); buf = ch; } }
+      if(buf) lines.push(buf); return lines;
     }
     function drawWrapAuto(ctx, text, x, centerY, maxW, opt){
       const base=opt.base||22, min=opt.min||16, gap=opt.lineGap||4, maxLines=opt.maxLines||2;
-      const fam = ctx.font.split(' ').slice(1).join(' ');
-      let size=base, lines;
-      while(true){
-        ctx.font=`bold ${size}px ${fam}`;
-        lines = splitByWidth(ctx, text, maxW);
-        if(lines.length<=maxLines || size<=min) break;
-        size -= 1;
-      }
-      if(lines.length>maxLines){
-        lines = lines.slice(0,maxLines);
-        let last = lines[lines.length-1];
+      const fam = ctx.font.split(' ').slice(1).join(' '); let size=base, lines;
+      while(true){ ctx.font=`bold ${size}px ${fam}`; lines = splitByWidth(ctx, text, maxW); if(lines.length<=maxLines || size<=min) break; size -= 1; }
+      if(lines.length>maxLines){ lines = lines.slice(0,maxLines); let last = lines[lines.length-1];
         while (ctx.measureText(last+'…').width>maxW && last.length>0) last=last.slice(0,-1);
         lines[lines.length-1] = last+'…';
       }
-      const totalH = lines.length*size + (lines.length-1)*gap;
-      let y = centerY - totalH/2 + size/2;
+      const totalH = lines.length*size + (lines.length-1)*gap; let y = centerY - totalH/2 + size/2;
       for(const ln of lines){ ctx.fillText(ln, x, y); y += size + gap; }
     }
   }
-
-  // generate QR (dataURL) via qrcodejs
   async function generateQrDataUrl(text, size){
     await ensureQRCode();
     return await new Promise((resolve)=>{
       const tmp = document.createElement('div');
       const qr = new QRCode(tmp, { text, width:size, height:size, correctLevel:QRCode.CorrectLevel.M });
       setTimeout(()=>{
-        const img = tmp.querySelector('img') || tmp.querySelector('canvas');
-        let url='';
-        try{
-          if(img.tagName==='IMG') url = img.src;
-          else url = img.toDataURL('image/png');
-        }catch(e){}
-        tmp.remove();
-        resolve(url);
+        const img = tmp.querySelector('img') || tmp.querySelector('canvas'); let url='';
+        try{ url = (img.tagName==='IMG') ? img.src : img.toDataURL('image/png'); }catch(e){}
+        tmp.remove(); resolve(url);
       }, 0);
     });
   }
 
-  /***********************
-   * Users / QR
-   ***********************/
+  /* ================= Users ================= */
   async function renderUsers(){
     try{
       const list = await api('users',{method:'GET'});
@@ -559,16 +432,18 @@
           <td>${escapeHtml(u.id)}</td>
           <td>${escapeHtml(u.name)}</td>
           <td>${escapeHtml(u.role||'user')}</td>
-          <td class="text-end"><button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}">DL</button></td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
+              <i class="bi bi-download"></i>
+            </button>
+          </td>
         </tr>
       `).join('');
 
       await ensureQRCode();
       for(const u of arr){
-        const el = document.getElementById(`uqr-${u.id}`);
-        if(!el) continue;
-        el.innerHTML = '';
-        new QRCode(el, { text:`USER|${u.id}`, width:64, height:64, correctLevel:QRCode.CorrectLevel.M });
+        const el = document.getElementById(`uqr-${u.id}`); if(!el) continue;
+        el.innerHTML = ''; new QRCode(el, { text:`USER|${u.id}`, width:64, height:64, correctLevel:QRCode.CorrectLevel.M });
       }
 
       tbody.addEventListener('click', async (e)=>{
@@ -577,14 +452,10 @@
         const url = await generateQrDataUrl(`USER|${id}`, 300);
         const a=document.createElement('a'); a.href=url; a.download=`user_${id}.png`; a.click();
       });
-    }catch{
-      toast('ユーザーQRの読み込みに失敗しました。');
-    }
+    }catch{ toast('ユーザーQRの読み込みに失敗しました。'); }
   }
 
-  /***********************
-   * History
-   ***********************/
+  /* ================= History ================= */
   async function renderHistory(){
     try{
       const raw = await api('history',{method:'GET'});
@@ -608,140 +479,91 @@
           <td></td>
         </tr>
       `).join('');
-    }catch{
-      toast('履歴の読み込みに失敗しました。');
-    }
+    }catch{ toast('履歴の読み込みに失敗しました。'); }
   }
 
-  /***********************
-   * IO (scan)
-   ***********************/
+  /* ================= IO Scanner ================= */
   let IO_SCANNER = null;
-
-  async function startBackCameraScan(mountId, onScan, boxSize = (/Android|iPhone|iPad/i.test(navigator.userAgent)? 160 : 190)) {
-  const mount = document.getElementById(mountId);
-  if (mount) {
-    Object.assign(mount.style, { maxWidth: '420px', margin: '0 auto', aspectRatio:'4/3', position:'relative' });
-  }
-
-  // 1) Coba native API (lebih cepat & stabil di iOS/Android modern)
-  if ('BarcodeDetector' in window) {
-    try {
-      const ok = await (async ()=>{
-        let stream;
-        const video = Object.assign(document.createElement('video'), { playsInline:true, autoplay:true, muted:true });
-        Object.assign(video.style,{ width:'100%', height:'100%', objectFit:'cover' });
-        mount.innerHTML=''; mount.appendChild(video);
-
-        // pilih kamera belakang dengan enumerateDevices
-        const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
-        const back = devs.find(d=>/back|rear|environment/i.test(d.label)) || devs.at(-1);
-        const constraints = {
-          audio:false,
-          video:{
-            deviceId: back ? { exact: back.deviceId } : { ideal: 'environment' },
-            width:{ ideal:1280 }, height:{ ideal:720 },
-            focusMode:'continuous', exposureMode:'continuous'
-          }
-        };
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject = stream;
-
-        const detector = new BarcodeDetector({ formats:['qr_code'] });
-        let raf=0, stopped=false;
-        const loop = async ()=>{
-          if(stopped) return;
-          try{
-            const codes = await detector.detect(video);
-            if(codes?.length){
-              const txt = codes[0].rawValue || '';
-              if(txt){ stop(); onScan(txt); return; }
-            }
-          }catch(_){}
-          raf = requestAnimationFrame(loop);
-        };
-        const stop = ()=>{ stopped=true; cancelAnimationFrame(raf); stream?.getTracks()?.forEach(t=>t.stop()); mount.innerHTML=''; };
-        loop();
-
-        // kembalikan “objek scanner” kompatibel
-        return {
-          stop: async ()=> stop(),
-          clear: ()=>{ try{ mount.innerHTML=''; }catch{} }
-        };
-      })();
-      if (ok) return ok;
-    } catch(e){ console.warn('Native detector gagal, fallback → html5-qrcode', e); }
-  }
-
-  // 2) Fallback ke html5-qrcode
-  await ensureHtml5Qrcode();
-  const formatsOpt = (window.Html5QrcodeSupportedFormats && Html5QrcodeSupportedFormats.QR_CODE)
-    ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] }
-    : {};
-  const cfg = {
-    fps: 24,
-    qrbox: { width: boxSize, height: boxSize },
-    aspectRatio: 1.33,
-    rememberLastUsedCamera: true,
-    disableFlip: true,
-    videoConstraints: {
-      facingMode: { ideal: 'environment' },
-      width:  { ideal: 1280 },
-      height: { ideal: 720 },
-      focusMode: 'continuous',
-      exposureMode: 'continuous'
-    },
-    ...formatsOpt
-  };
-  const scanner = new Html5Qrcode(mountId, { useBarCodeDetectorIfSupported: true });
-  async function startWith(source){
-    await scanner.start(source, cfg, txt => onScan(txt));
-    // coba set zoom > 2 untuk smartphone
-    try{
-      await scanner.applyVideoConstraints({ advanced:[{ focusMode:'continuous' }, { exposureMode:'continuous' }, { zoom: 3 }] })
-                  .catch(()=>{});
-    }catch(_){}
-    return scanner;
-  }
-  try {
-    return await startWith({ facingMode:'environment' });
-  } catch(e) {
-    // explicit pilih kamera belakang
-    const cams = await Html5Qrcode.getCameras();
-    if(!cams?.length) throw new Error('カメラが見つかりません。権限をご確認ください。');
-    const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams.at(-1);
-    return await startWith({ deviceId:{ exact: back.id } });
-  }
-}
-
-
-  async function startNativeDetector(mountId, onScan, boxSize){
+  async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 160 : 190)) {
     const mount = document.getElementById(mountId);
-    mount.innerHTML='';
-    const video=document.createElement('video'); video.playsInline=true; video.autoplay=true; video.muted=true;
-    video.style.width='100%'; video.style.height='100%'; video.style.objectFit='cover';
-    mount.appendChild(video);
+    if (mount) Object.assign(mount.style, { maxWidth:'420px', margin:'0 auto', aspectRatio:'4/3', position:'relative' });
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:{ideal:'environment'}, width:{ideal:640}, height:{ideal:480} },
-      audio:false
-    });
-    video.srcObject=stream;
+    if ('BarcodeDetector' in window) {
+      try {
+        const ok = await (async ()=>{
+          let stream;
+          const video = Object.assign(document.createElement('video'), { playsInline:true, autoplay:true, muted:true });
+          Object.assign(video.style,{ width:'100%', height:'100%', objectFit:'cover' });
+          mount.innerHTML=''; mount.appendChild(video);
 
-    const detector = new BarcodeDetector({ formats:['qr_code'] });
-    let raf=0;
-    const scan = async ()=>{
-      try{
-        const codes = await detector.detect(video);
-        if(codes && codes.length){
-          const txt = codes[0].rawValue || '';
-          if(txt){ cancelAnimationFrame(raf); stream.getTracks().forEach(t=>t.stop()); onScan(txt); return; }
-        }
-      }catch(e){}
-      raf = requestAnimationFrame(scan);
+          const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+          const back = devs.find(d=>/back|rear|environment/i.test(d.label)) || devs.at(-1);
+          const constraints = {
+            audio:false,
+            video:{
+              deviceId: back ? { exact: back.deviceId } : { ideal: 'environment' },
+              width:{ ideal:1280 }, height:{ ideal:720 },
+              focusMode:'continuous', exposureMode:'continuous'
+            }
+          };
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          video.srcObject = stream;
+
+          const detector = new BarcodeDetector({ formats:['qr_code'] });
+          let raf=0, stopped=false;
+          const loop = async ()=>{
+            if(stopped) return;
+            try{
+              const codes = await detector.detect(video);
+              if(codes?.length){
+                const txt = codes[0].rawValue || '';
+                if(txt){ stop(); onScan(txt); return; }
+              }
+            }catch(_){}
+            raf = requestAnimationFrame(loop);
+          };
+          const stop = ()=>{ stopped=true; cancelAnimationFrame(raf); stream?.getTracks()?.forEach(t=>t.stop()); mount.innerHTML=''; };
+          loop();
+          return { stop:async()=>stop(), clear:()=>{ try{mount.innerHTML='';}catch{} } };
+        })();
+        if (ok) return ok;
+      } catch(e){ console.warn('Native detector gagal → fallback html5-qrcode', e); }
+    }
+
+    await ensureHtml5Qrcode();
+    const formatsOpt = (window.Html5QrcodeSupportedFormats && Html5QrcodeSupportedFormats.QR_CODE)
+      ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] }
+      : {};
+    const cfg = {
+      fps: 24,
+      qrbox: { width: boxSize, height: boxSize },
+      aspectRatio: 1.33,
+      rememberLastUsedCamera: true,
+      disableFlip: true,
+      videoConstraints: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1280 },
+        height: { ideal: 720 },
+        focusMode: 'continuous',
+        exposureMode: 'continuous'
+      },
+      ...formatsOpt
     };
-    raf = requestAnimationFrame(scan);
-    return { stop:()=>{ cancelAnimationFrame(raf); stream.getTracks().forEach(t=>t.stop()); }, clear:()=>{ mount.innerHTML=''; } };
+    const scanner = new Html5Qrcode(mountId, { useBarCodeDetectorIfSupported: true });
+    async function startWith(source){
+      await scanner.start(source, cfg, txt => onScan(txt));
+      try{
+        await scanner.applyVideoConstraints({ advanced: [{ focusMode:'continuous' }, { exposureMode:'continuous' }, { zoom:3 }] }).catch(()=>{});
+      }catch(_){}
+      return scanner;
+    }
+    try { return await startWith({ facingMode:'environment' }); }
+    catch (e) {
+      const cams = await Html5Qrcode.getCameras();
+      if(!cams?.length) throw new Error('カメラが見つかりません。権限をご確認ください。');
+      const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams.at(-1);
+      return await startWith({ deviceId:{ exact: back.id } });
+    }
   }
 
   (function bindIO(){
@@ -769,8 +591,7 @@
 
     $('#form-io')?.addEventListener('submit', async (e)=>{
       e.preventDefault();
-      const who = getCurrentUser();
-      if(!who) return toast('ログイン情報がありません。');
+      const who = getCurrentUser(); if(!who) return toast('ログイン情報がありません。');
       const code=$('#io-code').value, qty=Number($('#io-qty').value||0);
       const unit=$('#io-unit').value, type=$('#io-type').value;
       try{
@@ -785,47 +606,33 @@
     try{
       let it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
       if (!it) {
-        const r = await api('itemByCode',{method:'POST', body:{ code }});
-        it = r && r.ok ? r.item : null;
+        const r = await api('itemByCode',{method:'POST', body:{ code }}); it = r && r.ok ? r.item : null;
       }
       if(!it) return;
       $('#io-name').value  = it.name  || '';
       $('#io-price').value = it.price || 0;
       $('#io-stock').value = it.stock || 0;
-    }catch(e){
-      console.warn(e);
-    }
+    }catch(e){ console.warn(e); }
   }
 
-  /***********************
-   * STOCKTAKE (棚卸)
-   ***********************/
+  /* ================= Stocktake (棚卸) ================= */
   let SHELF_SCANNER = null;
-  const ST = {
-    rows: new Map(), // code => {code,name,book,qty,diff}
-  };
+  const ST = { rows: new Map() }; // code => {code,name,book,qty,diff}
+  window.ST = ST;
 
   function parseScanText(txt){
-    // dukung: ITEM|<code>  atau JSON {t:'item', code:'...'}
     if(/^ITEM\|/i.test(txt)) return (txt.split('|')[1]||'').trim();
-    try{
-      const o = JSON.parse(txt);
-      if((o.t==='item' || o.type==='item') && o.code) return String(o.code);
-    }catch(_){}
+    try{ const o = JSON.parse(txt); if((o.t==='item'||o.type==='item') && o.code) return String(o.code); }catch(_){}
     return '';
   }
 
   async function addOrUpdateStocktake(code, realQty){
     if(!code) return;
     let item = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
-    if(!item){
-      const r = await api('itemByCode',{method:'POST', body:{ code }});
-      if(r?.ok) item = r.item;
-    }
+    if(!item){ const r = await api('itemByCode',{method:'POST', body:{ code }}); if(r?.ok) item = r.item; }
     if(!item) return toast('アイテムが見つかりません: '+code);
-
     const book = Number(item.stock||0);
-    const qty  = Number(realQty||0);
+    const qty  = Number(realQty??book);
     const diff = qty - book;
     ST.rows.set(code, { code, name:item.name, book, qty, diff });
     renderShelfTable();
@@ -851,32 +658,20 @@
       </tr>
     `).join('');
 
-    // delegasi event
-    tbody.addEventListener('input', (e)=>{
+    tbody.oninput = (e)=>{
       const tr = e.target.closest('tr'); if(!tr) return;
-      const code = tr.getAttribute('data-code');
-      if(e.target.classList.contains('st-qty')){
-        const q = Number(e.target.value||0);
-        const rec = ST.rows.get(code); if(!rec) return;
-        rec.qty = q; rec.diff = q - rec.book;
-        tr.children[4].textContent = fmt(rec.diff);
-        tr.children[4].classList.toggle('fw-bold', rec.diff!==0);
-      }
-    });
+      if(!e.target.classList.contains('st-qty')) return;
+      const code = tr.getAttribute('data-code'); const rec = ST.rows.get(code); if(!rec) return;
+      rec.qty = Number(e.target.value||0); rec.diff = rec.qty - rec.book;
+      tr.children[4].textContent = fmt(rec.diff);
+      tr.children[4].classList.toggle('fw-bold', rec.diff!==0);
+    };
 
-    tbody.addEventListener('click', (e)=>{
-      const tr = e.target.closest('tr'); if(!tr) return;
-      const code = tr.getAttribute('data-code');
-      const rec = ST.rows.get(code); if(!rec) return;
-
-      if(e.target.closest('.btn-st-adjust')){
-        if(!isAdmin()) return toast('Akses ditolak (admin only)');
-        openAdjustModal(rec);
-      }else if(e.target.closest('.btn-st-edit')){
-        if(!isAdmin()) return toast('Akses ditolak (admin only)');
-        openEditItem(code);
-      }
-    });
+    tbody.onclick = (e)=>{
+      const tr = e.target.closest('tr'); if(!tr) return; const code = tr.getAttribute('data-code'); const rec = ST.rows.get(code); if(!rec) return;
+      if(e.target.closest('.btn-st-adjust')){ if(!isAdmin()) return toast('Akses ditolak (admin only)'); openAdjustModal(rec); }
+      else if(e.target.closest('.btn-st-edit')){ if(!isAdmin()) return toast('Akses ditolak (admin only)'); openEditItem(code); }
+    };
   }
 
   function openAdjustModal(rec){
@@ -903,8 +698,7 @@
   </div>
 </div>`;
     document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap);
-    modal.show();
+    const modal = new bootstrap.Modal(wrap); modal.show();
 
     $('#aj-save',wrap)?.addEventListener('click', async ()=>{
       try{
@@ -912,17 +706,11 @@
         const payload = { code: rec.code, name: rec.name, stock: newStock, overwrite: true };
         const r = await api('updateItem',{method:'POST', body: payload});
         if(r?.ok){
-          // sinkronkan tampilan
-          rec.book = newStock;
-          rec.qty  = newStock;
-          rec.diff = 0;
-          ST.rows.set(rec.code, rec);
-          renderShelfTable();
-          // refresh cache item
+          rec.book = newStock; rec.qty  = newStock; rec.diff = 0;
+          ST.rows.set(rec.code, rec); renderShelfTable();
           const idx = _ITEMS_CACHE.findIndex(x=>String(x.code)===String(rec.code));
           if(idx>=0) _ITEMS_CACHE[idx].stock = newStock;
-          modal.hide(); wrap.remove();
-          toast('在庫を更新しました');
+          modal.hide(); wrap.remove(); toast('在庫を更新しました');
         }else toast(r?.error||'更新失敗');
       }catch(e){ toast('更新失敗: '+(e?.message||e)); }
     });
@@ -938,8 +726,7 @@
       try{
         area.textContent = 'カメラ起動中…';
         SHELF_SCANNER = await startBackCameraScan('scan-area', async (text)=>{
-          const code = parseScanText(String(text||''));
-          if(code){ await addOrUpdateStocktake(code, ST.rows.get(code)?.qty ?? undefined); }
+          const code = parseScanText(String(text||'')); if(code){ await addOrUpdateStocktake(code, ST.rows.get(code)?.qty ?? undefined); }
         }, (isMobile()? 160 : 180));
       }catch(e){ toast(e?.message||String(e)); }
     });
@@ -949,7 +736,6 @@
       area.innerHTML='カメラ待機中…';
     });
 
-    // filter baris
     $('#st-filter')?.addEventListener('input', (e)=>{
       const q = (e.target.value||'').toLowerCase();
       $$('#tbl-stocktake tr').forEach(tr=>{
@@ -959,7 +745,6 @@
       });
     });
 
-    // tambah manual
     $('#st-add')?.addEventListener('click', async (e)=>{
       e.preventDefault();
       const code = ($('#st-code').value||'').trim();
@@ -970,18 +755,131 @@
     });
   })();
 
-  /***********************
-   * Boot
-   ***********************/
-  window.addEventListener('DOMContentLoaded', ()=>{
-    // set logo dari CONFIG.LOGO_URL
-    const logo = document.getElementById('brand-logo');
-    if (logo && window.CONFIG && CONFIG.LOGO_URL){
-      logo.src = CONFIG.LOGO_URL;
-      logo.alt = 'logo';
-      logo.onerror = ()=>{ logo.style.display='none'; };
-    }
+  /* ================= Export / Import wiring ================= */
 
+  // Users print
+  $('#btn-print-qr-users')?.addEventListener('click', ()=> window.print());
+
+  // Users export/import
+  $('#btn-users-export')?.addEventListener('click', async ()=>{
+    try{
+      const list = await api('users',{method:'GET'});
+      const arr = Array.isArray(list) ? list : (list?.data||[]);
+      const csv = ['id,name,role']
+        .concat(arr.map(u=>[u.id,(u.name||'').replace(/,/g,' '),(u.role||'user')].join(','))).join('\n');
+      const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='users.csv'; a.click(); URL.revokeObjectURL(url);
+    }catch{ alert('エクスポート失敗'); }
+  });
+  $('#btn-users-import')?.addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('権限がありません（admin のみ）');
+    $('#input-users-import')?.click();
+  });
+  $('#input-users-import')?.addEventListener('change', async (e)=>{
+    if(!isAdmin()) return alert('権限がありません（admin のみ）');
+    const f=e.target.files?.[0]; if(!f) return;
+    const text=await f.text(); const rows=text.split(/\r?\n/).map(r=>r.trim()).filter(Boolean);
+    const start = rows[0]?.toLowerCase?.().startsWith('id') ? 1 : 0;
+    let ok=0, fail=0;
+    for(let i=start;i<rows.length;i++){
+      const [id,name,role] = rows[i].split(',').map(s=>s?.trim());
+      if(!id) { fail++; continue; }
+      try{
+        await api('upsertUser',{method:'POST', body:{ id, name, role:(role||'user') }}); ok++;
+      }catch{ fail++; }
+    }
+    alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value=''; renderUsers();
+  });
+
+  // Items import (CSV)
+  $('#btn-items-import')?.addEventListener('click', ()=> $('#input-items-import')?.click());
+  $('#input-items-import')?.addEventListener('change', async (e)=>{
+    const file = e.target.files?.[0]; if(!file) return;
+    const text = await file.text(); const rows = text.split(/\r?\n/).map(r=>r.trim()).filter(Boolean);
+    const start = rows[0]?.toLowerCase?.().includes('code') ? 1 : 0;
+    let ok=0, fail=0;
+    for(let i=start;i<rows.length;i++){
+      const [code,name,price,stock,min,location,img] = rows[i].split(',').map(s=>s?.trim());
+      if(!code) { fail++; continue; }
+      try{
+        await api('updateItem',{method:'POST', body:{
+          code, name, price:Number(price||0), stock:Number(stock||0), min:Number(min||0),
+          location:(location||'').toUpperCase(), img, overwrite:true
+        }});
+        ok++;
+      }catch{ fail++; }
+    }
+    alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value=''; renderItems();
+  });
+
+  // IO export/import
+  $('#btn-io-export')?.addEventListener('click', async ()=>{
+    try{
+      const raw = await api('history',{method:'GET'});
+      const list = Array.isArray(raw) ? raw : (raw?.history||raw?.data||[]);
+      const recent = list.slice(-200);
+      const csv = ['timestamp,userId,code,qty,unit,type,note']
+        .concat(recent.map(h=>[
+          h.timestamp||h.date||'', h.userId||'', h.code||'', h.qty||0, h.unit||'', h.type||'', (h.note||'').replace(/,/g,' ')
+        ].join(','))).join('\n');
+      const blob = new Blob([csv],{type:'text/csv'}); const url = URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='io_history.csv'; a.click(); URL.revokeObjectURL(url);
+    }catch{ alert('エクスポート失敗'); }
+  });
+  $('#btn-io-import')?.addEventListener('click', ()=> $('#input-io-import')?.click());
+  $('#input-io-import')?.addEventListener('change', async (e)=>{
+    const f=e.target.files?.[0]; if(!f) return;
+    const text=await f.text(); const rows=text.split(/\r?\n/).map(r=>r.trim()).filter(Boolean);
+    const start = rows[0]?.toLowerCase?.().includes('user') ? 1 : 0;
+    let ok=0, fail=0;
+    for(let i=start;i<rows.length;i++){
+      const [userId,code,qty,unit,type,note] = rows[i].split(',').map(s=>s?.trim());
+      if(!userId || !code) { fail++; continue; }
+      try{ await api('log',{method:'POST', body:{ userId, code, qty:Number(qty||0), unit, type, note }}); ok++; }
+      catch{ fail++; }
+    }
+    alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value='';
+  });
+
+  // Stocktake export/import
+  $('#st-export2')?.addEventListener('click', ()=>{
+    const arr = [...(ST.rows?.values?.()||[])];
+    const csv = ['code,name,book,qty,diff']
+      .concat(arr.map(r=>[r.code, (r.name||'').replace(/,/g,' '), r.book, r.qty, r.diff].join(','))).join('\n');
+    const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='stocktake.csv'; a.click(); URL.revokeObjectURL(url);
+  });
+  $('#st-import')?.addEventListener('click', ()=> $('#input-st-import')?.click());
+  $('#input-st-import')?.addEventListener('change', async (e)=>{
+    const f=e.target.files?.[0]; if(!f) return;
+    const text=await f.text(); const rows=text.split(/\r?\n/).map(r=>r.trim()).filter(Boolean);
+    const start = rows[0]?.toLowerCase?.().includes('code') ? 1 : 0;
+    for(let i=start;i<rows.length;i++){
+      const [code, qty] = rows[i].split(',').map(s=>s?.trim());
+      if(!code) continue; await addOrUpdateStocktake(code, Number(qty||0));
+    }
+    e.target.value=''; alert('インポート完了');
+  });
+
+  // History export
+  $('#btn-history-export')?.addEventListener('click', async ()=>{
+    try{
+      const raw = await api('history',{method:'GET'});
+      const list = Array.isArray(raw) ? raw : (raw?.history||raw?.data||[]);
+      const csv = ['timestamp,userId,userName,code,itemName,qty,unit,type,note']
+        .concat(list.map(h=>[
+          h.timestamp||h.date||'', h.userId||'', h.userName||'', h.code||'', (h.itemName||h.name||'').replace(/,/g,' '),
+          h.qty||0, h.unit||'', h.type||'', (h.note||'').replace(/,/g,' ')
+        ].join(','))).join('\n');
+      const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='history.csv'; a.click(); URL.revokeObjectURL(url);
+    }catch{ alert('エクスポート失敗'); }
+  });
+
+  /* ================= Boot ================= */
+  window.addEventListener('DOMContentLoaded', ()=>{
+    const logo = document.getElementById('brand-logo');
+    if (logo && window.CONFIG && CONFIG.LOGO_URL){ logo.src = CONFIG.LOGO_URL; logo.alt='logo'; logo.onerror = ()=>{ logo.style.display='none'; }; }
     renderDashboard();
     $('#btn-logout')?.addEventListener('click', logout);
   });
