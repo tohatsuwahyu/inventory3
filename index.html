@@ -19,6 +19,21 @@
     .login-card{ width:100%; max-width:680px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.08); }
     #qr-area{ display:none; width:100%; max-width:360px; aspect-ratio:4/3; margin:12px auto 0; border-radius:12px; overflow:hidden; background:#0b0b0b10; }
     #qr-area video, #qr-area canvas{ width:100%!important; height:100%!important; object-fit:cover; }
+     /* Pastikan elemen card & tombol berada di atas overlay manapun */
+  .login-card { position: relative; z-index: 2; }
+  #qr-area    { position: relative; z-index: 1; }
+
+  /* Jika ada overlay global, jangan block tap */
+  #global-loading { pointer-events: none !important; }
+
+  /* Beberapa lib menyisipkan elemen html5-qrcode sendiri — jangan biarkan tutup tombol */
+  .html5-qrcode-element { display: none !important; }
+
+  /* Bantu perangkat sentuh agar tap tidak ditahan sebagai gesture zoom/double-tap */
+  button, a, input, label { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+  /* Pastikan tautan QR terlihat sebagai tappable */
+  #btn-qr { cursor: pointer; }
   </style>
 </head>
 <body>
