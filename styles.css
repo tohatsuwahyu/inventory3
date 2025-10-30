@@ -89,44 +89,26 @@ main section.active{ opacity:1; transform:none; }
 @media (max-width:992px){ .qr-cell{ width:130px; min-width:130px; } .thumb{ width:48px; height:48px; } }
 
 /* Print */
-@media print{
+@media (print){
   body{ background:#fff; }
   .sidebar, header, nav, .items-toolbar, .no-print{ display:none !important; }
 }
-#io-scan-area, #scan-area{
-  width:100%; max-width:420px; margin:0 auto;
-  aspect-ratio:4/3; position:relative; overflow:hidden; border-radius:12px;
-}
-#io-scan-area video, #io-scan-area canvas,
-#scan-area video,   #scan-area canvas{
-  width:100%!important; height:100%!important; object-fit:cover;
-}
+
+/* Area grafik (supaya tidak jatuh) */
+.chart-box{ height: 340px; }
+.chart-box canvas{ width:100% !important; height:100% !important; }
+
 /* Kolom "置場" di tabel 商品一覧 (kolom ke-8) */
 #view-items thead th:nth-child(8),
 #view-items tbody td:nth-child(8){
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   letter-spacing: .5px;
-  white-space: nowrap;     /* hapus jika ingin bisa baris-baru */
+  white-space: nowrap;
   vertical-align: middle;
-  min-width: 96px;         /* opsional: kasih lebar minimum biar tidak mepet */
+  min-width: 96px;
 }
-/* Tinggi area grafik agar tidak “turun” */
-.chart-box{ height: 300px; }
-@media (min-width: 992px){
-  /* sedikit lebih tinggi di layar lebar */
-  .chart-box{ height: 340px; }
-}
-/* Pastikan canvas mengikuti tinggi container */
-.chart-box canvas{ width:100% !important; height:100% !important; }
-/* === Table header & cell === */
-.table thead th{ background:#f3f6ff; color:#334155; border-bottom:1px solid var(--border-strong); }
-.table th, .table td{ vertical-align: middle; padding:.65rem .8rem; }
 
-/* Kolom lebar fix */
-.table th:nth-child(1), .table td:nth-child(1){ width:110px; }   /* QR mini */
-.table th:last-child, .table td:last-child{ width:140px; }       /* 操作 */
-
-/* Grid aksi: 2 kolom, 2 baris */
+/* Grid aksi di tabel 商品一覧 */
 .act-grid{
   display:grid;
   grid-template-columns: repeat(2, minmax(0,1fr));
@@ -135,21 +117,15 @@ main section.active{ opacity:1; transform:none; }
 }
 .act-grid .btn{ width:42px; height:36px; padding:0; display:flex; align-items:center; justify-content:center; }
 
-/* Mobile tuning */
+/* Aksi di tabel 棚卸 */
+.st-actions{ display:flex; gap:.4rem; justify-content:flex-end; }
+.st-actions .btn{ height:32px; padding:0 .6rem; border-radius:10px; }
+
+/* Mobile tuning tabel */
 @media (max-width: 576px){
   .content{ padding:12px; }
   .table th, .table td{ padding:.5rem .6rem; }
   .table th:nth-child(1), .table td:nth-child(1){ width:90px; }
   .table th:last-child, .table td:last-child{ width:128px; }
   .act-grid .btn{ width:40px; height:34px; }
-}
-
-/* QR img kecil di tabel tidak merapat ke kiri */
-.tbl-qr-box{ display:flex; align-items:center; justify-content:center; }
-@media (max-width: 576px){
-  .content{ padding: 12px; }
-  .act-grid{ grid-template-columns: repeat(2,1fr); gap:.35rem .4rem; }
-  .act-grid .btn{ width:40px; height:34px; }
-  .table th:nth-child(1), .table td:nth-child(1){ width:90px; }
-  .table th:last-child, .table td:last-child{ width:128px; }
 }
