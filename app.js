@@ -91,11 +91,16 @@
   (function navHandler(){
     const sb = $('#sb'), bd = $('#sb-backdrop');
     const burger = $('#burger'), btnMenu = $('#btn-menu');
-    function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
-    function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
-    burger?.addEventListener('click', toggleSB);
-    btnMenu?.addEventListener('click', toggleSB);
-    bd?.addEventListener('click', closeSB);
+function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
+function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
+
+// dukung semua tombol burger (ikon ≡ di kiri & tombol "メニュー" di kanan)
+[burger, btnMenu].forEach(el=> el && el.addEventListener('click', (e)=>{ e.preventDefault(); toggleSB(); }));
+document.addEventListener('click', (e)=>{
+  const trg = e.target.closest('[data-burger], .btn-burger');
+  if(trg) { e.preventDefault(); toggleSB(); }
+});
+bd?.addEventListener('click', closeSB);
 
     document.addEventListener('click', (e)=>{
       const a = e.target.closest('aside nav a[data-view]');
@@ -376,7 +381,7 @@
   // QR lebih kecil + quiet-zone lebih lebar + jarak ekstra ke kotak kanan
   const QUIET = 20;                 // pinggiran putih
   const qrSize = 156;               // sebelumnya ~170
-  const gapToGrid = 20;             // jarak antara kolom QR dan kotak kanan
+  const gapToGrid = 16;             // jarak antara kolom QR dan kotak kanan
 
   const c=document.createElement('canvas'); c.width=W; c.height=H;
   const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
