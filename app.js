@@ -9,8 +9,14 @@
   const $$ = (sel, el=document)=>Array.from(el.querySelectorAll(sel));
   const fmt = (n)=> new Intl.NumberFormat('ja-JP').format(Number(n||0));
   const isMobile = ()=> /Android|iPhone|iPad/i.test(navigator.userAgent);
-  const isAdmin  = ()=> (getCurrentUser()?.role||"").toLowerCase()==="admin";
   const toast = (m)=> alert(m);
+
+  function getCurrentUser(){
+    try{ return JSON.parse(localStorage.getItem('currentUser')||'null'); }catch(_){ return null; }
+  }
+  function setCurrentUser(u){ localStorage.setItem('currentUser', JSON.stringify(u||null)); }
+  function logout(){ setCurrentUser(null); location.href='index.html'; }
+  const isAdmin = ()=> (getCurrentUser()?.role || '').toLowerCase()==='admin';
 
   function setLoading(show, text){
     const el = $('#global-loading');
@@ -90,13 +96,6 @@
     for(const u of cdn){ try{ await loadScriptOnce(u); if(window.Html5Qrcode) return; }catch(_){} }
     throw new Error('html5-qrcode tidak tersedia');
   }
-
-  // ---------- Auth ----------
-  function getCurrentUser(){
-    try{ return JSON.parse(localStorage.getItem('currentUser')||'null'); }catch(_){ return null; }
-  }
-  function setCurrentUser(u){ localStorage.setItem('currentUser', JSON.stringify(u||null)); }
-  function logout(){ setCurrentUser(null); location.href='index.html'; }
 
   // ---------- Sidebar / Nav ----------
   (function navHandler(){
@@ -192,22 +191,14 @@
   // ---------- Items + submenu + role guard ----------
   let _ITEMS_CACHE = [];
 
+  function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;","&gt;":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
+  function escapeAttr(s){ return escapeHtml(s); }
+
   function tplItemRow(it){
     const qrid = `qr-${it.code}`;
     const admin = isAdmin();
-    const menu = `
-    <div class="btn-group">
-      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">操作</button>
-      <ul class="dropdown-menu dropdown-menu-end">
-        ${ admin ? `<li><a class="dropdown-item act-edit"   data-code="${escapeAttr(it.code)}">編集</a></li>` : ``}
-        ${ admin ? `<li><a class="dropdown-item act-adjust" data-code="${escapeAttr(it.code)}">在庫調整</a></li>` : ``}
-        <li><a class="dropdown-item act-preview" data-code="${escapeAttr(it.code)}">プレビュー</a></li>
-        <li><a class="dropdown-item act-dl"      data-code="${escapeAttr(it.code)}">ラベルDL</a></li>
-      </ul>
-    </div>`;
-
     return `<tr>
-      <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}"></div></div></td>
+      <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
       <td>${escapeHtml(it.code)}</td>
       <td><a href="#" class="link-underline link-item" data-code="${escapeHtml(it.code)}">${escapeHtml(it.name)}</a></td>
       <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''}</td>
@@ -215,7 +206,15 @@
       <td class="text-end">${fmt(it.stock)}</td>
       <td class="text-end">${fmt(it.min)}</td>
       <td>${escapeHtml(it.location||'')}</td>
-      <td class="text-end">${menu}</td>
+      <td>
+        <div class="act-grid">
+          ${ admin ? `<button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>` : '' }
+          ${ admin ? `<button class="btn btn-sm btn-warning btn-adjust" data-code="${escapeAttr(it.code)}" title="在庫調整"><i class="bi bi-sliders"></i></button>` : '' }
+          ${ admin ? `<button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>` : '' }
+          <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ダウンロード">DL</button>
+          <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>
+        </div>
+      </td>
     </tr>`;
   }
 
@@ -232,26 +231,36 @@
         const holder = document.getElementById(`qr-${it.code}`);
         if(!holder) continue;
         holder.innerHTML = '';
+        // eslint-disable-next-line no-new
         new QRCode(holder, { text:`ITEM|${it.code}`, width:64, height:64, correctLevel: QRCode.CorrectLevel.M });
       }
 
-      // submenu actions
+      // actions
       tbody.addEventListener('click', async (e)=>{
-        const a = e.target.closest('.dropdown-item');
-        if(!a) return;
-        const code = a.getAttribute('data-code');
+        const btn = e.target.closest('button');
+        if(!btn) return;
+        const code = btn.getAttribute('data-code');
 
-        if(a.classList.contains('act-edit')){
-          if(!isAdmin()){ toast('アクセスが拒否されました（管理者のみ）'); return; }
+        // proteksi admin
+        if((btn.classList.contains('btn-edit') || btn.classList.contains('btn-adjust') || btn.classList.contains('btn-del')) && !isAdmin()){
+          toast('アクセスが拒否されました（管理者のみ）'); 
+          return;
+        }
+
+        if(btn.classList.contains('btn-edit')){
           openEditItem(code);
-        }else if(a.classList.contains('act-adjust')){
-          if(!isAdmin()){ toast('アクセスが拒否されました（管理者のみ）'); return; }
+        }else if(btn.classList.contains('btn-adjust')){
           openAdjustModal(code);
-        }else if(a.classList.contains('act-dl')){
+        }else if(btn.classList.contains('btn-del')){
+          if(!confirm('削除しますか？')) return;
+          const r = await api('deleteItem',{method:'POST', body:{ code }});
+          if(r?.ok) renderItems();
+          else toast(r?.error||'削除失敗');
+        }else if(btn.classList.contains('btn-dl')){
           const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
           const url = await makeItemLabelDataURL(it);
-          const d=document.createElement('a'); d.href=url; d.download=`label_${it.code}.png`; d.click();
-        }else if(a.classList.contains('act-preview')){
+          const a=document.createElement('a'); a.href=url; a.download=`label_${it.code}.png`; a.click();
+        }else if(btn.classList.contains('btn-preview')){
           const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
           const url = await makeItemLabelDataURL(it);
           openPreview(url);
@@ -284,17 +293,14 @@
     }
   }
 
-  function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;","&gt;":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
-  function escapeAttr(s){ return escapeHtml(s); }
-
   // --- Edit item (modal) ---
   function openEditItem(code){
     const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
     if(!it) return;
     const wrap = document.createElement('div');
     wrap.className='modal fade';
-    wrap.innerHTML = (
-`<div class="modal-dialog">
+    wrap.innerHTML = `
+<div class="modal-dialog">
   <div class="modal-content">
     <div class="modal-header"><h5 class="modal-title">商品編集</h5>
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
@@ -316,7 +322,7 @@
       <button class="btn btn-primary" id="md-save">保存</button>
     </div>
   </div>
-</div>`);
+</div>`;
     document.body.appendChild(wrap);
     const modal = new bootstrap.Modal(wrap);
     modal.show();
@@ -353,8 +359,8 @@
     if(!it) return;
     const wrap = document.createElement('div');
     wrap.className='modal fade';
-    wrap.innerHTML = (
-`<div class="modal-dialog">
+    wrap.innerHTML = `
+<div class="modal-dialog">
   <div class="modal-content">
     <div class="modal-header"><h5 class="modal-title">在庫調整：${escapeHtml(it.name)} (${escapeHtml(it.code)})</h5>
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
@@ -370,7 +376,7 @@
       <button class="btn btn-warning" id="adj-save">調整</button>
     </div>
   </div>
-</div>`);
+</div>`;
     document.body.appendChild(wrap);
     const modal = new bootstrap.Modal(wrap);
     modal.show();
@@ -393,8 +399,8 @@
   function showItemDetail(it){
     const card = $('#card-item-detail'); if(!card) return;
     const body = $('#item-detail-body', card);
-    body.innerHTML = (
-`<div class="d-flex gap-3">
+    body.innerHTML = `
+<div class="d-flex gap-3">
   <div style="width:160px;height:120px;background:#f3f6ff;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden">
     ${it.img ? `<img src="${escapeAttr(it.img)}" style="max-width:100%;max-height:100%">` : '<span class="text-primary">画像</span>'}
   </div>
@@ -406,7 +412,7 @@
     <div><b>最小</b>：${fmt(it.min)}</div>
     <div><b>置場</b>：<span class="badge text-bg-light border">${escapeHtml(it.location||'')}</span></div>
   </div>
-</div>`);
+</div>`;
     card.classList.remove('d-none');
     $('#btn-close-detail')?.addEventListener('click', ()=> card.classList.add('d-none'), {once:true});
   }
@@ -414,9 +420,7 @@
   function openPreview(url){
     const w = window.open('','_blank','width=900,height=600');
     if(!w || !w.document){
-      const a=document.createElement('a');
-      a.href=url; a.target='_blank'; a.download='';
-      a.click();
+      const a=document.createElement('a'); a.href=url; a.target='_blank'; a.download=''; a.click();
       return;
     }
     w.document.write('<img src="'+url+'" style="max-width:100%">');
