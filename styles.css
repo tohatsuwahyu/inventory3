@@ -206,3 +206,11 @@ header.appbar .brand img{ height:32px; }
   background:#f8fafc; border:1px solid #e5e7eb; color:#334155;
   padding:.2rem .5rem; border-radius:8px; font-weight:600;
 }
+/* Footer */
+.app-footer{
+  margin-top:24px; padding:14px 12px;
+  color:#6b7280; background:transparent; text-align:center;
+  font-size:.9rem;
+}
+.app-footer b{ color:#374151; }
+@media print{ .app-footer{ display:none !important; } }
