@@ -1,13 +1,29 @@
 /* =========================================================
- * login.js — Login USER+PIN & QR (versi cepat & stabil)
- * - Auto-load html5-qrcode (lokal + 3 CDN fallback)
- * - Scan cepat: 1280x720, fps 24, qrbox kecil, autofocus/autoexposure, zoom
+ * login.js — Login USER+PIN & QR (versi cepat & stabil, mobile-safe)
+ * - Tap-friendly: click + touchend binding (anti double-fire)
+ * - Inject CSS ringan agar overlay tak memblokir tap
+ * - Native BarcodeDetector → fallback html5-qrcode (qrbox 150, 1280x720, AF/AE/zoom)
  * - Manual login → GAS action=login
  * - QR login: USER|<id>  atau  LOGIN|<id>|<pin>  atau JSON setara
  * =======================================================*/
 (function(){
   "use strict";
+
   const qs = (s, el=document)=>el.querySelector(s);
+
+  /* ---------- Inject CSS anti-overlay (aman, non-invasif) ---------- */
+  (function injectTapCss(){
+    const css = `
+      #qr-area{ position:relative; z-index:1; }
+      #global-loading{ pointer-events:none !important; }
+      button, a, input, label{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+      .html5-qrcode-element{ display:none !important; } /* sembunyikan tombol bawaan lib agar tak menutup UI */
+    `.trim();
+    const style = document.createElement('style');
+    style.setAttribute('data-login-hotfix','tap');
+    style.textContent = css;
+    document.head.appendChild(style);
+  })();
 
   /* ---------- GAS API ---------- */
   async function api(action, {method='GET', body}={}){
@@ -50,11 +66,26 @@
     throw new Error('html5-qrcode tidak tersedia');
   }
 
+  /* ---------- Binding tap aman untuk mobile (anti double-fire) ---------- */
+  function bindTap(el, handler){
+    if(!el) return;
+    let locked = false;
+    const wrap = (e)=>{
+      // cegah klik ganda (click + touchend)
+      if(locked) { e.preventDefault(); return; }
+      locked = true;
+      setTimeout(()=>locked=false, 350);
+      e.preventDefault();
+      try{ handler(e); }catch(err){ console.error(err); }
+    };
+    el.addEventListener('click', wrap, false);
+    el.addEventListener('touchend', wrap, { passive:false });
+  }
+
   /* ---------- Manual login ---------- */
   const $id=qs('#login-user'), $pin=qs('#login-pin'), $btn=qs('#btn-login');
   $btn?.setAttribute('type','button');
-  $btn?.addEventListener('click', async (e)=>{
-    e.preventDefault();
+  bindTap($btn, async ()=>{
     const id=($id?.value||'').trim(), pin=($pin?.value||'').trim();
     if(!id) return toast('ユーザーIDを入力してください。');
     try{
@@ -64,11 +95,14 @@
       location.href='dashboard.html';
     }catch(err){ toast('ログイン失敗: '+(err?.message||err)); }
   });
-  [$id,$pin].forEach(el=>el?.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $btn?.click(); }}));
+  [$id,$pin].forEach(el=>el?.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){ e.preventDefault(); $btn?.click(); }
+  }));
 
   /* ---------- QR login (versi cepat) ---------- */
   let scanner=null, nativeRunner=null, stream=null;
-  const $btnQR = qs('#btn-qr');
+  const $btnQR   = qs('#btn-qr');
+  const $btnQR2  = qs('#btn-qr-alt'); // jika ada tombol alternatif
   const $area  = (()=>{
     let a = qs('#qr-area');
     if(!a){ a=document.createElement('div'); a.id='qr-area'; document.body.appendChild(a); }
@@ -108,7 +142,10 @@
     if(!('BarcodeDetector' in window)) return false;
     try{
       $area.style.display='block';
-      const video=document.createElement('video'); video.playsInline=true; video.autoplay=true; video.muted=true;
+      $area.style.pointerEvents = 'auto';
+
+      const video=document.createElement('video');
+      Object.assign(video,{ playsInline:true, autoplay:true, muted:true });
       Object.assign(video.style,{ width:'100%', height:'100%', objectFit:'cover' });
       $area.innerHTML=''; $area.appendChild(video);
 
@@ -139,11 +176,18 @@
         }catch(_){}
         raf = requestAnimationFrame(loop);
       };
-      const stop = ()=>{ stopped=true; cancelAnimationFrame(raf); stream?.getTracks()?.forEach(t=>t.stop()); stream=null; $area.innerHTML=''; };
+      const stop = ()=>{
+        stopped=true; cancelAnimationFrame(raf);
+        try{ stream?.getTracks()?.forEach(t=>t.stop()); }catch(_){}
+        stream=null; $area.innerHTML='';
+      };
       loop();
       nativeRunner = { stop, clear:()=>{ try{$area.innerHTML='';}catch{} } };
       return true;
-    }catch(_){ try{ nativeRunner?.stop?.(); nativeRunner?.clear?.(); }catch{} return false; }
+    }catch(_){
+      try{ nativeRunner?.stop?.(); nativeRunner?.clear?.(); }catch{}
+      return false;
+    }
   }
 
   async function startQR(){
@@ -154,6 +198,7 @@
     try{
       await ensureHtml5();
       $area.style.display='block';
+      $area.style.pointerEvents = 'auto';
 
       const cfg = {
         fps: 24,
@@ -172,6 +217,7 @@
 
       async function startWith(source){
         await scanner.start(source, cfg, onScan);
+        // dorong autofocus/autoexposure/zoom jika didukung
         try{
           await scanner.applyVideoConstraints({
             advanced:[{focusMode:'continuous'},{exposureMode:'continuous'},{zoom:3}]
@@ -197,11 +243,11 @@
     try{ await scanner?.stop?.(); scanner?.clear?.(); }catch{}
     try{ nativeRunner?.stop?.(); nativeRunner?.clear?.(); }catch{}
     scanner=null; nativeRunner=null;
-    if($area) $area.style.display='none';
+    if($area){ $area.style.display='none'; $area.style.pointerEvents = 'none'; }
   }
 
-  $btnQR?.addEventListener('click', e=>{
-    e.preventDefault();
-    (scanner || nativeRunner) ? stopQR() : startQR();
-  });
+  // Toggle dengan binding tap aman
+  bindTap($btnQR,  ()=>{ (scanner || nativeRunner) ? stopQR() : startQR(); });
+  bindTap($btnQR2, ()=>{ (scanner || nativeRunner) ? stopQR() : startQR(); });
+
 })();
