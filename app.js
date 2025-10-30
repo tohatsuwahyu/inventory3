@@ -183,24 +183,29 @@
 
   let _ITEMS_CACHE = [];
   function tplItemRow(it){
-    const qrid = `qr-${it.code}`;
-    return `<tr>
-      <td style="width:170px"><div id="${qrid}" class="d-inline-block"></div></td>
-      <td>${escapeHtml(it.code)}</td>
-      <td><a href="#" class="link-underline link-item" data-code="${escapeHtml(it.code)}">${escapeHtml(it.name)}</a></td>
-      <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''}</td>
-      <td class="text-end">¥${fmt(it.price)}</td>
-      <td class="text-end">${fmt(it.stock)}</td>
-      <td class="text-end">${fmt(it.min)}</td>
-      <td>${escapeHtml(it.location||'')}</td>
-      <td class="text-end">
-        <button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}"><i class="bi bi-pencil"></i></button>
-        <button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}"><i class="bi bi-trash"></i></button>
-        <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}">DL</button>
-        <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}"><i class="bi bi-search"></i></button>
-      </td>
-    </tr>`;
-  }
+  const qrid = `qr-${it.code}`;
+  return `<tr>
+    <td style="width:110px">
+      <div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div>
+    </td>
+    <td>${escapeHtml(it.code)}</td>
+    <td><a href="#" class="link-underline link-item" data-code="${escapeHtml(it.code)}">${escapeHtml(it.name)}</a></td>
+    <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''}</td>
+    <td class="text-end">¥${fmt(it.price)}</td>
+    <td class="text-end">${fmt(it.stock)}</td>
+    <td class="text-end">${fmt(it.min)}</td>
+    <td>${escapeHtml(it.location||'')}</td>
+    <td>
+      <div class="act-grid">
+        <button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>
+        <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ダウンロード">DL</button>
+        <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>
+      </div>
+    </td>
+  </tr>`;
+}
+
 
   async function renderItems(){
     try{
@@ -364,132 +369,110 @@
   }
 
   // === Label generator: QR lebih presisi tidak menimpa garis ===
-  async function makeItemLabelDataURL(item){
-    const W=760,H=260,pad=16;
-    const imgW=200, gap=14;
-    const qrBox=H-2*pad;
+ async function makeItemLabelDataURL(item){
+  const W=760, H=260, pad=18;
+  const imgW=200, gap=16;
 
-    // tweak: sedikit lebih kecil + quiet-zone lebih lebar supaya tidak menyentuh garis
-    const QUIET=14;
-    const qrSize=Math.min(170, qrBox - 8);
+  // QR lebih kecil + quiet-zone lebih lebar + jarak ekstra ke kotak kanan
+  const QUIET = 20;                 // pinggiran putih
+  const qrSize = 156;               // sebelumnya ~170
+  const gapToGrid = 20;             // jarak antara kolom QR dan kotak kanan
 
-    const colQRW = qrSize + 2*QUIET;
-    const gridX = pad + imgW + gap + colQRW + gap;
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
 
-    const c=document.createElement('canvas'); c.width=W; c.height=H;
-    const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
+  // background & border luar
+  g.fillStyle='#fff'; g.fillRect(0,0,W,H);
+  g.strokeStyle='#000'; g.lineWidth=2; g.strokeRect(1,1,W-2,H-2);
 
-    g.fillStyle='#fff'; g.fillRect(0,0,W,H);
-    g.strokeStyle='#000'; g.lineWidth=2; g.strokeRect(1,1,W-2,H-2);
+  // slot gambar kiri (rounded)
+  const rx=pad, ry=pad, rw=imgW, rh=H-2*pad, r=18;
+  roundRect(g, rx,ry,rw,rh,r, true,true,'#eaf1ff','#cbd5e1');
+  await drawImageIfAny(g,item.img,rx,ry,rw,rh,r);
 
-    // slot gambar rounded
-    const rx=pad, ry=pad, rw=imgW, rh=H-2*pad, r=18;
-    roundRect(g, rx,ry,rw,rh,r, true,true,'#eaf1ff','#cbd5e1');
-    await drawImageIfAny(g,item.img,rx,ry,rw,rh,r);
+  // posisi QR (center di kolomnya)
+  const qrBoxH = H-2*pad;
+  const qx = pad + imgW + gap + QUIET + Math.max(0,(qrBoxH-qrSize)/2);
+  const qy = pad + Math.max(0,(qrBoxH-qrSize)/2);
 
-    // QR center + quiet-zone (tidak menimpa garis)
-    const free = qrBox - qrSize;
-    const qx = pad + imgW + gap + QUIET + Math.max(0, free/2);
-    const qy = pad + Math.max(0, free/2);
-    g.fillStyle='#fff';
-    g.fillRect(qx-QUIET,qy-QUIET, qrSize+2*QUIET, qrSize+2*QUIET);
-    try{
-      const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
-      const im = new Image(); im.src=du; await imgLoaded(im);
-      g.drawImage(im, qx,qy, qrSize,qrSize);
-    }catch(e){}
+  // quiet-zone
+  g.fillStyle='#fff';
+  g.fillRect(qx-QUIET, qy-QUIET, qrSize+2*QUIET, qrSize+2*QUIET);
 
-    // GRID kanan
-    const cellH=(H-2*pad)/3;
-    g.strokeStyle='#000'; g.lineWidth=2;
-    g.strokeRect(gridX,pad, W-gridX-pad, H-2*pad);
-    for(let i=1;i<=2;i++){ const y=pad+cellH*i; g.beginPath(); g.moveTo(gridX,y); g.lineTo(W-pad,y); g.stroke(); }
+  // render QR
+  try{
+    const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
+    const im = new Image(); im.src=du; await imgLoaded(im);
+    g.drawImage(im, qx, qy, qrSize, qrSize);
+  }catch(e){}
 
-    const labelX=gridX+12, valX=gridX+112;
-    const valMaxW = W - pad - valX - 8;
+  // kotak grid kanan (dipindah lebih ke kanan dengan gapToGrid)
+  const colQRW = (qrSize + 2*QUIET);
+  const gridX = pad + imgW + gap + colQRW + gapToGrid;
 
-    g.textAlign='left'; g.textBaseline='middle'; g.fillStyle='#000';
-    g.font='18px "Noto Sans JP", system-ui';
-    g.fillText('コード：', labelX, pad + cellH*0.5);
-    g.fillText('商品名：', labelX, pad + cellH*1.5);
-    g.fillText('置場：',   labelX, pad + cellH*2.5);
-
-    g.font='bold 22px "Noto Sans JP", system-ui';
-    drawSingleLineFit(g, String(item.code||''), valX, pad + cellH*0.5, valMaxW);
-
-    drawWrapAuto(g, String(item.name||''), valX, pad + cellH*1.5, valMaxW, { maxLines:2, base:22, min:16, lineGap:4 });
-
-    g.font='bold 20px "Noto Sans JP", system-ui';
-    drawSingleLineFit(g, String(item.location||'').toUpperCase(), valX, pad + cellH*2.5, valMaxW);
-
-    return c.toDataURL('image/png');
-
-    function roundRect(ctx,x,y,w,h,r,fill,stroke,fillColor,border){
-      ctx.save(); ctx.beginPath();
-      ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
-      ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
-      if(fill){ ctx.fillStyle=fillColor||'#eef'; ctx.fill(); }
-      if(stroke){ ctx.strokeStyle=border||'#000'; ctx.stroke(); }
-      ctx.restore();
-    }
-    function imgLoaded(im){ return new Promise(res=>{ im.onload=res; im.onerror=res; }); }
-    async function drawImageIfAny(ctx,url,x,y,w,h,rr){
-      if(!url){
-        ctx.save(); ctx.fillStyle='#3B82F6'; ctx.font='bold 28px "Noto Sans JP", system-ui';
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText('画像', x+w/2, y+h/2); ctx.restore(); return;
-      }
-      try{
-        const im=new Image(); im.crossOrigin='anonymous'; im.src=url; await imgLoaded(im);
-        const s=Math.min(w/im.width,h/im.height);
-        const iw=im.width*s, ih=im.height*s;
-        const ix=x+(w-iw)/2, iy=y+(h-ih)/2;
-        ctx.save(); ctx.beginPath();
-        ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr);
-        ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); ctx.clip();
-        ctx.drawImage(im, ix,iy, iw,ih); ctx.restore();
-      }catch(e){}
-    }
-    function drawSingleLineFit(ctx, text, x, y, maxW){
-      let size = parseInt((ctx.font.match(/(\d+)px/)||[])[1]||22,10);
-      const fam = ctx.font.split(' ').slice(1).join(' ');
-      while (ctx.measureText(text).width > maxW && size > 12){
-        size -= 1; ctx.font = `bold ${size}px ${fam}`;
-      }
-      ctx.fillText(text, x, y);
-    }
-    function splitByWidth(ctx, text, maxW){
-      const arr = [...String(text)];
-      const lines=[]; let buf='';
-      for(const ch of arr){
-        const trial = buf + ch;
-        if (ctx.measureText(trial).width <= maxW) buf = trial;
-        else { if(buf) lines.push(buf); buf = ch; }
-      }
-      if(buf) lines.push(buf);
-      return lines;
-    }
-    function drawWrapAuto(ctx, text, x, centerY, maxW, opt){
-      const base=opt.base||22, min=opt.min||16, gap=opt.lineGap||4, maxLines=opt.maxLines||2;
-      const fam = ctx.font.split(' ').slice(1).join(' ');
-      let size=base, lines;
-      while(true){
-        ctx.font=`bold ${size}px ${fam}`;
-        lines = splitByWidth(ctx, text, maxW);
-        if(lines.length<=maxLines || size<=min) break;
-        size -= 1;
-      }
-      if(lines.length>maxLines){
-        lines = lines.slice(0,maxLines);
-        let last = lines[lines.length-1];
-        while (ctx.measureText(last+'…').width>maxW && last.length>0) last=last.slice(0,-1);
-        lines[lines.length-1] = last+'…';
-      }
-      const totalH = lines.length*size + (lines.length-1)*gap;
-      let y = centerY - totalH/2 + size/2;
-      for(const ln of lines){ ctx.fillText(ln, x, y); y += size + gap; }
-    }
+  const cellH=(H-2*pad)/3;
+  g.strokeStyle='#000'; g.lineWidth=2;
+  g.strokeRect(gridX,pad, W-gridX-pad, H-2*pad);
+  for(let i=1;i<=2;i++){
+    const y=pad+cellH*i; g.beginPath(); g.moveTo(gridX,y); g.lineTo(W-pad,y); g.stroke();
   }
+
+  // label dan nilai
+  const labelX=gridX+12, valX=gridX+112;
+  const valMaxW = W - pad - valX - 8;
+
+  g.textAlign='left'; g.textBaseline='middle'; g.fillStyle='#000';
+  g.font='18px "Noto Sans JP", system-ui';
+  g.fillText('コード：', labelX, pad + cellH*0.5);
+  g.fillText('商品名：', labelX, pad + cellH*1.5);
+  g.fillText('置場：',   labelX, pad + cellH*2.5);
+
+  g.font='bold 22px "Noto Sans JP", system-ui';
+  drawSingleLineFit(g, String(item.code||''), valX, pad + cellH*0.5, valMaxW);
+
+  drawWrapAuto(g, String(item.name||''), valX, pad + cellH*1.5, valMaxW, { maxLines:2, base:22, min:16, lineGap:4 });
+
+  g.font='bold 20px "Noto Sans JP", system-ui';
+  drawSingleLineFit(g, String(item.location||'').toUpperCase(), valX, pad + cellH*2.5, valMaxW);
+
+  return c.toDataURL('image/png');
+
+  /* helper2 (sama seperti versi sebelumnya) */
+  function roundRect(ctx,x,y,w,h,r,fill,stroke,fillColor,border){ ctx.save(); ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); if(fill){ ctx.fillStyle=fillColor||'#eef'; ctx.fill(); } if(stroke){ ctx.strokeStyle=border||'#000'; ctx.stroke(); } ctx.restore(); }
+  function imgLoaded(im){ return new Promise(res=>{ im.onload=res; im.onerror=res; }); }
+  async function drawImageIfAny(ctx,url,x,y,w,h,rr){
+    if(!url){ ctx.save(); ctx.fillStyle='#3B82F6'; ctx.font='bold 28px "Noto Sans JP", system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('画像', x+w/2, y+h/2); ctx.restore(); return; }
+    try{ const im=new Image(); im.crossOrigin='anonymous'; im.src=url; await imgLoaded(im);
+      const s=Math.min(w/im.width,h/im.height), iw=im.width*s, ih=im.height*s;
+      const ix=x+(w-iw)/2, iy=y+(h-ih)/2;
+      ctx.save(); ctx.beginPath(); ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr); ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); ctx.clip();
+      ctx.drawImage(im, ix,iy, iw,ih); ctx.restore(); }catch(e){}
+  }
+  function drawSingleLineFit(ctx, text, x, y, maxW){
+    let size = parseInt((ctx.font.match(/(\d+)px/)||[])[1]||22,10);
+    const fam = ctx.font.split(' ').slice(1).join(' ');
+    while (ctx.measureText(text).width > maxW && size > 12){ size -= 1; ctx.font = `bold ${size}px ${fam}`; }
+    ctx.fillText(text, x, y);
+  }
+  function splitByWidth(ctx, text, maxW){
+    const arr = [...String(text)]; const lines=[]; let buf='';
+    for(const ch of arr){ const trial = buf + ch; if (ctx.measureText(trial).width <= maxW) buf = trial; else { if(buf) lines.push(buf); buf = ch; } }
+    if(buf) lines.push(buf); return lines;
+  }
+  function drawWrapAuto(ctx, text, x, centerY, maxW, opt){
+    const base=opt.base||22, min=opt.min||16, gap=opt.lineGap||4, maxLines=opt.maxLines||2;
+    const fam = ctx.font.split(' ').slice(1).join(' ');
+    let size=base, lines;
+    while(true){ ctx.font=`bold ${size}px ${fam}`; lines = splitByWidth(ctx, text, maxW);
+      if(lines.length<=maxLines || size<=min) break; size -= 1; }
+    if(lines.length>maxLines){ lines = lines.slice(0,maxLines); let last = lines[lines.length-1];
+      while (ctx.measureText(last+'…').width>maxW && last.length>0) last=last.slice(0,-1);
+      lines[lines.length-1] = last+'…'; }
+    const totalH = lines.length*size + (lines.length-1)*gap;
+    let y = centerY - totalH/2 + size/2;
+    for(const ln of lines){ ctx.fillText(ln, x, y); y += size + gap; }
+  }
+}
 
   async function generateQrDataUrl(text, size){
     await ensureQRCode();
