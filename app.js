@@ -448,17 +448,17 @@
     const valMaxW = W - pad - valX - 8;
 
     g.textAlign='left'; g.textBaseline='middle'; g.fillStyle='#000';
-    g.font='18px "Noto Sans JP", system-ui';
+    g.font='16px "Noto Sans JP", system-ui';
     g.fillText('コード：', labelX, pad + cellH*0.5);
     g.fillText('商品名：', labelX, pad + cellH*1.5);
     g.fillText('置場：',   labelX, pad + cellH*2.5);
 
-    g.font='bold 22px "Noto Sans JP", system-ui';
+    g.font='bold 18px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.code||''), valX, pad + cellH*0.5, valMaxW);
 
     drawWrapAuto(g, String(item.name||''), valX, pad + cellH*1.5, valMaxW, { maxLines:2, base:22, min:16, lineGap:4 });
 
-    g.font='bold 20px "Noto Sans JP", system-ui';
+    g.font='bold 18px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.location||'').toUpperCase(), valX, pad + cellH*2.5, valMaxW);
 
     return c.toDataURL('image/png');
