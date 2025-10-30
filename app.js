@@ -4,32 +4,25 @@
 (function(){
   "use strict";
 
-  // ---------- Helpers ----------
+  /***********************
+   * Helpers
+   ***********************/
   const $  = (sel, el=document)=>el.querySelector(sel);
-  const $$ = (sel, el=document)=>Array.from(el.querySelectorAll(sel));
+  const $$ = (sel, el=document)=>[...el.querySelectorAll(sel)];
   const fmt = (n)=> new Intl.NumberFormat('ja-JP').format(Number(n||0));
   const isMobile = ()=> /Android|iPhone|iPad/i.test(navigator.userAgent);
-  const toast = (m)=> alert(m);
-
-  function getCurrentUser(){
-    try{ return JSON.parse(localStorage.getItem('currentUser')||'null'); }catch(_){ return null; }
-  }
-  function setCurrentUser(u){ localStorage.setItem('currentUser', JSON.stringify(u||null)); }
-  function logout(){ setCurrentUser(null); location.href='index.html'; }
-  const isAdmin = ()=> (getCurrentUser()?.role || '').toLowerCase()==='admin';
+  function toast(msg){ alert(msg); }
 
   function setLoading(show, text){
     const el = $('#global-loading');
     if(!el) return;
-    if(show){
-      el.classList.remove('d-none');
-      const t=$('#loading-text'); if(t) t.textContent = text || '読み込み中…';
-    }else{
-      el.classList.add('d-none');
-    }
+    if(show){ el.classList.remove('d-none'); $('#loading-text').textContent = text||'読み込み中…'; }
+    else { el.classList.add('d-none'); }
   }
 
-  // ---------- API ----------
+  /***********************
+   * API (GAS)
+   ***********************/
   async function api(action, { method='GET', body=null, silent=false }={}){
     if(!window.CONFIG || !CONFIG.BASE_URL){
       throw new Error('config.js BASE_URL belum di-set');
@@ -37,7 +30,7 @@
     const apikey = encodeURIComponent(CONFIG.API_KEY||'');
     const url = `${CONFIG.BASE_URL}?action=${encodeURIComponent(action)}&apikey=${apikey}&_=${Date.now()}`;
 
-    if(!silent) setLoading(true);
+    if(!silent) setLoading(true, '読み込み中…');
 
     try{
       if(method==='GET'){
@@ -46,23 +39,24 @@
         return await r.json();
       }else{
         const r = await fetch(url, {
-          method:'POST',
-          mode:'cors',
+          method:'POST', mode:'cors',
           headers:{ 'Content-Type':'text/plain;charset=utf-8' },
           body: JSON.stringify({ ...(body||{}), apikey: CONFIG.API_KEY })
         });
         if(!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
         return await r.json();
       }
-    } finally {
+    }finally{
       if(!silent) setLoading(false);
     }
   }
 
-  // ---------- Script loaders ----------
+  /***********************
+   * Script loaders
+   ***********************/
   function loadScriptOnce(src){
     return new Promise((resolve, reject)=>{
-      if ([...document.scripts].some(s=>s.src===src || s.src.endsWith(src))) { resolve(); return; }
+      if ([...document.scripts].some(s=>s.src===src || s.src.endsWith(src))) return resolve();
       const s=document.createElement('script');
       s.src=src; s.async=true; s.crossOrigin='anonymous';
       s.onload=()=>resolve();
@@ -73,45 +67,60 @@
 
   async function ensureQRCode(){
     if (window.QRCode) return;
-    const local = ['./qrlib.js','./qrcode.min.js','./vendor/qrcode.min.js'];
-    for(const u of local){ try{ await loadScriptOnce(u); if(window.QRCode) return; }catch(_){} }
-    const cdn = [
+    const locals = ['./qrlib.js','./qrcode.min.js','./vendor/qrcode.min.js'];
+    for(const p of locals){ try{ await loadScriptOnce(p); if(window.QRCode) return; }catch(e){} }
+    const cdns = [
       'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js',
       'https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js',
       'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
     ];
-    for(const u of cdn){ try{ await loadScriptOnce(u); if(window.QRCode) return; }catch(_){} }
-    throw new Error('QRCode library tidak tersedia');
+    for(const u of cdns){ try{ await loadScriptOnce(u); if(window.QRCode) return; }catch(e){} }
+    throw new Error('QRCode library tidak tersedia (qrlib.js)');
   }
 
   async function ensureHtml5Qrcode(){
     if (window.Html5Qrcode) return;
-    const local = ['./html5-qrcode.min.js','./vendor/html5-qrcode.min.js'];
-    for(const u of local){ try{ await loadScriptOnce(u); if(window.Html5Qrcode) return; }catch(_){} }
-    const cdn = [
+    const locals = ['./html5-qrcode.min.js','./vendor/html5-qrcode.min.js'];
+    for(const p of locals){ try{ await loadScriptOnce(p); if(window.Html5Qrcode) return; }catch(e){} }
+    const cdns = [
       'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js',
       'https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js',
       'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js'
     ];
-    for(const u of cdn){ try{ await loadScriptOnce(u); if(window.Html5Qrcode) return; }catch(_){} }
+    for(const u of cdns){ try{ await loadScriptOnce(u); if(window.Html5Qrcode) return; }catch(e){} }
     throw new Error('html5-qrcode tidak tersedia');
   }
 
-  // ---------- Sidebar / Nav ----------
+  /***********************
+   * Auth mini
+   ***********************/
+  function getCurrentUser(){
+    try{ return JSON.parse(localStorage.getItem('currentUser')||'null'); }catch(e){ return null; }
+  }
+  function setCurrentUser(u){ localStorage.setItem('currentUser', JSON.stringify(u||null)); }
+  function logout(){ setCurrentUser(null); location.href='index.html'; }
+
+  function isAdmin(){
+    return (getCurrentUser()?.role || 'user').toLowerCase() === 'admin';
+  }
+
+  /***********************
+   * Sidebar / Nav
+   ***********************/
   (function navHandler(){
     const sb = $('#sb'), bd = $('#sb-backdrop');
-    const burger = $('#burger'), btnMenu = $('#btn-menu');
 
     function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
     function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
 
-    [burger, btnMenu].forEach(el=> el && el.addEventListener('click', (e)=>{ e.preventDefault(); toggleSB(); }));
+    // semua elemen bertanda data-burger akan toggle sidebar (ikon & tombol)
     document.addEventListener('click', (e)=>{
-      const trg = e.target.closest('[data-burger], .btn-burger');
+      const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
       if(trg){ e.preventDefault(); toggleSB(); }
     });
     bd?.addEventListener('click', closeSB);
 
+    // navigasi antar view
     document.addEventListener('click', (e)=>{
       const a = e.target.closest('aside nav a[data-view]');
       if(!a) return;
@@ -120,28 +129,36 @@
       $$('aside nav a').forEach(n=>n.classList.remove('active'));
       a.classList.add('active');
 
-      $$('main section').forEach(s=>{ s.classList.add('d-none'); s.classList.remove('active'); });
+      $$('main section').forEach(s=>{
+        s.classList.add('d-none');
+        s.classList.remove('active');
+      });
+
       const id = a.getAttribute('data-view');
       const sec = document.getElementById(id);
-      if(sec){ sec.classList.remove('d-none'); sec.classList.add('active'); }
+      if(sec){
+        sec.classList.remove('d-none');
+        sec.classList.add('active');
+      }
 
-      const h = $('#page-title'); if(h) h.textContent = a.textContent.trim();
+      const title = a.textContent.trim();
+      const h = $('#page-title'); if(h) h.textContent = title;
 
       closeSB();
 
       if(id==='view-items') renderItems();
       if(id==='view-users') renderUsers();
       if(id==='view-history') renderHistory();
-      if(id==='view-stocktake') initStocktake();
     });
   })();
 
-  // ---------- Dashboard ----------
+  /***********************
+   * Charts (Dashboard)
+   ***********************/
   let chartLine=null, chartPie=null;
   async function renderDashboard(){
     const who = getCurrentUser();
-    const w = $('#who');
-    if (who && w) w.textContent = `${who.name || who.id || 'user'} (${who.id} | ${who.role||'user'})`;
+    if (who) $('#who').textContent = `${who.name || who.id || 'user'} (${who.id} | ${who.role||'user'})`;
 
     try{
       const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([
@@ -154,12 +171,13 @@
       const users  = Array.isArray(usersRaw)  ? usersRaw  : [];
       const series = Array.isArray(seriesRaw) ? seriesRaw : [];
 
-      const t1 = $('#metric-total-items'); if(t1) t1.textContent = items.length;
-      const t2 = $('#metric-low-stock'); if(t2) t2.textContent = items.filter(it => Number(it.stock||0) <= Number(it.min||0)).length;
-      const t3 = $('#metric-users'); if(t3) t3.textContent = users.length;
+      $('#metric-total-items').textContent = items.length;
+      const low = items.filter(it => Number(it.stock||0) <= Number(it.min||0)).length;
+      $('#metric-low-stock').textContent = low;
+      $('#metric-users').textContent = users.length;
 
       const ctx1 = $('#chart-monthly');
-      if (ctx1 && window.Chart){
+      if (ctx1){
         chartLine?.destroy();
         chartLine = new Chart(ctx1, {
           type:'line',
@@ -174,7 +192,7 @@
         });
       }
       const ctx2 = $('#chart-pie');
-      if (ctx2 && window.Chart){
+      if (ctx2){
         chartPie?.destroy();
         const last = series.length ? series[series.length-1] : {in:0,out:0};
         chartPie = new Chart(ctx2, {
@@ -183,22 +201,24 @@
           options:{ responsive:true, maintainAspectRatio:false }
         });
       }
+
+      $('#tbl-mov').innerHTML = '';
     }catch{
       toast('ダッシュボードの読み込みに失敗しました。');
     }
   }
 
-  // ---------- Items + submenu + role guard ----------
+  /***********************
+   * Items list + Edit + Label
+   ***********************/
   let _ITEMS_CACHE = [];
-
-  function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;","&gt;":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
-  function escapeAttr(s){ return escapeHtml(s); }
 
   function tplItemRow(it){
     const qrid = `qr-${it.code}`;
-    const admin = isAdmin();
     return `<tr>
-      <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
+      <td style="width:110px">
+        <div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div>
+      </td>
       <td>${escapeHtml(it.code)}</td>
       <td><a href="#" class="link-underline link-item" data-code="${escapeHtml(it.code)}">${escapeHtml(it.name)}</a></td>
       <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''}</td>
@@ -208,9 +228,8 @@
       <td>${escapeHtml(it.location||'')}</td>
       <td>
         <div class="act-grid">
-          ${ admin ? `<button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>` : '' }
-          ${ admin ? `<button class="btn btn-sm btn-warning btn-adjust" data-code="${escapeAttr(it.code)}" title="在庫調整"><i class="bi bi-sliders"></i></button>` : '' }
-          ${ admin ? `<button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>` : '' }
+          <button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>
           <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ダウンロード">DL</button>
           <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>
         </div>
@@ -223,7 +242,6 @@
       const list = await api('items',{method:'GET'});
       _ITEMS_CACHE = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
       const tbody = $('#tbl-items');
-      if(!tbody) return;
       tbody.innerHTML = _ITEMS_CACHE.map(tplItemRow).join('');
 
       await ensureQRCode();
@@ -231,26 +249,16 @@
         const holder = document.getElementById(`qr-${it.code}`);
         if(!holder) continue;
         holder.innerHTML = '';
-        // eslint-disable-next-line no-new
         new QRCode(holder, { text:`ITEM|${it.code}`, width:64, height:64, correctLevel: QRCode.CorrectLevel.M });
       }
 
-      // actions
       tbody.addEventListener('click', async (e)=>{
         const btn = e.target.closest('button');
         if(!btn) return;
+
         const code = btn.getAttribute('data-code');
-
-        // proteksi admin
-        if((btn.classList.contains('btn-edit') || btn.classList.contains('btn-adjust') || btn.classList.contains('btn-del')) && !isAdmin()){
-          toast('アクセスが拒否されました（管理者のみ）'); 
-          return;
-        }
-
         if(btn.classList.contains('btn-edit')){
           openEditItem(code);
-        }else if(btn.classList.contains('btn-adjust')){
-          openAdjustModal(code);
         }else if(btn.classList.contains('btn-del')){
           if(!confirm('削除しますか？')) return;
           const r = await api('deleteItem',{method:'POST', body:{ code }});
@@ -259,7 +267,8 @@
         }else if(btn.classList.contains('btn-dl')){
           const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
           const url = await makeItemLabelDataURL(it);
-          const a=document.createElement('a'); a.href=url; a.download=`label_${it.code}.png`; a.click();
+          const a = document.createElement('a');
+          a.href = url; a.download = `label_${it.code}.png`; a.click();
         }else if(btn.classList.contains('btn-preview')){
           const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
           const url = await makeItemLabelDataURL(it);
@@ -267,7 +276,6 @@
         }
       });
 
-      // link detail
       $$('#tbl-items .link-item').forEach(a=>{
         a.addEventListener('click', (ev)=>{
           ev.preventDefault();
@@ -277,14 +285,12 @@
         });
       });
 
-      // search: nama/kode/lokasi
       $('#items-search')?.addEventListener('input', (e)=>{
-        const q = (e.target.value||'').toLowerCase().trim();
-        $$('#tbl-items tr').forEach(tr=>{
-          const code=(tr.children[1]?.textContent||'').toLowerCase();
-          const name=(tr.children[2]?.textContent||'').toLowerCase();
-          const loc =(tr.children[7]?.textContent||'').toLowerCase();
-          tr.style.display = (code.includes(q)||name.includes(q)||loc.includes(q)) ? '' : 'none';
+        const q = (e.target.value||'').toLowerCase();
+        const rows = $$('#tbl-items tr');
+        rows.forEach(tr=>{
+          const name = (tr.children[2]?.textContent||'').toLowerCase();
+          tr.style.display = name.includes(q) ? '' : 'none';
         });
       });
 
@@ -293,8 +299,12 @@
     }
   }
 
-  // --- Edit item (modal) ---
+  function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;","&gt;":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
+  function escapeAttr(s){ return escapeHtml(s); }
+
+  // === Edit item (modal) ===
   function openEditItem(code){
+    if(!isAdmin()){ return toast('Akses ditolak (admin only)'); }
     const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
     if(!it) return;
     const wrap = document.createElement('div');
@@ -332,7 +342,6 @@
     });
 
     $('#md-save',wrap)?.addEventListener('click', async ()=>{
-      if(!isAdmin()){ toast('アクセスが拒否されました（管理者のみ）'); return; }
       try{
         const payload = {
           code: $('#md-code',wrap).value,
@@ -345,74 +354,37 @@
           overwrite: true
         };
         const r = await api('updateItem',{method:'POST', body: payload});
-        if(r?.ok){ modal.hide(); wrap.remove(); renderItems(); }
-        else toast(r?.error||'保存失敗');
-      }catch(e){ toast('保存失敗: '+(e?.message||e)); }
-    });
-
-    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
-  }
-
-  // --- Adjust (modal) ---
-  function openAdjustModal(code){
-    const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
-    if(!it) return;
-    const wrap = document.createElement('div');
-    wrap.className='modal fade';
-    wrap.innerHTML = `
-<div class="modal-dialog">
-  <div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">在庫調整：${escapeHtml(it.name)} (${escapeHtml(it.code)})</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <div class="mb-2">現在在庫：<b>${fmt(it.stock||0)}</b></div>
-      <label class="form-label">新しい在庫数</label>
-      <input id="adj-qty" type="number" class="form-control" value="${Number(it.stock||0)}">
-      <label class="form-label mt-3">備考</label>
-      <input id="adj-note" class="form-control" placeholder="棚卸し調整 など">
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-      <button class="btn btn-warning" id="adj-save">調整</button>
-    </div>
-  </div>
-</div>`;
-    document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap);
-    modal.show();
-
-    $('#adj-save',wrap)?.addEventListener('click', async ()=>{
-      if(!isAdmin()){ toast('アクセスが拒否されました（管理者のみ）'); return; }
-      const who = getCurrentUser();
-      try{
-        const newStock = Number($('#adj-qty',wrap).value||0);
-        const note = $('#adj-note',wrap).value||'Adjust';
-        const r = await api('adjustStock',{method:'POST', body:{ code: it.code, newStock, userId: who?.id, note }});
-        if(r?.ok){ toast('調整しました'); modal.hide(); wrap.remove(); renderItems(); renderDashboard(); }
-        else toast(r?.error||'調整失敗');
-      }catch(e){ toast('調整失敗: '+(e?.message||e)); }
+        if(r?.ok){
+          modal.hide(); wrap.remove();
+          renderItems();
+          renderShelfTable(); // refresh jika dibuka
+        }else toast(r?.error||'保存失敗');
+      }catch(e){
+        console.error(e); toast('保存失敗: '+(e?.message||e));
+      }
     });
 
     wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
   }
 
   function showItemDetail(it){
-    const card = $('#card-item-detail'); if(!card) return;
+    const card = $('#card-item-detail');
+    if(!card) return;
     const body = $('#item-detail-body', card);
     body.innerHTML = `
-<div class="d-flex gap-3">
-  <div style="width:160px;height:120px;background:#f3f6ff;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden">
-    ${it.img ? `<img src="${escapeAttr(it.img)}" style="max-width:100%;max-height:100%">` : '<span class="text-primary">画像</span>'}
-  </div>
-  <div class="flex-1">
-    <div><b>コード</b>：${escapeHtml(it.code)}</div>
-    <div><b>名称</b>：${escapeHtml(it.name)}</div>
-    <div><b>価格</b>：¥${fmt(it.price)}</div>
-    <div><b>在庫</b>：${fmt(it.stock)}</div>
-    <div><b>最小</b>：${fmt(it.min)}</div>
-    <div><b>置場</b>：<span class="badge text-bg-light border">${escapeHtml(it.location||'')}</span></div>
-  </div>
-</div>`;
+      <div class="d-flex gap-3">
+        <div style="width:160px;height:120px;background:#f3f6ff;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+          ${it.img ? `<img src="${escapeAttr(it.img)}" style="max-width:100%;max-height:100%">` : '<span class="text-primary">画像</span>'}
+        </div>
+        <div class="flex-1">
+          <div><b>コード</b>：${escapeHtml(it.code)}</div>
+          <div><b>名称</b>：${escapeHtml(it.name)}</div>
+          <div><b>価格</b>：¥${fmt(it.price)}</div>
+          <div><b>在庫</b>：${fmt(it.stock)}</div>
+          <div><b>最小</b>：${fmt(it.min)}</div>
+          <div><b>置場</b>：<span class="badge text-bg-light border">${escapeHtml(it.location||'')}</span></div>
+        </div>
+      </div>`;
     card.classList.remove('d-none');
     $('#btn-close-detail')?.addEventListener('click', ()=> card.classList.add('d-none'), {once:true});
   }
@@ -420,17 +392,22 @@
   function openPreview(url){
     const w = window.open('','_blank','width=900,height=600');
     if(!w || !w.document){
-      const a=document.createElement('a'); a.href=url; a.target='_blank'; a.download=''; a.click();
+      const a=document.createElement('a');
+      a.href=url; a.target='_blank'; a.download='';
+      a.click();
       return;
     }
-    w.document.write('<img src="'+url+'" style="max-width:100%">');
+    w.document.write(`<img src="${url}" style="max-width:100%">`);
   }
 
-  // ---------- Label generator (QR simetris) ----------
+  // === Label generator (unchanged) ===
   async function makeItemLabelDataURL(item){
     const W=760, H=260, pad=18;
     const imgW=200, gap=16;
-    const QUIET=20, qrSize=156, gapQR=18;
+
+    const QUIET = 20;
+    const qrSize = 156;
+    const gapQR  = 18;
 
     const c=document.createElement('canvas'); c.width=W; c.height=H;
     const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
@@ -443,17 +420,18 @@
     await drawImageIfAny(g,item.img,rx,ry,rw,rh,r);
 
     const colStart = pad + imgW + gap;
-    const qrBoxH = H - 2*pad;
-    const qy = pad + Math.max(0, (qrBoxH - qrSize)/2);
+    const qrBoxH   = H - 2*pad;
+    const qy       = pad + Math.max(0, (qrBoxH - qrSize)/2);
+
     const qx = colStart + gapQR + QUIET;
 
     g.fillStyle='#fff';
-    g.fillRect(qx-QUIET,qy-QUIET, qrSize+2*QUIET, qrSize+2*QUIET);
+    g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2*QUIET, qrSize + 2*QUIET);
     try{
       const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
       const im = new Image(); im.src=du; await imgLoaded(im);
       g.drawImage(im, qx, qy, qrSize, qrSize);
-    }catch(_){}
+    }catch(e){}
 
     const colQRW = qrSize + 2*QUIET;
     const gridX  = colStart + gapQR + colQRW + gapQR;
@@ -467,30 +445,25 @@
     const valMaxW = W - pad - valX - 8;
 
     g.textAlign='left'; g.textBaseline='middle'; g.fillStyle='#000';
-    g.font='18px "Noto Sans JP", system-ui';
+    g.font='16px "Noto Sans JP", system-ui';
     g.fillText('コード：', labelX, pad + cellH*0.5);
     g.fillText('商品名：', labelX, pad + cellH*1.5);
     g.fillText('置場：',   labelX, pad + cellH*2.5);
 
-    g.font='bold 22px "Noto Sans JP", system-ui';
+    g.font='bold 18px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.code||''), valX, pad + cellH*0.5, valMaxW);
 
     drawWrapAuto(g, String(item.name||''), valX, pad + cellH*1.5, valMaxW, { maxLines:2, base:22, min:16, lineGap:4 });
 
-    g.font='bold 20px "Noto Sans JP", system-ui';
+    g.font='bold 18px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.location||'').toUpperCase(), valX, pad + cellH*2.5, valMaxW);
 
     return c.toDataURL('image/png');
 
-    // helpers canvas
-    function roundRect(ctx,x,y,w,h,rr,fill,stroke,fillColor,border){
+    function roundRect(ctx,x,y,w,h,r,fill,stroke,fillColor,border){
       ctx.save(); ctx.beginPath();
-      ctx.moveTo(x+rr,y);
-      ctx.arcTo(x+w,y,x+w,y+h,rr);
-      ctx.arcTo(x+w,y+h,x,y+h,rr);
-      ctx.arcTo(x,y+h,x,y,rr);
-      ctx.arcTo(x,y,x+w,y,rr);
-      ctx.closePath();
+      ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
       if(fill){ ctx.fillStyle=fillColor||'#eef'; ctx.fill(); }
       if(stroke){ ctx.strokeStyle=border||'#000'; ctx.stroke(); }
       ctx.restore();
@@ -500,41 +473,38 @@
       if(!url){
         ctx.save(); ctx.fillStyle='#3B82F6'; ctx.font='bold 28px "Noto Sans JP", system-ui';
         ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText('画像', x+w/2, y+h/2);
-        ctx.restore(); return;
+        ctx.fillText('画像', x+w/2, y+h/2); ctx.restore(); return;
       }
       try{
         const im=new Image(); im.crossOrigin='anonymous'; im.src=url; await imgLoaded(im);
-        const s=Math.min(w/im.width,h/im.height); const iw=im.width*s, ih=im.height*s;
+        const s=Math.min(w/im.width,h/im.height), iw=im.width*s, ih=im.height*s;
         const ix=x+(w-iw)/2, iy=y+(h-ih)/2;
         ctx.save(); ctx.beginPath();
-        ctx.moveTo(x+rr,y);
-        ctx.arcTo(x+w,y,x+w,y+h,rr);
-        ctx.arcTo(x+w,y+h,x,y+h,rr);
-        ctx.arcTo(x,y+h,x,y,rr);
-        ctx.arcTo(x,y,x+w,y,rr);
-        ctx.closePath(); ctx.clip();
+        ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr);
+        ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); ctx.clip();
         ctx.drawImage(im, ix,iy, iw,ih); ctx.restore();
-      }catch(_){}
+      }catch(e){}
     }
     function drawSingleLineFit(ctx, text, x, y, maxW){
       let size = parseInt((ctx.font.match(/(\d+)px/)||[])[1]||22,10);
       const fam = ctx.font.split(' ').slice(1).join(' ');
-      while (ctx.measureText(text).width > maxW && size > 12){ size -= 1; ctx.font = `bold ${size}px ${fam}`; }
+      while (ctx.measureText(text).width > maxW && size > 12){
+        size -= 1; ctx.font = `bold ${size}px ${fam}`;
+      }
       ctx.fillText(text, x, y);
     }
     function splitByWidth(ctx, text, maxW){
-      const arr = String(text).split('');
+      const arr = [...String(text)];
       const lines=[]; let buf='';
       for(const ch of arr){
-        const t = buf + ch;
-        if (ctx.measureText(t).width <= maxW) buf = t;
+        const trial = buf + ch;
+        if (ctx.measureText(trial).width <= maxW) buf = trial;
         else { if(buf) lines.push(buf); buf = ch; }
       }
       if(buf) lines.push(buf);
       return lines;
     }
-    function drawWrapAuto(ctx, text, x, cy, maxW, opt){
+    function drawWrapAuto(ctx, text, x, centerY, maxW, opt){
       const base=opt.base||22, min=opt.min||16, gap=opt.lineGap||4, maxLines=opt.maxLines||2;
       const fam = ctx.font.split(' ').slice(1).join(' ');
       let size=base, lines;
@@ -551,49 +521,53 @@
         lines[lines.length-1] = last+'…';
       }
       const totalH = lines.length*size + (lines.length-1)*gap;
-      let y = cy - totalH/2 + size/2;
+      let y = centerY - totalH/2 + size/2;
       for(const ln of lines){ ctx.fillText(ln, x, y); y += size + gap; }
     }
   }
 
+  // generate QR (dataURL) via qrcodejs
   async function generateQrDataUrl(text, size){
     await ensureQRCode();
     return await new Promise((resolve)=>{
       const tmp = document.createElement('div');
-      // eslint-disable-next-line no-new
-      new QRCode(tmp, { text, width:size, height:size, correctLevel:QRCode.CorrectLevel.M });
+      const qr = new QRCode(tmp, { text, width:size, height:size, correctLevel:QRCode.CorrectLevel.M });
       setTimeout(()=>{
         const img = tmp.querySelector('img') || tmp.querySelector('canvas');
         let url='';
-        try{ url = (img && img.tagName==='IMG') ? img.src : img.toDataURL('image/png'); }catch(_){}
+        try{
+          if(img.tagName==='IMG') url = img.src;
+          else url = img.toDataURL('image/png');
+        }catch(e){}
         tmp.remove();
         resolve(url);
       }, 0);
     });
   }
 
-  // ---------- Users ----------
+  /***********************
+   * Users / QR
+   ***********************/
   async function renderUsers(){
     try{
       const list = await api('users',{method:'GET'});
       const arr = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
-      const tbody = $('#tbl-userqr'); if(!tbody) return;
-      tbody.innerHTML = arr.map(u=>(
-`<tr>
-  <td style="width:170px"><div id="uqr-${escapeAttr(u.id)}"></div></td>
-  <td>${escapeHtml(u.id)}</td>
-  <td>${escapeHtml(u.name)}</td>
-  <td>${escapeHtml(u.role||'user')}</td>
-  <td class="text-end"><button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}">DL</button></td>
-</tr>`
-      )).join('');
+      const tbody = $('#tbl-userqr');
+      tbody.innerHTML = arr.map(u=>`
+        <tr>
+          <td style="width:170px"><div id="uqr-${escapeAttr(u.id)}"></div></td>
+          <td>${escapeHtml(u.id)}</td>
+          <td>${escapeHtml(u.name)}</td>
+          <td>${escapeHtml(u.role||'user')}</td>
+          <td class="text-end"><button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}">DL</button></td>
+        </tr>
+      `).join('');
 
       await ensureQRCode();
       for(const u of arr){
         const el = document.getElementById(`uqr-${u.id}`);
         if(!el) continue;
         el.innerHTML = '';
-        // eslint-disable-next-line no-new
         new QRCode(el, { text:`USER|${u.id}`, width:64, height:64, correctLevel:QRCode.CorrectLevel.M });
       }
 
@@ -608,7 +582,9 @@
     }
   }
 
-  // ---------- History ----------
+  /***********************
+   * History
+   ***********************/
   async function renderHistory(){
     try{
       const raw = await api('history',{method:'GET'});
@@ -616,51 +592,51 @@
                  : Array.isArray(raw?.history) ? raw.history
                  : Array.isArray(raw?.data) ? raw.data
                  : [];
-      const tbody = $('#tbl-history'); if(!tbody) return;
+      const tbody = $('#tbl-history');
       const recent = list.slice(-400).reverse();
-      tbody.innerHTML = recent.map(h=>(
-`<tr>
-  <td>${escapeHtml(h.timestamp||h.date||'')}</td>
-  <td>${escapeHtml(h.userId||'')}</td>
-  <td>${escapeHtml(h.userName||'')}</td>
-  <td>${escapeHtml(h.code||'')}</td>
-  <td>${escapeHtml(h.itemName||h.name||'')}</td>
-  <td class="text-end">${fmt(h.qty||0)}</td>
-  <td>${escapeHtml(h.unit||'')}</td>
-  <td>${escapeHtml(h.type||'')}</td>
-  <td>${escapeHtml(h.note||'')}</td>
-  <td></td>
-</tr>`
-      )).join('');
+      tbody.innerHTML = recent.map(h=>`
+        <tr>
+          <td>${escapeHtml(h.timestamp||h.date||'')}</td>
+          <td>${escapeHtml(h.userId||'')}</td>
+          <td>${escapeHtml(h.userName||'')}</td>
+          <td>${escapeHtml(h.code||'')}</td>
+          <td>${escapeHtml(h.itemName||h.name||'')}</td>
+          <td class="text-end">${fmt(h.qty||0)}</td>
+          <td>${escapeHtml(h.unit||'')}</td>
+          <td>${escapeHtml(h.type||'')}</td>
+          <td>${escapeHtml(h.note||'')}</td>
+          <td></td>
+        </tr>
+      `).join('');
     }catch{
       toast('履歴の読み込みに失敗しました。');
     }
   }
 
-  // ---------- Scanner (IO & Stocktake) ----------
+  /***********************
+   * IO (scan)
+   ***********************/
   let IO_SCANNER = null;
-  let ST_SCANNER = null;
 
-  async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 190 : 200)) {
+  async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 170 : 190)) {
     const mount = document.getElementById(mountId);
     if (mount) {
-      mount.textContent = '';
-      Object.assign(mount.style, {
-        maxWidth: isMobile() ? '360px' : '420px',
-        margin: '0 auto',
-        aspectRatio: '4 / 3',
-        position: 'relative'
-      });
+      mount.style.maxWidth = isMobile() ? '340px' : '400px';
+      mount.style.margin = '0 auto';
+      mount.style.aspectRatio = '4 / 3';
+      mount.style.position = 'relative';
     }
 
     if ('BarcodeDetector' in window) {
-      try { return await startNativeDetector(mountId, onScan); }
+      try { return await startNativeDetector(mountId, onScan, boxSize); }
       catch (e) { console.warn('BarcodeDetector fallback ke html5-qrcode', e); }
     }
 
     await ensureHtml5Qrcode();
-    const formatsOpt = (window.Html5QrcodeSupportedFormats)
-      ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.EAN_13 ] }
+    if (!window.Html5Qrcode) throw new Error('html5-qrcode tidak tersedia');
+
+    const formatsOpt = (window.Html5QrcodeSupportedFormats && Html5QrcodeSupportedFormats.QR_CODE)
+      ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] }
       : {};
 
     const cfg = {
@@ -671,21 +647,23 @@
       disableFlip: true,
       videoConstraints: {
         facingMode: { ideal: 'environment' },
-        width:  { ideal: 1280 },
-        height: { ideal: 720  },
+        width:  { ideal: 640 },
+        height: { ideal: 480 },
         focusMode: 'continuous',
-        exposureMode: 'continuous',
-        advanced: [{ zoom:2 }]
+        exposureMode: 'continuous'
       },
       ...formatsOpt
     };
 
     const scanner = new Html5Qrcode(mountId, { useBarCodeDetectorIfSupported: true });
+
     async function startWith(source) {
-      await scanner.start(source, cfg, (txt)=> onScan(String(txt||'').trim()));
+      await scanner.start(source, cfg, txt => onScan(txt));
       try {
-        await scanner.applyVideoConstraints({ advanced: [{ focusMode:'continuous' }, { exposureMode:'continuous' }, { zoom:2 }] }).catch(()=>{});
-      } catch(_){}
+        await scanner.applyVideoConstraints({
+          advanced: [{ focusMode:'continuous' }, { exposureMode:'continuous' }, { zoom:2 }]
+        }).catch(()=>{});
+      } catch(e){}
       return scanner;
     }
 
@@ -704,37 +682,35 @@
     }
   }
 
-  async function startNativeDetector(mountId, onScan){
+  async function startNativeDetector(mountId, onScan, boxSize){
     const mount = document.getElementById(mountId);
     mount.innerHTML='';
-    const video=document.createElement('video');
-    Object.assign(video, { playsInline:true, autoplay:true, muted:true });
-    Object.assign(video.style, { width:'100%', height:'100%', objectFit:'cover' });
+    const video=document.createElement('video'); video.playsInline=true; video.autoplay=true; video.muted=true;
+    video.style.width='100%'; video.style.height='100%'; video.style.objectFit='cover';
     mount.appendChild(video);
 
     const stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} },
+      video:{ facingMode:{ideal:'environment'}, width:{ideal:640}, height:{ideal:480} },
       audio:false
     });
     video.srcObject=stream;
 
-    const detector = new BarcodeDetector({ formats:['qr_code','ean_13','code_128'] });
+    const detector = new BarcodeDetector({ formats:['qr_code'] });
     let raf=0;
     const scan = async ()=>{
       try{
         const codes = await detector.detect(video);
         if(codes && codes.length){
-          const txt = (codes[0].rawValue || '').trim();
+          const txt = codes[0].rawValue || '';
           if(txt){ cancelAnimationFrame(raf); stream.getTracks().forEach(t=>t.stop()); onScan(txt); return; }
         }
-      }catch(_){}
+      }catch(e){}
       raf = requestAnimationFrame(scan);
     };
     raf = requestAnimationFrame(scan);
     return { stop:()=>{ cancelAnimationFrame(raf); stream.getTracks().forEach(t=>t.stop()); }, clear:()=>{ mount.innerHTML=''; } };
   }
 
-  // IO scan
   (function bindIO(){
     const btnStart = $('#btn-io-scan'), btnStop = $('#btn-io-stop'), area = $('#io-scan-area');
     if(!btnStart || !btnStop || !area) return;
@@ -743,13 +719,13 @@
       try{
         area.textContent = 'カメラ起動中…';
         IO_SCANNER = await startBackCameraScan('io-scan-area', (text)=>{
-          const code = (text.split('|')[1]||text).trim();
+          const code = (String(text||'').split('|')[1]||'').trim();
           if(code){ $('#io-code').value = code; findItemIntoIO(code); }
         });
       }catch(e){ toast(e?.message||String(e)); }
     });
     btnStop.addEventListener('click', async ()=>{
-      try{ await IO_SCANNER?.stop?.(); IO_SCANNER?.clear?.(); }catch(_){}
+      try{ await IO_SCANNER?.stop?.(); IO_SCANNER?.clear?.(); }catch(e){}
       area.innerHTML='カメラ待機中…';
     });
 
@@ -772,41 +748,6 @@
     });
   })();
 
-  // 棚卸 scan
-  function initStocktake(){
-    const btnScan = $('#btn-st-scan'), btnStop = $('#btn-st-stop'), area = $('#st-scan-area');
-    if(!btnScan || !btnStop || !area) return;
-
-    btnScan.onclick = async ()=>{
-      try{
-        area.textContent = 'カメラ起動中…';
-        ST_SCANNER = await startBackCameraScan('st-scan-area', (text)=>{
-          const code = (text.split('|')[1]||text).trim();
-          if(code){ $('#st-code').value = code; $('#st-qty')?.focus(); }
-        });
-      }catch(e){ toast(e?.message||String(e)); }
-    };
-
-    btnStop.onclick = async ()=>{
-      try{ await ST_SCANNER?.stop?.(); ST_SCANNER?.clear?.(); }catch(_){}
-      area.innerHTML = 'カメラ待機中…';
-    };
-
-    $('#form-stocktake')?.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      const who = getCurrentUser();
-      const code = ($('#st-code').value||'').trim();
-      const qty  = Number($('#st-qty').value||0);
-      const note = $('#st-note')?.value || '棚卸';
-      if(!code){ toast('コードを入力/スキャンしてください'); return; }
-      try{
-        const r = await api('stocktake',{method:'POST', body:{ userId: who?.id, code, qty, note }});
-        if(r?.ok){ toast('棚卸を登録しました'); $('#st-qty').value=''; renderItems(); renderDashboard(); }
-        else toast(r?.error||'登録失敗');
-      }catch(e){ toast('登録失敗: '+(e?.message||e)); }
-    });
-  }
-
   async function findItemIntoIO(code){
     try{
       let it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
@@ -815,15 +756,192 @@
         it = r && r.ok ? r.item : null;
       }
       if(!it) return;
-      const n=$('#io-name'), p=$('#io-price'), s=$('#io-stock');
-      if(n) n.value = it.name || '';
-      if(p) p.value = it.price || 0;
-      if(s) s.value = it.stock || 0;
-    }catch(_){}
+      $('#io-name').value  = it.name  || '';
+      $('#io-price').value = it.price || 0;
+      $('#io-stock').value = it.stock || 0;
+    }catch(e){
+      console.warn(e);
+    }
   }
 
-  // ---------- Boot ----------
+  /***********************
+   * STOCKTAKE (棚卸)
+   ***********************/
+  let SHELF_SCANNER = null;
+  const ST = {
+    rows: new Map(), // code => {code,name,book,qty,diff}
+  };
+
+  function parseScanText(txt){
+    // dukung: ITEM|<code>  atau JSON {t:'item', code:'...'}
+    if(/^ITEM\|/i.test(txt)) return (txt.split('|')[1]||'').trim();
+    try{
+      const o = JSON.parse(txt);
+      if((o.t==='item' || o.type==='item') && o.code) return String(o.code);
+    }catch(_){}
+    return '';
+  }
+
+  async function addOrUpdateStocktake(code, realQty){
+    if(!code) return;
+    let item = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
+    if(!item){
+      const r = await api('itemByCode',{method:'POST', body:{ code }});
+      if(r?.ok) item = r.item;
+    }
+    if(!item) return toast('アイテムが見つかりません: '+code);
+
+    const book = Number(item.stock||0);
+    const qty  = Number(realQty||0);
+    const diff = qty - book;
+    ST.rows.set(code, { code, name:item.name, book, qty, diff });
+    renderShelfTable();
+  }
+
+  function renderShelfTable(){
+    const tbody = $('#tbl-stocktake'); if(!tbody) return;
+    const isadmin = isAdmin();
+    const arr = [...ST.rows.values()];
+    tbody.innerHTML = arr.map(r=>`
+      <tr data-code="${escapeAttr(r.code)}">
+        <td>${escapeHtml(r.code)}</td>
+        <td>${escapeHtml(r.name)}</td>
+        <td class="text-end">${fmt(r.book)}</td>
+        <td class="text-end"><input type="number" class="form-control form-control-sm st-qty" value="${r.qty}"></td>
+        <td class="text-end ${r.diff===0?'':'fw-bold'}">${fmt(r.qty - r.book)}</td>
+        <td class="text-end">
+          <div class="st-actions">
+            ${isadmin ? `<button class="btn btn-outline-primary btn-st-adjust">Adjust</button>`:''}
+            ${isadmin ? `<button class="btn btn-outline-secondary btn-st-edit">Edit</button>`:''}
+          </div>
+        </td>
+      </tr>
+    `).join('');
+
+    // delegasi event
+    tbody.addEventListener('input', (e)=>{
+      const tr = e.target.closest('tr'); if(!tr) return;
+      const code = tr.getAttribute('data-code');
+      if(e.target.classList.contains('st-qty')){
+        const q = Number(e.target.value||0);
+        const rec = ST.rows.get(code); if(!rec) return;
+        rec.qty = q; rec.diff = q - rec.book;
+        tr.children[4].textContent = fmt(rec.diff);
+        tr.children[4].classList.toggle('fw-bold', rec.diff!==0);
+      }
+    });
+
+    tbody.addEventListener('click', (e)=>{
+      const tr = e.target.closest('tr'); if(!tr) return;
+      const code = tr.getAttribute('data-code');
+      const rec = ST.rows.get(code); if(!rec) return;
+
+      if(e.target.closest('.btn-st-adjust')){
+        if(!isAdmin()) return toast('Akses ditolak (admin only)');
+        openAdjustModal(rec);
+      }else if(e.target.closest('.btn-st-edit')){
+        if(!isAdmin()) return toast('Akses ditolak (admin only)');
+        openEditItem(code);
+      }
+    });
+  }
+
+  function openAdjustModal(rec){
+    const wrap = document.createElement('div');
+    wrap.className='modal fade';
+    wrap.innerHTML = `
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Adjust 在庫</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="mb-2"><b>コード：</b>${escapeHtml(rec.code)}</div>
+      <div class="mb-2"><b>名称：</b>${escapeHtml(rec.name)}</div>
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">帳簿</label><input class="form-control" value="${rec.book}" readonly></div>
+        <div class="col-md-6"><label class="form-label">新しい在庫</label><input id="aj-new" type="number" class="form-control" value="${rec.qty||rec.book}"></div>
+      </div>
+      <div class="small text-muted mt-2">この操作は即時に在庫を上書きします（履歴は別管理）。</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+      <button class="btn btn-primary" id="aj-save">保存</button>
+    </div>
+  </div>
+</div>`;
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap);
+    modal.show();
+
+    $('#aj-save',wrap)?.addEventListener('click', async ()=>{
+      try{
+        const newStock = Number($('#aj-new',wrap).value||0);
+        const payload = { code: rec.code, name: rec.name, stock: newStock, overwrite: true };
+        const r = await api('updateItem',{method:'POST', body: payload});
+        if(r?.ok){
+          // sinkronkan tampilan
+          rec.book = newStock;
+          rec.qty  = newStock;
+          rec.diff = 0;
+          ST.rows.set(rec.code, rec);
+          renderShelfTable();
+          // refresh cache item
+          const idx = _ITEMS_CACHE.findIndex(x=>String(x.code)===String(rec.code));
+          if(idx>=0) _ITEMS_CACHE[idx].stock = newStock;
+          modal.hide(); wrap.remove();
+          toast('在庫を更新しました');
+        }else toast(r?.error||'更新失敗');
+      }catch(e){ toast('更新失敗: '+(e?.message||e)); }
+    });
+
+    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
+  }
+
+  (function bindShelf(){
+    const btnStart = $('#btn-start-scan'), btnStop = $('#btn-stop-scan'), area = $('#scan-area');
+    if(!btnStart || !btnStop || !area) return;
+
+    btnStart.addEventListener('click', async ()=>{
+      try{
+        area.textContent = 'カメラ起動中…';
+        SHELF_SCANNER = await startBackCameraScan('scan-area', async (text)=>{
+          const code = parseScanText(String(text||''));
+          if(code){ await addOrUpdateStocktake(code, ST.rows.get(code)?.qty ?? undefined); }
+        }, (isMobile()? 160 : 180));
+      }catch(e){ toast(e?.message||String(e)); }
+    });
+
+    btnStop.addEventListener('click', async ()=>{
+      try{ await SHELF_SCANNER?.stop?.(); SHELF_SCANNER?.clear?.(); }catch(e){}
+      area.innerHTML='カメラ待機中…';
+    });
+
+    // filter baris
+    $('#st-filter')?.addEventListener('input', (e)=>{
+      const q = (e.target.value||'').toLowerCase();
+      $$('#tbl-stocktake tr').forEach(tr=>{
+        const code = (tr.children[0]?.textContent||'').toLowerCase();
+        const name = (tr.children[1]?.textContent||'').toLowerCase();
+        tr.style.display = (code.includes(q) || name.includes(q)) ? '' : 'none';
+      });
+    });
+
+    // tambah manual
+    $('#st-add')?.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const code = ($('#st-code').value||'').trim();
+      const qty  = Number($('#st-qty').value||0);
+      if(!code) return;
+      await addOrUpdateStocktake(code, qty||undefined);
+      $('#st-code').value=''; $('#st-qty').value='';
+    });
+  })();
+
+  /***********************
+   * Boot
+   ***********************/
   window.addEventListener('DOMContentLoaded', ()=>{
+    // set logo dari CONFIG.LOGO_URL
     const logo = document.getElementById('brand-logo');
     if (logo && window.CONFIG && CONFIG.LOGO_URL){
       logo.src = CONFIG.LOGO_URL;
@@ -833,7 +951,6 @@
 
     renderDashboard();
     $('#btn-logout')?.addEventListener('click', logout);
-    initStocktake();
   });
 
 })();
