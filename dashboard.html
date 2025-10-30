@@ -5,54 +5,42 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>在庫管理 - ダッシュボード</title>
 
-  <!-- Bootstrap CSS (CDN → fallback lokal) -->
+  <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
         onerror="this.onerror=null;this.href='vendor/bootstrap.min.css'"/>
-  <!-- Bootstrap Icons (CDN → lokal) -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"
         onerror="this.onerror=null;this.href='vendor/bootstrap-icons.css'"/>
 
-  <!-- App styles -->
-  <link href="styles.css?v=20251030a" rel="stylesheet"/>
-  <link href="print.css?v=20251029" rel="stylesheet"/>
-
+  <link href="styles.css?v=20251030b" rel="stylesheet"/>
+  <link href="print.css?v=20251030" rel="stylesheet"/>
   <style>
     header.appbar{position:sticky;top:0;z-index:1020;background:#fff;border-bottom:1px solid #e5e7eb}
     header .brand{display:flex;align-items:center;gap:.6rem}
     header .brand img{height:32px}
     .sidebar{min-width:240px;max-width:260px;padding:14px}
-   @media (max-width:992px){
-    .layout{display:block}
-    .sidebar{
-      position:fixed; left:0; top:0; bottom:0;
-      transform: translateX(-100%);
-      transition: transform .2s;
-      width:82%; max-width:320px;
-      z-index:1040; background:#0b1727;
-      overflow:auto;
+    @media (max-width:992px){
+      .layout{display:block}
+      .sidebar{
+        position:fixed; left:0; top:0; bottom:0;
+        transform: translateX(-100%);
+        transition: transform .2s;
+        width:86%; max-width:360px;
+        z-index:1040; background:#0b1727;
+        overflow:auto;
+      }
+      .sidebar.open{ transform:none; }
+      #sb-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.3); display:none; z-index:1030; }
+      #sb-backdrop.show{ display:block; }
     }
-    .sidebar.open{ transform:none; }
-    #sb-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.3); display:none; z-index:1030; }
-    #sb-backdrop.show{ display:block; }
-  }
     main{flex:1}
     .layout{display:flex;min-height:100vh;gap:0}
     .content{padding:16px}
-
-    /* Scan area (IO & 棚卸) */
-    #io-scan-area, #scan-area{
-      width:100%; max-width:420px; margin:0 auto; aspect-ratio: 4/3;
-      position:relative; overflow:hidden; background:#0b0b0b10; border-radius:12px;
-    }
-    #io-scan-area video, #io-scan-area canvas, #io-scan-area img,
-    #scan-area video,   #scan-area canvas,   #scan-area img{
-      width:100% !important; height:100% !important; object-fit:cover;
-    }
-    .html5-qrcode-element{ display:none !important; } /* hide lib UI */
+    #io-scan-area,#scan-area{width:100%;max-width:420px;margin:0 auto;aspect-ratio:4/3;position:relative;overflow:hidden;background:#0b0b0b10;border-radius:12px}
+    #io-scan-area video,#scan-area video{width:100%!important;height:100%!important;object-fit:cover}
+    .html5-qrcode-element{display:none!important}
   </style>
 </head>
 <body>
-  <!-- Appbar -->
   <header class="appbar">
     <div class="container-fluid py-2">
       <div class="d-flex align-items-center justify-content-between">
@@ -72,7 +60,6 @@
   <div id="sb-backdrop"></div>
 
   <div class="layout">
-    <!-- Sidebar -->
     <aside id="sb" class="sidebar">
       <nav class="d-flex flex-column gap-1">
         <a data-view="view-dashboard" class="active"><i class="bi bi-speedometer2"></i> ダッシュボード</a>
@@ -84,7 +71,6 @@
       </nav>
     </aside>
 
-    <!-- Main -->
     <main class="w-100">
       <div class="content container-fluid">
         <div class="d-flex align-items-center justify-content-between mb-3">
@@ -116,32 +102,20 @@
           <div class="row g-3">
             <div class="col-lg-8">
               <div class="card p-3">
-                <div class="text-muted small mb-2">月次 IN/OUT</div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div class="text-muted small">月次 IN/OUT</div>
+                  <button id="btn-export-mov" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-download me-1"></i>CSV
+                  </button>
+                </div>
                 <div class="chart-box"><canvas id="chart-monthly"></canvas></div>
               </div>
             </div>
             <div class="col-lg-4">
               <div class="card p-3">
                 <div class="text-muted small mb-2">当月比率</div>
-               <div class="chart-box"><canvas id="chart-pie"></canvas></div>
+                <div class="chart-box"><canvas id="chart-pie"></canvas></div>
               </div>
-            </div>
-          </div>
-
-          <div class="card p-3 mt-3">
-            <div class="d-flex items-toolbar">
-              <div class="left"><div class="fw-semibold">当月アイテム別の動き</div></div>
-              <div class="right">
-                <button id="btn-export-mov" class="btn btn-sm btn-outline-secondary">
-                  <i class="bi bi-filetype-csv me-1"></i>CSV
-                </button>
-              </div>
-            </div>
-            <div class="table-responsive">
-              <table class="table table-sm align-middle">
-                <thead><tr><th>コード</th><th>名称</th><th class="text-end">IN</th><th class="text-end">OUT</th><th class="text-end">NET</th></tr></thead>
-                <tbody id="tbl-mov"></tbody>
-              </table>
             </div>
           </div>
         </section>
@@ -164,6 +138,10 @@
               <div class="left"><div class="fw-semibold">入出庫入力</div></div>
               <div class="right">
                 <button id="btn-io-lookup" class="btn btn-sm btn-outline-secondary"><i class="bi bi-search me-1"></i>照会</button>
+                <!-- Export/Import -->
+                <button id="btn-io-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
+                <button id="btn-io-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
+                <input id="input-io-import" type="file" accept=".csv" class="d-none">
               </div>
             </div>
             <form id="form-io" class="row g-3">
@@ -199,11 +177,14 @@
           <div class="card p-3">
             <div class="items-toolbar">
               <div class="left">
-                <div class="fw-semibold">手入力</div>
+                <div class="fw-semibold">棚卸入力</div>
                 <input id="st-filter" class="form-control search" placeholder="コード/名称で絞り込み…"/>
               </div>
               <div class="right">
                 <button id="st-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+                <button id="st-export2" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
+                <button id="st-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
+                <input id="input-st-import" type="file" accept=".csv" class="d-none">
               </div>
             </div>
 
@@ -234,6 +215,8 @@
             <div class="right">
               <button id="btn-items-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
               <button id="btn-items-xlsx" class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+              <button id="btn-items-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
+              <input id="input-items-import" type="file" accept=".csv" class="d-none">
               <button id="btn-items-print-all" class="btn btn-sm btn-outline-secondary"><i class="bi bi-printer me-1"></i> 全件ラベルを印刷</button>
               <button id="btn-open-new-item" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i> 新規</button>
             </div>
@@ -259,7 +242,6 @@
               </table>
             </div>
 
-            <!-- 詳細パネル -->
             <div id="card-item-detail" class="card p-3 mt-3 d-none">
               <div class="d-flex justify-content-between align-items-center mb-2">
                 <div class="fw-semibold">詳細</div>
@@ -275,9 +257,10 @@
           <div class="items-toolbar card p-3 mb-3">
             <div class="left"><div class="fw-semibold">ユーザー / QR</div></div>
             <div class="right">
-              <button id="btn-print-qr-users" class="btn btn-sm btn-outline-secondary">
-  <i class="bi bi-printer me-1"></i> 印刷
-</button>
+              <button id="btn-users-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
+              <button id="btn-users-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
+              <input id="input-users-import" type="file" accept=".csv" class="d-none">
+              <button id="btn-print-qr-users" class="btn btn-sm btn-outline-secondary"><i class="bi bi-printer me-1"></i> 印刷</button>
               <button id="btn-open-new-user" class="btn btn-sm btn-primary d-none"><i class="bi bi-plus-circle me-1"></i> 新規ユーザー</button>
             </div>
           </div>
@@ -302,7 +285,10 @@
         <section id="view-history" class="d-none">
           <div class="items-toolbar card p-3 mb-3">
             <div class="left"><div class="fw-semibold">履歴</div></div>
-            <div class="right"><span class="badge-soft">最新400件を表示</span></div>
+            <div class="right">
+              <button id="btn-history-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
+              <span class="badge-soft">最新400件を表示</span>
+            </div>
           </div>
 
           <div class="card p-3">
@@ -323,69 +309,36 @@
     </main>
   </div>
 
-  <!-- ===== Global Loading ===== -->
+  <!-- Loading -->
   <div id="global-loading" class="d-none">
-    <div class="box">
-      <div class="spinner"></div>
-      <div id="loading-text" class="text">読み込み中…</div>
-    </div>
+    <div class="box"><div class="spinner"></div><div id="loading-text" class="text">読み込み中…</div></div>
   </div>
 
-  <!-- Core libs -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
           onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <!-- html5-qrcode (prefetch; app.js juga fallback jika tidak ada) -->
-  <script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 
-  <!-- Konfigurasi & App -->
   <script src="./config.js"></script>
   <script src="./app.js"></script>
-<script>
-/* --- Burger Universal Hotfix --- */
-(function(){
-  const sb = document.getElementById('sb');
-  const bd = document.getElementById('sb-backdrop');
-  function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
-  function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
 
-  // tangkap SEMUA variasi tombol burger
-  const isBurger = (el)=>{
-    if(!el) return false;
-    if(el.closest?.('[data-burger]')) return true;
-    const id = el.id || '';
-    const cl = el.className || '';
-    return /burger/i.test(id+ ' ' + cl);
-  };
-
-  document.addEventListener('click', (e)=>{
-    if(isBurger(e.target)){ e.preventDefault(); toggleSB(); }
-    if(e.target === bd){ closeSB(); }
-  }, true);
-
-  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSB(); });
-
-  // jaga2: expose util untuk dipakai tempat lain
-  window.__toggleSidebar = toggleSB;
-})();
-</script>
-
-  <!-- Burger/open sidebar cadangan -->
+  <!-- Burger universal hotfix -->
   <script>
-    (function(){
-      const sb = document.getElementById('sb');
-      const bd = document.getElementById('sb-backdrop');
-      function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
-      function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
-      document.addEventListener('click', (e)=>{
-        const trg = e.target.closest('[data-burger]');
-        if(trg){ e.preventDefault(); toggleSB(); }
-      });
-      bd?.addEventListener('click', closeSB);
-      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSB(); });
-    })();
+  (function(){
+    const sb = document.getElementById('sb');
+    const bd = document.getElementById('sb-backdrop');
+    function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
+    function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
+    const isBurger = (el)=> !!(el && (el.closest?.('[data-burger]') || /burger|btn-menu|^burger$/.test(el.id||'')));
+    document.addEventListener('click', (e)=>{
+      if(isBurger(e.target)){ e.preventDefault(); toggleSB(); }
+      if(e.target===bd) closeSB();
+    }, true);
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSB(); });
+    window.__toggleSidebar = toggleSB;
+  })();
   </script>
 </body>
 </html>
