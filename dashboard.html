@@ -341,6 +341,34 @@
   <!-- Konfigurasi & App -->
   <script src="./config.js"></script>
   <script src="./app.js"></script>
+<script>
+/* --- Burger Universal Hotfix --- */
+(function(){
+  const sb = document.getElementById('sb');
+  const bd = document.getElementById('sb-backdrop');
+  function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
+  function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
+
+  // tangkap SEMUA variasi tombol burger
+  const isBurger = (el)=>{
+    if(!el) return false;
+    if(el.closest?.('[data-burger]')) return true;
+    const id = el.id || '';
+    const cl = el.className || '';
+    return /burger/i.test(id+ ' ' + cl);
+  };
+
+  document.addEventListener('click', (e)=>{
+    if(isBurger(e.target)){ e.preventDefault(); toggleSB(); }
+    if(e.target === bd){ closeSB(); }
+  }, true);
+
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSB(); });
+
+  // jaga2: expose util untuk dipakai tempat lain
+  window.__toggleSidebar = toggleSB;
+})();
+</script>
 
   <!-- Burger/open sidebar cadangan -->
   <script>
