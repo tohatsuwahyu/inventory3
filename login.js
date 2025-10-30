@@ -90,40 +90,53 @@
     return null;
   }
 
-  async function startQR(){
+async function startQR(){
+  // 1) Native dulu
+  if(await startNative()) return;
+
+  // 2) Fallback html5-qrcode (tuning mobile)
+  try{
+    await ensureHtml5();
+    const area = document.getElementById('qr-area');
+    if(area) area.style.display='block';
+
+    const cfg = {
+      fps: 24,
+      qrbox: { width: 150, height: 150 },
+      aspectRatio: 1.33,
+      rememberLastUsedCamera: true,
+      disableFlip: true,
+      videoConstraints:{
+        facingMode:{ ideal:'environment' },
+        width:{ ideal:1280 }, height:{ ideal:720 },
+        focusMode:'continuous', exposureMode:'continuous'
+      }
+    };
+
+    scanner = new Html5Qrcode('qr-area', { useBarCodeDetectorIfSupported:true });
+    async function startWith(source){
+      await scanner.start(source, cfg, onScan);
+      try{
+        await scanner.applyVideoConstraints({
+          advanced:[{focusMode:'continuous'},{exposureMode:'continuous'},{zoom:3}]
+        }).catch(()=>{});
+      }catch(_){}
+      return scanner;
+    }
+
     try{
-      await ensureHtml5();
-      $area.style.display='block';
+      await startWith({ facingMode:'environment' });
+    }catch(_){
+      const cams = await Html5Qrcode.getCameras();
+      const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams.at(-1);
+      await startWith({ deviceId:{ exact: back.id } });
+    }
+  }catch(err){
+    toast('QRログインを開始できませんでした: '+(err?.message||err));
+    try{ await stopQR(); }catch{}
+  }
+}
 
-      // ——— setting cepat: fps tinggi + resolusi 640x480 + kotak kecil
-      const cfg = {
-  fps: 24,
-  qrbox: { width: 150, height: 150 },   // ← kecilkan ke 150
-  aspectRatio: 1.33,
-        rememberLastUsedCamera: true,
-        disableFlip: true,
-        videoConstraints:{
-          facingMode:{ ideal:'environment' },
-          width:{ ideal:640 }, height:{ ideal:480 },
-          focusMode:'continuous', exposureMode:'continuous'
-        }
-      };
-
-      scanner = new Html5Qrcode('qr-area', { useBarCodeDetectorIfSupported:true });
-
-      const onScan = async (txt)=>{
-        const p = parseQR(txt);
-        if(!p) return;                // bukan format kita → abaikan
-        await stopQR();               // hentikan agar tak dobel
-        try{
-          const r = (p.kind==='byId')
-            ? await api('loginById',{method:'POST',body:{id:p.id}})
-            : await api('login',{method:'POST',body:{id:p.id,pass:p.pin}});
-          if(!r || r.ok===false) return toast(r?.error||'ログインに失敗しました。');
-          localStorage.setItem('currentUser', JSON.stringify(r.user));
-          location.href='dashboard.html';
-        }catch(err){ toast('QRログイン失敗: '+(err?.message||err)); }
-      };
 
       async function startWith(source){
         await scanner.start(source, cfg, onScan);
