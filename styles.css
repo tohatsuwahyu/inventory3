@@ -118,3 +118,31 @@ main section.active{ opacity:1; transform:none; }
 }
 /* Pastikan canvas mengikuti tinggi container */
 .chart-box canvas{ width:100% !important; height:100% !important; }
+/* === Table header & cell === */
+.table thead th{ background:#f3f6ff; color:#334155; border-bottom:1px solid var(--border-strong); }
+.table th, .table td{ vertical-align: middle; padding:.65rem .8rem; }
+
+/* Kolom lebar fix */
+.table th:nth-child(1), .table td:nth-child(1){ width:110px; }   /* QR mini */
+.table th:last-child, .table td:last-child{ width:140px; }       /* 操作 */
+
+/* Grid aksi: 2 kolom, 2 baris */
+.act-grid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:.4rem .5rem;
+  justify-items:center;
+}
+.act-grid .btn{ width:42px; height:36px; padding:0; display:flex; align-items:center; justify-content:center; }
+
+/* Mobile tuning */
+@media (max-width: 576px){
+  .content{ padding:12px; }
+  .table th, .table td{ padding:.5rem .6rem; }
+  .table th:nth-child(1), .table td:nth-child(1){ width:90px; }
+  .table th:last-child, .table td:last-child{ width:128px; }
+  .act-grid .btn{ width:40px; height:34px; }
+}
+
+/* QR img kecil di tabel tidak merapat ke kiri */
+.tbl-qr-box{ display:flex; align-items:center; justify-content:center; }
