@@ -214,3 +214,30 @@ header.appbar .brand img{ height:32px; }
 }
 .app-footer b{ color:#374151; }
 @media print{ .app-footer{ display:none !important; } }
+/* ==== Tap-safe & header polish ==== */
+button, a, input, label { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+header.appbar .btn { white-space: nowrap; }
+header.appbar #btn-logout { height: 36px; padding: 6px 10px; border-radius: 12px; }
+
+/* ==== Global loading overlay ==== */
+#global-loading {
+  position: fixed; inset: 0;
+  background: rgba(255,255,255,.7);
+  backdrop-filter: saturate(1.1) blur(2px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2000;
+}
+#global-loading.d-none { display: none; }
+#global-loading .box {
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  padding:16px 18px; background:#fff; border:1px solid #e5e7eb;
+  border-radius:14px; box-shadow: var(--shadow);
+}
+#global-loading .spinner {
+  width:28px; height:28px; border-radius:50%;
+  border:3px solid #cbd5e1; border-top-color: var(--primary);
+  animation: spin 1s linear infinite;
+}
+#global-loading .text { font-size:.95rem; color:#475569; }
+@keyframes spin { to { transform: rotate(360deg); } }
