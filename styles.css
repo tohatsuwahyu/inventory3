@@ -129,3 +129,87 @@ main section.active{ opacity:1; transform:none; }
   .table th:last-child, .table td:last-child{ width:128px; }
   .act-grid .btn{ width:40px; height:34px; }
 }
+/* ===== Mobile Polishing (≤ 420px) ===== */
+@media (max-width: 420px){
+
+  /* Appbar & header spacing */
+  header.appbar .container-fluid{ padding-top:8px; padding-bottom:8px; }
+  header.appbar .brand{ gap:.5rem; }
+  header.appbar .brand img{ height:28px; }
+  #btn-menu, [data-burger]{ height:38px; padding:6px 10px; border-radius:12px; }
+
+  /* Sidebar sheet feel */
+  .sidebar{ width:86% !important; max-width: 360px; }
+  .sidebar nav a{ padding:.7rem .9rem; border-radius:12px; }
+
+  /* Section title & cards */
+  .section-title{ font-size:1.05rem; letter-spacing:.02em; }
+  .card{ border-radius:16px; }
+
+  /* Toolbar “商品一覧” */
+  #view-items .items-toolbar{ gap:.5rem; }
+  #view-items .items-toolbar .left{ width:100%; }
+  #view-items .items-toolbar .right{
+    width:100%; display:flex; gap:.5rem; flex-wrap:wrap;
+  }
+  #view-items .items-toolbar .search{
+    flex:1; min-width:0; height:42px;
+  }
+  #view-items .items-toolbar .btn{
+    height:38px; padding:0 12px; border-radius:12px;
+  }
+
+  /* Tabel – header jelas & sticky */
+  #view-items .table thead th{
+    font-size:.82rem; white-space:nowrap;
+    position:sticky; top:0; z-index:1;
+  }
+  #view-items .table td, #view-items .table th{
+    padding:.55rem .6rem;
+  }
+
+  /* Kolom QR jangan terlalu lebar */
+  #view-items .qr-cell,
+  #view-items thead th:first-child,
+  #view-items tbody td:first-child{
+    width:130px !important; min-width:130px !important;
+  }
+
+  /* Kolom 置場 monospace tetap rapi */
+  #view-items thead th:nth-child(8),
+  #view-items tbody td:nth-child(8){
+    font-size:.9rem; letter-spacing:.4px; white-space:nowrap;
+  }
+
+  /* Aksi per baris jadi grid 1×3 ikon – tidak menumpuk */
+  #view-items .act-grid{
+    display:grid; grid-template-columns: repeat(3, 40px);
+    gap:.35rem; justify-content:flex-end;
+  }
+  #view-items .act-grid .btn{
+    width:40px; height:40px; padding:0;
+    border-radius:12px; display:flex; align-items:center; justify-content:center;
+  }
+  #view-items .act-grid .btn i{ font-size:1rem; }
+
+  /* Hindari chip merah/biru melebar (dari style lama) */
+  #view-items .act-grid .btn-outline-success,
+  #view-items .act-grid .btn-outline-secondary,
+  #view-items .act-grid .btn-danger{
+    min-width:40px; max-width:40px;
+  }
+
+  /* Kartu tabel (container) diberi breathing space */
+  #view-items .card{ padding:14px; }
+}
+
+/* ===== Small tablets (421–768px) – sedikit lebih lega ===== */
+@media (min-width:421px) and (max-width:768px){
+  #view-items .items-toolbar .search{ min-width:240px; }
+  #view-items .act-grid{ grid-template-columns: repeat(3, 44px); gap:.45rem; }
+  #view-items .act-grid .btn{ width:44px; height:44px; }
+}
+
+/* ===== Ikon tombol lebih konsisten di semua ukuran ===== */
+#view-items .act-grid .btn-dl::after{ content: "DL"; font-weight:600; font-size:.8rem; }
+#view-items .act-grid .btn-preview i::before{ margin-top:1px; }
