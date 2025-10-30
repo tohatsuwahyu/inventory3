@@ -618,69 +618,102 @@
    ***********************/
   let IO_SCANNER = null;
 
-  async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 170 : 190)) {
-    const mount = document.getElementById(mountId);
-    if (mount) {
-      mount.style.maxWidth = isMobile() ? '340px' : '400px';
-      mount.style.margin = '0 auto';
-      mount.style.aspectRatio = '4 / 3';
-      mount.style.position = 'relative';
-    }
-
-    if ('BarcodeDetector' in window) {
-      try { return await startNativeDetector(mountId, onScan, boxSize); }
-      catch (e) { console.warn('BarcodeDetector fallback ke html5-qrcode', e); }
-    }
-
-    await ensureHtml5Qrcode();
-    if (!window.Html5Qrcode) throw new Error('html5-qrcode tidak tersedia');
-
-    const formatsOpt = (window.Html5QrcodeSupportedFormats && Html5QrcodeSupportedFormats.QR_CODE)
-      ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] }
-      : {};
-
-    const cfg = {
-      fps: 24,
-      qrbox: { width: boxSize, height: boxSize },
-      aspectRatio: 1.33,
-      rememberLastUsedCamera: true,
-      disableFlip: true,
-      videoConstraints: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 640 },
-        height: { ideal: 480 },
-        focusMode: 'continuous',
-        exposureMode: 'continuous'
-      },
-      ...formatsOpt
-    };
-
-    const scanner = new Html5Qrcode(mountId, { useBarCodeDetectorIfSupported: true });
-
-    async function startWith(source) {
-      await scanner.start(source, cfg, txt => onScan(txt));
-      try {
-        await scanner.applyVideoConstraints({
-          advanced: [{ focusMode:'continuous' }, { exposureMode:'continuous' }, { zoom:2 }]
-        }).catch(()=>{});
-      } catch(e){}
-      return scanner;
-    }
-
-    try {
-      return await startWith({ facingMode: 'environment' });
-    } catch (err1) {
-      try {
-        const cams = await Html5Qrcode.getCameras();
-        if (!cams?.length) throw err1;
-        const back = cams.find(c => /back|rear|environment/i.test(c.label)) || cams.at(-1);
-        return await startWith({ deviceId: { exact: back.id } });
-      } catch (err2) {
-        await scanner?.stop?.(); scanner?.clear?.();
-        throw new Error('カメラが見つかりません。権限/ネットワークをご確認ください。');
-      }
-    }
+  async function startBackCameraScan(mountId, onScan, boxSize = (/Android|iPhone|iPad/i.test(navigator.userAgent)? 160 : 190)) {
+  const mount = document.getElementById(mountId);
+  if (mount) {
+    Object.assign(mount.style, { maxWidth: '420px', margin: '0 auto', aspectRatio:'4/3', position:'relative' });
   }
+
+  // 1) Coba native API (lebih cepat & stabil di iOS/Android modern)
+  if ('BarcodeDetector' in window) {
+    try {
+      const ok = await (async ()=>{
+        let stream;
+        const video = Object.assign(document.createElement('video'), { playsInline:true, autoplay:true, muted:true });
+        Object.assign(video.style,{ width:'100%', height:'100%', objectFit:'cover' });
+        mount.innerHTML=''; mount.appendChild(video);
+
+        // pilih kamera belakang dengan enumerateDevices
+        const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+        const back = devs.find(d=>/back|rear|environment/i.test(d.label)) || devs.at(-1);
+        const constraints = {
+          audio:false,
+          video:{
+            deviceId: back ? { exact: back.deviceId } : { ideal: 'environment' },
+            width:{ ideal:1280 }, height:{ ideal:720 },
+            focusMode:'continuous', exposureMode:'continuous'
+          }
+        };
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+
+        const detector = new BarcodeDetector({ formats:['qr_code'] });
+        let raf=0, stopped=false;
+        const loop = async ()=>{
+          if(stopped) return;
+          try{
+            const codes = await detector.detect(video);
+            if(codes?.length){
+              const txt = codes[0].rawValue || '';
+              if(txt){ stop(); onScan(txt); return; }
+            }
+          }catch(_){}
+          raf = requestAnimationFrame(loop);
+        };
+        const stop = ()=>{ stopped=true; cancelAnimationFrame(raf); stream?.getTracks()?.forEach(t=>t.stop()); mount.innerHTML=''; };
+        loop();
+
+        // kembalikan “objek scanner” kompatibel
+        return {
+          stop: async ()=> stop(),
+          clear: ()=>{ try{ mount.innerHTML=''; }catch{} }
+        };
+      })();
+      if (ok) return ok;
+    } catch(e){ console.warn('Native detector gagal, fallback → html5-qrcode', e); }
+  }
+
+  // 2) Fallback ke html5-qrcode
+  await ensureHtml5Qrcode();
+  const formatsOpt = (window.Html5QrcodeSupportedFormats && Html5QrcodeSupportedFormats.QR_CODE)
+    ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] }
+    : {};
+  const cfg = {
+    fps: 24,
+    qrbox: { width: boxSize, height: boxSize },
+    aspectRatio: 1.33,
+    rememberLastUsedCamera: true,
+    disableFlip: true,
+    videoConstraints: {
+      facingMode: { ideal: 'environment' },
+      width:  { ideal: 1280 },
+      height: { ideal: 720 },
+      focusMode: 'continuous',
+      exposureMode: 'continuous'
+    },
+    ...formatsOpt
+  };
+  const scanner = new Html5Qrcode(mountId, { useBarCodeDetectorIfSupported: true });
+  async function startWith(source){
+    await scanner.start(source, cfg, txt => onScan(txt));
+    // coba set zoom > 2 untuk smartphone
+    try{
+      await scanner.applyVideoConstraints({ advanced:[{ focusMode:'continuous' }, { exposureMode:'continuous' }, { zoom: 3 }] })
+                  .catch(()=>{});
+    }catch(_){}
+    return scanner;
+  }
+  try {
+    return await startWith({ facingMode:'environment' });
+  } catch(e) {
+    // explicit pilih kamera belakang
+    const cams = await Html5Qrcode.getCameras();
+    if(!cams?.length) throw new Error('カメラが見つかりません。権限をご確認ください。');
+    const back = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams.at(-1);
+    return await startWith({ deviceId:{ exact: back.id } });
+  }
+}
+
 
   async function startNativeDetector(mountId, onScan, boxSize){
     const mount = document.getElementById(mountId);
