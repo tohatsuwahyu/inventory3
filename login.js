@@ -8,7 +8,15 @@
   /* CSS anti overlay/tap miss */
   (function injectTapCss(){
     const css = `
-      #qr-area{ position:relative; z-index:1; }
+      #global-loading{ position:fixed; inset:0; background:rgba(255,255,255,.7); backdrop-filter:saturate(1.1) blur(2px);
+        display:flex; align-items:center; justify-content:center; z-index:2000; }
+      #global-loading.d-none{ display:none; }
+      #global-loading .box{ display:flex; flex-direction:column; align-items:center; gap:10px;
+        padding:16px 18px; background:#fff; border:1px solid #e5e7eb; border-radius:14px; box-shadow:0 8px 26px rgba(15,23,42,.06); }
+      #global-loading .spinner{ width:28px; height:28px; border-radius:50%; border:3px solid #cbd5e1; border-top-color:#2563eb; animation:spin 1s linear infinite; }
+      #global-loading .text{ font-size:.95rem; color:#475569; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+#qr-area{ position:relative; z-index:1; }
       #global-loading{ pointer-events:none !important; }
       button, a, input, label{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
       .html5-qrcode-element{ display:none !important; }
@@ -34,6 +42,23 @@
   }
 
   function toast(m){ alert(m); }
+  
+  function showLoadingOverlay(text){
+    let el = document.getElementById('global-loading');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'global-loading';
+      el.className = 'd-none';
+      el.innerHTML = '<div class="box"><div class="spinner"></div><div id="loading-text" class="text"></div></div>';
+      document.body.appendChild(el);
+    }
+    var t = document.getElementById('loading-text'); if(t){ t.textContent = text || 'Loading...'; }
+    el.classList.remove('d-none');
+  }
+  function hideLoadingOverlay(){
+    const el = document.getElementById('global-loading');
+    if(el){ el.classList.add('d-none'); }
+  }
   function loadScriptOnce(src){
     return new Promise((resolve,reject)=>{
       if ([...document.scripts].some(s=>s.src===src || s.src.endsWith(src))) return resolve();
@@ -72,10 +97,10 @@
     if(!id) return toast('ユーザーIDを入力してください。');
     try{
       const r=await api('login',{method:'POST',body:{id,pass:pin}});
-      if(!r || r.ok===false) return toast(r?.error||'ログインに失敗しました。');
+      if(!r || r.ok===false){ hideLoadingOverlay(); return toast(r?.error||'ログインに失敗しました。'); }
       localStorage.setItem('currentUser', JSON.stringify(r.user));
       location.href='dashboard.html';
-    }catch(err){ toast('ログイン失敗: '+(err?.message||err)); }
+    }catch(err){ hideLoadingOverlay(); toast('ログイン失敗: '+(err?.message||err)); }
   });
   [$id,$pin].forEach(el=>el?.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $btn?.click(); }}));
 
@@ -108,13 +133,14 @@
     const p = parseQR(String(txt||'')); if(!p) return;
     await stopQR();
     try{
+      showLoadingOverlay('Sedang login...');
       const r = (p.kind==='byId')
         ? await api('loginById',{method:'POST',body:{id:p.id}})
         : await api('login',{method:'POST',body:{id:p.id,pass:p.pin}});
-      if(!r || r.ok===false) return toast(r?.error||'ログインに失敗しました。');
+      if(!r || r.ok===false){ hideLoadingOverlay(); return toast(r?.error||'ログインに失敗しました。'); }
       localStorage.setItem('currentUser', JSON.stringify(r.user));
       location.href='dashboard.html';
-    }catch(err){ toast('QRログイン失敗: '+(err?.message||err)); }
+    }catch(err){ hideLoadingOverlay(); toast('QRログイン失敗: '+(err?.message||err)); }
   }
 
   async function startNative(){
