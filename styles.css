@@ -159,7 +159,7 @@ input[readonly], .form-control[readonly]{ background:#f8fafc; }
 
 /* Mobile ≤ 420px */
 @media (max-width: 420px){
-  .sidebar{ display:none; }
+  /* HAPUS display:none; → burger akan berfungsi */
   .layout{ display:block; }
   .items-toolbar{ flex-direction:column; align-items:stretch; gap:.6rem; }
   .items-toolbar .left, .items-toolbar .right{ width:100%; }
@@ -193,17 +193,22 @@ input[readonly], .form-control[readonly]{ background:#f8fafc; }
   .card{ border-radius:14px; }
 }
 
-/* Tablet: 421–991px */
-@media (min-width: 421px) and (max-width: 991px){
+/* Off-canvas sidebar untuk mobile & tablet (≤991px) */
+@media (max-width: 991px){
   .sidebar{
     position:fixed; left:0; top:0; bottom:0;
+    width:86%; max-width:360px;
+    background:#0b1727; color:#c9d2e3; overflow:auto;
     transform: translateX(-100%);
-    transition: transform .2s;
-    width:86%; max-width:360px; z-index:1040;
-    background:#0b1727; overflow:auto;
+    transition: transform .18s ease-out;
+    z-index:1040;
   }
   .sidebar.open{ transform:none; }
-  #sb-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.3); display:none; z-index:1030; }
+
+  #sb-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,.35);
+    display:none; z-index:1030;
+  }
   #sb-backdrop.show{ display:block; }
 
   .items-toolbar .search{ min-width:240px; }
@@ -248,30 +253,24 @@ input[readonly], .form-control[readonly]{ background:#f8fafc; }
 
 /* Canvas image preview window fix */
 img{ max-width:100%; height:auto; }
+
 /* Rapi-in header & tombol kolom '操作' di 商品一覧 */
 #view-items thead th:last-child{
   text-align:center !important;
-  min-width: 180px;            /* ruang cukup untuk 3–4 tombol */
+  min-width: 180px;
   width: 1%;
   white-space: nowrap;
 }
-
-#view-items tbody td:last-child{
-  text-align:center !important;
-}
-
+#view-items tbody td:last-child{ text-align:center !important; }
 #view-items tbody td:last-child .act-grid{
-  grid-template-columns: repeat(4, 38px);  /* seragam */
+  grid-template-columns: repeat(4, 38px);
   gap: .4rem;
   justify-content: center;
   margin-inline: auto;
 }
-
 #view-items tbody td:last-child .act-grid .btn{
-  width:38px; height:38px;     /* tinggi/lebarnya konsisten */
-  padding:0;
+  width:38px; height:38px; padding:0;
 }
-
 /* Sedikit kencangkan padding row supaya sejajar rapi */
 #view-items .table td, 
 #view-items .table th{ padding:.56rem .7rem; }
