@@ -563,7 +563,8 @@ document.addEventListener('touchend', (e)=>{
       const me = (getCurrentUser()?.id)||'';
 
       const list = await api('users',{method:'GET'});
-      \1      const rows = isAdm ? arr : arr.filter(u=>String(u.id).toLowerCase()===String(me).toLowerCase());
+            const arr = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
+      const rows = isAdm ? arr : arr.filter(u=>String(u.id).toLowerCase()===String(me).toLowerCase());
       const tbody = $('#tbl-userqr');
       tbody.innerHTML = rows.map(u=>`
         <tr>
