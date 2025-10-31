@@ -911,6 +911,115 @@ document.addEventListener('touchend', (e)=>{
     document.getElementById('st-export-yearly')?.addEventListener('click',  ()=>exportCSV('yearly'));
   })();
 
+
+  // ==== 新規アイテム作成 ====
+  function openCreateItem(){
+    if(!isAdmin()) return toast('Akses ditolak (admin only)');
+    const wrap = document.createElement('div');
+    wrap.className='modal fade';
+    wrap.innerHTML = `
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">商品 新規</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">品番</label><input id="md-code" class="form-control" placeholder="例: P-001"></div>
+        <div class="col-md-6"><label class="form-label">名称</label><input id="md-name" class="form-control" placeholder="商品名"></div>
+        <div class="col-md-4"><label class="form-label">価格</label><input id="md-price" type="number" class="form-control" value="0"></div>
+        <div class="col-md-4"><label class="form-label">在庫</label><input id="md-stock" type="number" class="form-control" value="0"></div>
+        <div class="col-md-4"><label class="form-label">最小</label><input id="md-min" type="number" class="form-control" value="0"></div>
+        <div class="col-md-6"><label class="form-label">置場</label><input id="md-location" class="form-control" placeholder="A-01 など"></div>
+        <div class="col-md-6"><label class="form-label">画像URL</label><input id="md-img" class="form-control" placeholder="https://..."></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+      <button id="btn-save-new-item" class="btn btn-primary">保存</button>
+    </div>
+  </div>
+</div>`;
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap); modal.show();
+
+    $('#btn-save-new-item', wrap)?.addEventListener('click', async ()=>{
+      const code = $('#md-code',wrap).value?.trim();
+      if(!code) return toast('品番を入力してください');
+      try{
+        const body = {
+          code,
+          name: $('#md-name',wrap).value||'',
+          price: Number($('#md-price',wrap).value||0),
+          stock: Number($('#md-stock',wrap).value||0),
+          min: Number($('#md-min',wrap).value||0),
+          location: ($('#md-location',wrap).value||'').toUpperCase(),
+          img: $('#md-img',wrap).value||'',
+          overwrite: false
+        };
+        const r = await api('updateItem',{method:'POST', body});
+        if(r?.ok){ toast('作成しました'); modal.hide(); renderItems(); }
+        else toast(r?.error||'作成失敗');
+      }catch(e){ toast('作成失敗: '+(e?.message||e)); }
+    });
+
+    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
+  }
+
+  // bind 新規 button
+  document.getElementById('btn-open-new-item')?.addEventListener('click', openCreateItem);
+
+  // ==== 新規ユーザー ====
+  function openCreateUser(){
+    if(!isAdmin()) return alert('権限がありません（admin のみ）');
+    const wrap = document.createElement('div');
+    wrap.className='modal fade';
+    wrap.innerHTML = `
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">ユーザー 新規</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">ユーザーID</label><input id="ud-id" class="form-control" placeholder="社員番号など"></div>
+        <div class="col-md-6"><label class="form-label">名前</label><input id="ud-name" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label">権限</label>
+          <select id="ud-role" class="form-select">
+            <option value="user">user</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+      <button id="btn-save-new-user" class="btn btn-primary">保存</button>
+    </div>
+  </div>
+</div>`;
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap); modal.show();
+
+    $('#btn-save-new-user', wrap)?.addEventListener('click', async ()=>{
+      const id = $('#ud-id',wrap).value?.trim();
+      if(!id) return alert('ユーザーIDを入力してください');
+      try{
+        const body = { id, name: $('#ud-name',wrap).value||'', role: ($('#ud-role',wrap).value||'user') };
+        const r = await api('upsertUser',{method:'POST', body});
+        if(r?.ok){ alert('作成しました'); modal.hide(); renderUsers(); }
+        else alert(r?.error||'作成失敗');
+      }catch(e){ alert('作成失敗'); }
+    });
+
+    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
+  }
+
+  // tampilkan tombol add user untuk admin
+  (function showAdminButtons(){
+    const b = document.getElementById('btn-open-new-user');
+    if(b){ if(isAdmin()) b.classList.remove('d-none'); else b.classList.add('d-none'); b.addEventListener('click', openCreateUser); }
+  })();
+
+
   /* ================= Boot ================= */
   window.addEventListener('DOMContentLoaded', ()=>{
     const logo = document.getElementById('brand-logo');
