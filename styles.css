@@ -248,3 +248,30 @@ input[readonly], .form-control[readonly]{ background:#f8fafc; }
 
 /* Canvas image preview window fix */
 img{ max-width:100%; height:auto; }
+/* Rapi-in header & tombol kolom '操作' di 商品一覧 */
+#view-items thead th:last-child{
+  text-align:center !important;
+  min-width: 180px;            /* ruang cukup untuk 3–4 tombol */
+  width: 1%;
+  white-space: nowrap;
+}
+
+#view-items tbody td:last-child{
+  text-align:center !important;
+}
+
+#view-items tbody td:last-child .act-grid{
+  grid-template-columns: repeat(4, 38px);  /* seragam */
+  gap: .4rem;
+  justify-content: center;
+  margin-inline: auto;
+}
+
+#view-items tbody td:last-child .act-grid .btn{
+  width:38px; height:38px;     /* tinggi/lebarnya konsisten */
+  padding:0;
+}
+
+/* Sedikit kencangkan padding row supaya sejajar rapi */
+#view-items .table td, 
+#view-items .table th{ padding:.56rem .7rem; }
