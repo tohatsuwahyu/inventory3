@@ -76,47 +76,53 @@
   function logout(){ setCurrentUser(null); location.href='index.html'; }
   function isAdmin(){ return (getCurrentUser()?.role || 'user').toLowerCase() === 'admin'; }
 
-  (function navHandler(){
-  // Toggle berbasis body class → tidak bergantung cache elemen
-  function toggleSB(){
-    document.body.classList.toggle('sb-open');
-  }
-  function closeSB(){
-    document.body.classList.remove('sb-open');
-  }
+ (function navHandler(){
+  // Toggle pakai class di <body> (aman untuk mobile)
+  function toggleSB(){ document.body.classList.toggle('sb-open'); }
+  function closeSB(){ document.body.classList.remove('sb-open'); }
 
-  // Dengarkan klik pada tombol dengan selector umum
+  // Klik tombol burger / menu
   document.addEventListener('click', (e)=>{
     const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
-    if(trg){
-      e.preventDefault();
-      toggleSB();
-    }
-    // Klik pada backdrop (apapun id-nya)
-    const isBackdrop = e.target.id === 'sb-backdrop' || e.target.closest('#sb-backdrop');
-    if(isBackdrop){ closeSB(); }
+    if (trg){ e.preventDefault(); toggleSB(); }
+
+    // Klik backdrop
+    const isBackdrop = e.target.id === 'sb-backdrop' || e.target.closest?.('#sb-backdrop');
+    if (isBackdrop) closeSB();
   });
 
-  // Sentuhan mobile (supaya tidak double-tap)
+  // Sentuhan mobile (hindari double tap)
   document.addEventListener('touchend', (e)=>{
     const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
-    if(trg){
-      e.preventDefault();
-      e.stopPropagation();
-      toggleSB();
-    }
+    if (trg){ e.preventDefault(); e.stopPropagation(); toggleSB(); }
   }, { passive:false });
 
-  // Tutup ketika pilih menu di sidebar
+  // Pindah view (SPA) + tutup sidebar
   document.addEventListener('click', (e)=>{
-    const a = e.target.closest('aside nav a[data-view]');
-    if(a){ closeSB(); }
+    const a = e.target.closest('aside nav a[data-view]'); 
+    if (!a) return;
+    e.preventDefault();
+
+    $$('aside nav a').forEach(n=>n.classList.remove('active'));
+    a.classList.add('active');
+
+    $$('main section').forEach(s=>{ s.classList.add('d-none'); s.classList.remove('active'); });
+    const id = a.getAttribute('data-view');
+    const sec = document.getElementById(id);
+    if (sec){ sec.classList.remove('d-none'); sec.classList.add('active'); }
+
+    const h = $('#page-title'); 
+    if (h) h.textContent = a.textContent.trim();
+
+    closeSB();
+
+    if (id==='view-items')   renderItems();
+    if (id==='view-users')   renderUsers();
+    if (id==='view-history') renderHistory();
+    if (id==='view-shelf') { renderShelfTable(); renderShelfRecap(); }
   });
 })();
 
-    document.addEventListener('click', (e)=>{
-      const a = e.target.closest('aside nav a[data-view]'); if(!a) return;
-      e.preventDefault();
       $$('aside nav a').forEach(n=>n.classList.remove('active')); a.classList.add('active');
       $$('main section').forEach(s=>{ s.classList.add('d-none'); s.classList.remove('active'); });
       const id = a.getAttribute('data-view'); const sec = document.getElementById(id);
