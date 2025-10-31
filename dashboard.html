@@ -10,29 +10,16 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"
         onerror="this.onerror=null;this.href='vendor/bootstrap-icons.css'"/>
 
-  <link href="styles.css?v=20251031a" rel="stylesheet"/>
+  <link href="styles.css?v=20251031b" rel="stylesheet"/>
   <link href="print.css?v=20251030" rel="stylesheet"/>
+
+  <!-- Sedikit styling pelengkap yang aman -->
   <style>
     header.appbar{position:sticky;top:0;z-index:1020;background:#fff;border-bottom:1px solid #e5e7eb}
     header .brand{display:flex;align-items:center;gap:.6rem}
     header .brand img{height:32px}
-    .sidebar{min-width:240px;max-width:260px;padding:14px}
-    @media (max-width:992px){
-      .layout{display:block}
-      .sidebar{
-        position:fixed; left:0; top:0; bottom:0;
-        transform: translateX(-100%);
-        transition: transform .2s;
-        width:86%; max-width:360px;
-        z-index:1040; background:#0b1727;
-        overflow:auto;
-      }
-      .sidebar.open{ transform:none; }
-      #sb-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.3); display:none; z-index:1030; }
-      #sb-backdrop.show{ display:block; }
-    }
-    main{flex:1}
     .layout{display:flex;min-height:100vh;gap:0}
+    main{flex:1}
     .content{padding:16px}
     #io-scan-area,#scan-area{width:100%;max-width:420px;margin:0 auto;aspect-ratio:4/3;position:relative;overflow:hidden;background:#0b0b0b10;border-radius:12px}
     #io-scan-area video,#scan-area video{width:100%!important;height:100%!important;object-fit:cover}
@@ -44,10 +31,10 @@
     <div class="container-fluid py-2">
       <div class="d-flex align-items-center justify-content-between">
         <div class="brand">
+          <!-- Burger hanya tombol (sidebar & backdrop dipindah ke bawah) -->
           <button id="burger" class="btn btn-sm btn-burger" data-burger aria-label="Menu">
-  <i class="bi bi-list"></i>
-</button><aside id="sb" class="sidebar"> … </aside>
-<div id="sb-backdrop"></div>
+            <i class="bi bi-list"></i>
+          </button>
           <img id="brand-logo" alt="logo"/>
           <div class="fw-bold">在庫管理</div>
         </div>
@@ -59,17 +46,16 @@
     </div>
   </header>
 
-  <div id="sb-backdrop"></div>
-
   <div class="layout">
+    <!-- Sidebar: SATU saja, id=sb -->
     <aside id="sb" class="sidebar">
       <nav class="d-flex flex-column gap-1">
-        <a data-view="view-dashboard" class="active"><i class="bi bi-speedometer2"></i> ダッシュボード</a>
-        <a data-view="view-io"><i class="bi bi-box-seam"></i> 入出庫（QR対応）</a>
-        <a data-view="view-shelf"><i class="bi bi-clipboard-check"></i> 棚卸</a>
-        <a data-view="view-items"><i class="bi bi-boxes"></i> 商品一覧</a>
-        <a data-view="view-users"><i class="bi bi-person-badge"></i> ユーザー / QR</a>
-        <a data-view="view-history"><i class="bi bi-clock-history"></i> 履歴</a>
+        <a href="#" data-view="view-dashboard" class="active"><i class="bi bi-speedometer2"></i> ダッシュボード</a>
+        <a href="#" data-view="view-io"><i class="bi bi-box-seam"></i> 入出庫（QR対応）</a>
+        <a href="#" data-view="view-shelf"><i class="bi bi-clipboard-check"></i> 棚卸</a>
+        <a href="#" data-view="view-items"><i class="bi bi-boxes"></i> 商品一覧</a>
+        <a href="#" data-view="view-users"><i class="bi bi-person-badge"></i> ユーザー / QR</a>
+        <a href="#" data-view="view-history"><i class="bi bi-clock-history"></i> 履歴</a>
       </nav>
     </aside>
 
@@ -140,7 +126,6 @@
               <div class="left"><div class="fw-semibold">入出庫入力</div></div>
               <div class="right">
                 <button id="btn-io-lookup" class="btn btn-sm btn-outline-secondary"><i class="bi bi-search me-1"></i>照会</button>
-                <!-- Export/Import -->
                 <button id="btn-io-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
                 <button id="btn-io-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
                 <input id="input-io-import" type="file" accept=".csv" class="d-none">
@@ -346,6 +331,9 @@
     </main>
   </div>
 
+  <!-- Backdrop: SATU saja, di luar .layout -->
+  <div id="sb-backdrop"></div>
+
   <!-- Loading -->
   <div id="global-loading" class="d-none">
     <div class="box"><div class="spinner"></div><div id="loading-text" class="text">読み込み中…</div></div>
@@ -361,21 +349,7 @@
   <script src="./config.js"></script>
   <script src="./app.js"></script>
 
-  <script>
-  (function(){
-    const sb = document.getElementById('sb');
-    const bd = document.getElementById('sb-backdrop');
-    function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
-    function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
-    const isBurger = (el)=> !!(el && (el.closest?.('[data-burger]') || /burger|btn-menu|^burger$/.test(el.id||'')));
-    document.addEventListener('click', (e)=>{
-      if(isBurger(e.target)){ e.preventDefault(); toggleSB(); }
-      if(e.target===bd) closeSB();
-    }, true);
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSB(); });
-    window.__toggleSidebar = toggleSB;
-    document.getElementById('fy').textContent=new Date().getFullYear();
-  })();
-  </script>
+  <!-- Script kecil: tahun footer saja -->
+  <script>document.getElementById('fy').textContent=new Date().getFullYear();</script>
 </body>
 </html>
