@@ -104,6 +104,7 @@
       if(id==='view-items') renderItems();
       if(id==='view-users') renderUsers();
       if(id==='view-history') renderHistory();
+      if(id==='view-shelf')  { renderShelfTable(); renderShelfRecap(); }
     });
   })();
 
@@ -154,7 +155,7 @@
         });
       }
 
-      // CSV monthly button (dummy source, bisa isi nanti)
+      // CSV monthly button
       $('#btn-export-mov')?.addEventListener('click', ()=>{
         const csv = ['month,in,out'].concat(series.map(s=>[s.month,s.in||0,s.out||0].join(','))).join('\n');
         const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
@@ -215,6 +216,7 @@
         const code = btn.getAttribute('data-code');
         if(btn.classList.contains('btn-edit')) openEditItem(code);
         else if(btn.classList.contains('btn-del')){
+          if(!isAdmin()) return toast('Akses ditolak (admin only)');
           if(!confirm('削除しますか？')) return;
           const r = await api('deleteItem',{method:'POST', body:{ code }});
           r?.ok ? renderItems() : toast(r?.error||'削除失敗');
@@ -261,7 +263,7 @@
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">コード</label><input id="md-code" class="form-control" value="${escapeAttr(it.code)}" readonly></div>
+        <div class="col-md-6"><label class="form-label">品番</label><input id="md-code" class="form-control" value="${escapeAttr(it.code)}" readonly></div>
         <div class="col-md-6"><label class="form-label">名称</label><input id="md-name" class="form-control" value="${escapeAttr(it.name)}"></div>
         <div class="col-md-4"><label class="form-label">価格</label><input id="md-price" type="number" class="form-control" value="${Number(it.price||0)}"></div>
         <div class="col-md-4"><label class="form-label">在庫</label><input id="md-stock" type="number" class="form-control" value="${Number(it.stock||0)}"></div>
@@ -304,6 +306,57 @@
     wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
   }
 
+  // === New Item (admin only) ===
+  function openNewItem(){
+    if(!isAdmin()) return toast('Akses ditolak (admin only)');
+    const wrap = document.createElement('div');
+    wrap.className='modal fade';
+    wrap.innerHTML = `
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">新規商品</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">品番</label><input id="nw-code" class="form-control" placeholder="SKU-001"></div>
+        <div class="col-md-6"><label class="form-label">名称</label><input id="nw-name" class="form-control"></div>
+        <div class="col-md-4"><label class="form-label">価格</label><input id="nw-price" type="number" class="form-control" value="0"></div>
+        <div class="col-md-4"><label class="form-label">在庫</label><input id="nw-stock" type="number" class="form-control" value="0"></div>
+        <div class="col-md-4"><label class="form-label">最小</label><input id="nw-min" type="number" class="form-control" value="0"></div>
+        <div class="col-md-8"><label class="form-label">画像URL</label><input id="nw-img" class="form-control"></div>
+        <div class="col-md-4"><label class="form-label">置場</label><input id="nw-location" class="form-control text-uppercase" placeholder="A-01-03"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+      <button class="btn btn-primary" id="nw-save">作成</button>
+    </div>
+  </div>
+</div>`;
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap); modal.show();
+    $('#nw-location',wrap)?.addEventListener('input',(e)=>{ e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,''); });
+    $('#nw-save',wrap)?.addEventListener('click', async ()=>{
+      try{
+        const payload = {
+          code: ($('#nw-code',wrap).value||'').trim(),
+          name: $('#nw-name',wrap).value,
+          price: Number($('#nw-price',wrap).value||0),
+          stock: Number($('#nw-stock',wrap).value||0),
+          min:   Number($('#nw-min',wrap).value||0),
+          img:   $('#nw-img',wrap).value,
+          location: ($('#nw-location',wrap).value||'').toUpperCase().trim(),
+          overwrite: false
+        };
+        if(!payload.code) return toast('品番を入力してください。');
+        const r = await api('updateItem',{method:'POST', body: payload});
+        if(r?.ok){ modal.hide(); wrap.remove(); renderItems(); toast('作成しました'); }
+        else toast(r?.error||'作成失敗');
+      }catch(e){ toast('作成失敗: '+(e?.message||e)); }
+    });
+    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
+  }
+
   function showItemDetail(it){
     const card = $('#card-item-detail'); if(!card) return;
     const body = $('#item-detail-body', card);
@@ -313,7 +366,7 @@
           ${it.img ? `<img src="${escapeAttr(it.img)}" style="max-width:100%;max-height:100%">` : '<span class="text-primary">画像</span>'}
         </div>
         <div class="flex-1">
-          <div><b>コード</b>：${escapeHtml(it.code)}</div>
+          <div><b>品番</b>：${escapeHtml(it.code)}</div>
           <div><b>名称</b>：${escapeHtml(it.name)}</div>
           <div><b>価格</b>：¥${fmt(it.price)}</div>
           <div><b>在庫</b>：${fmt(it.stock)}</div>
@@ -356,7 +409,7 @@
     const labelX=gridX+12, valX=gridX+112, valMaxW=W - pad - valX - 8;
     g.textAlign='left'; g.textBaseline='middle'; g.fillStyle='#000';
     g.font='16px "Noto Sans JP", system-ui';
-    g.fillText('コード：', labelX, pad + cellH*0.5);
+    g.fillText('品番：', labelX, pad + cellH*0.5);
     g.fillText('商品名：', labelX, pad + cellH*1.5);
     g.fillText('置場：',   labelX, pad + cellH*2.5);
     g.font='bold 18px "Noto Sans JP", system-ui';
@@ -429,21 +482,29 @@
   /* ================= Users ================= */
   async function renderUsers(){
     try{
-      const isAdm = isAdmin();
-      const me = (getCurrentUser()?.id) || '';
-
+      const who = getCurrentUser();
       const list = await api('users',{method:'GET'});
-      const arr  = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
+      let arr = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
 
-      // Admin: semua user. Non-admin: hanya dirinya sendiri
-      const rows = isAdm ? arr : arr.filter(u => String(u.id).toLowerCase() === String(me).toLowerCase());
+      const admin = isAdmin();
+
+      // Kontrol tombol (hanya admin boleh)
+      $('#btn-users-import')?.classList.toggle('d-none', !admin);
+      $('#btn-users-export')?.classList.toggle('d-none', !admin);
+      $('#btn-print-qr-users')?.classList.toggle('d-none', !admin);
+      $('#btn-open-new-user')?.classList.toggle('d-none', !admin);
+
+      // Non-admin: hanya tampilkan dirinya
+      if(!admin && who){
+        arr = arr.filter(u => String(u.id) === String(who.id));
+      }
 
       const tbody = $('#tbl-userqr');
-      tbody.innerHTML = rows.map(u=>`
+      tbody.innerHTML = arr.map(u=>`
         <tr>
           <td style="width:170px"><div id="uqr-${escapeAttr(u.id)}"></div></td>
           <td>${escapeHtml(u.id)}</td>
-          <td>${escapeHtml(u.name||'')}</td>
+          <td>${escapeHtml(u.name)}</td>
           <td>${escapeHtml(u.role||'user')}</td>
           <td class="text-end">
             <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
@@ -454,7 +515,7 @@
       `).join('');
 
       await ensureQRCode();
-      for(const u of rows){
+      for(const u of arr){
         const el = document.getElementById(`uqr-${u.id}`); if(!el) continue;
         el.innerHTML = ''; new QRCode(el, { text:`USER|${u.id}`, width:64, height:64, correctLevel:QRCode.CorrectLevel.M });
       }
@@ -466,23 +527,73 @@
         const a=document.createElement('a'); a.href=url; a.download=`user_${id}.png`; a.click();
       });
 
-      // Sembunyikan tombol admin-only jika bukan admin
-      (function usersToolbarToggle(){
-        const admin = isAdm;
-        const ids = [
-          'btn-users-export','btn-users-import','btn-print-qr-users','btn-open-new-user',
-          // kompatibel dengan kemungkinan id lama:
-          'btn-export-users','btn-import-users'
-        ];
-        ids.forEach(id=>{
-          const el = document.getElementById(id);
-          if(el) el.classList.toggle('d-none', !admin);
-        });
-      })();
+      // Non-admin: tampilkan kartu info diri di panel kanan
+      const right = $('#print-qr-users-grid');
+      if(right){
+        if(!admin && who){
+          right.innerHTML = `
+            <div class="card p-3 w-100">
+              <div class="fw-semibold mb-2">ユーザー情報</div>
+              <div class="d-flex align-items-center gap-3">
+                <div id="me-qr"></div>
+                <div class="small">
+                  <div><b>ID</b>：${escapeHtml(who.id||'')}</div>
+                  <div><b>名前</b>：${escapeHtml(who.name||'')}</div>
+                  <div><b>ユーザー</b>：${escapeHtml(who.role||'user')}</div>
+                  <div><b>PIN</b>：<span class="text-muted">（非表示）</span></div>
+                </div>
+              </div>
+            </div>`;
+          const box = document.getElementById('me-qr');
+          if(box){ new QRCode(box, { text:`USER|${who.id}`, width:120, height:120 }); }
+        }else{
+          // admin: biarkan area untuk preview cetak
+          right.innerHTML = `<div class="text-muted small">印刷するユーザーQRを左の表から選択してダウンロードしてください。</div>`;
+        }
+      }
+    }catch{ toast('ユーザーQRの読み込みに失敗しました。'); }
+  }
 
-    }catch{
-      toast('ユーザーQRの読み込みに失敗しました。');
-    }
+  // === New User (admin only) ===
+  function openNewUser(){
+    if(!isAdmin()) return toast('Akses ditolak (admin only)');
+    const wrap = document.createElement('div');
+    wrap.className='modal fade';
+    wrap.innerHTML = `
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">新規ユーザー</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-4"><label class="form-label">ID</label><input id="nu-id" class="form-control" placeholder="USER001"></div>
+        <div class="col-md-5"><label class="form-label">名前</label><input id="nu-name" class="form-control"></div>
+        <div class="col-md-3"><label class="form-label">権限</label>
+          <select id="nu-role" class="form-select"><option value="user">user</option><option value="admin">admin</option></select>
+        </div>
+      </div>
+      <div class="small text-muted mt-2">PIN の設定は別途（GAS 側）で行ってください。</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+      <button class="btn btn-primary" id="nu-save">作成</button>
+    </div>
+  </div>
+</div>`;
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap); modal.show();
+    $('#nu-save',wrap)?.addEventListener('click', async ()=>{
+      const id = ($('#nu-id',wrap).value||'').trim();
+      const name = $('#nu-name',wrap).value||'';
+      const role = $('#nu-role',wrap).value||'user';
+      if(!id) return toast('ID を入力してください。');
+      try{
+        const r = await api('upsertUser',{method:'POST', body:{ id, name, role }});
+        if(r?.ok){ modal.hide(); wrap.remove(); renderUsers(); toast('作成しました'); }
+        else toast(r?.error||'作成失敗');
+      }catch(e){ toast('作成失敗: '+(e?.message||e)); }
+    });
+    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
   }
 
   /* ================= History ================= */
@@ -704,6 +815,49 @@
     };
   }
 
+  // Rekap bulanan & tahunan (berdasarkan history)
+  async function renderShelfRecap(){
+    try{
+      const raw = await api('history',{method:'GET'});
+      const list = Array.isArray(raw) ? raw : (raw?.history||raw?.data||[]);
+      const byMonth = new Map(); // key: YYYY-MM => {in,out}
+      const byYear  = new Map(); // key: YYYY    => {in,out}
+      for(const h of list){
+        const d = new Date(h.timestamp||h.date||''); if(isNaN(d)) continue;
+        const m = d.toISOString().slice(0,7);
+        const y = String(d.getFullYear());
+        const type = String(h.type||'').toUpperCase();
+        const qty  = Number(h.qty||0);
+        if(!byMonth.has(m)) byMonth.set(m,{in:0,out:0});
+        if(!byYear.has(y))  byYear.set(y,{in:0,out:0});
+        if(type==='IN'){ byMonth.get(m).in += qty; byYear.get(y).in += qty; }
+        else if(type==='OUT'){ byMonth.get(m).out += qty; byYear.get(y).out += qty; }
+      }
+      const tbM = $('#st-recap-monthly'); const tbY = $('#st-recap-yearly');
+      if(tbM){
+        const rows = [...byMonth.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>`<tr><td>${k}</td><td class="text-end">${fmt(v.in)}</td><td class="text-end">${fmt(v.out)}</td></tr>`);
+        tbM.innerHTML = rows.join('');
+      }
+      if(tbY){
+        const rows = [...byYear.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>`<tr><td>${k}</td><td class="text-end">${fmt(v.in)}</td><td class="text-end">${fmt(v.out)}</td></tr>`);
+        tbY.innerHTML = rows.join('');
+      }
+
+      // Export buttons
+      $('#st-recap-export-monthly')?.addEventListener('click', ()=>{
+        const csv = ['month,in,out'].concat([...byMonth.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>[k,v.in,v.out].join(','))).join('\n');
+        const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=url; a.download='stocktake_monthly.csv'; a.click(); URL.revokeObjectURL(url);
+      }, { once:true });
+      $('#st-recap-export-yearly')?.addEventListener('click', ()=>{
+        const csv = ['year,in,out'].concat([...byYear.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>[k,v.in,v.out].join(','))).join('\n');
+        const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=url; a.download='stocktake_yearly.csv'; a.click(); URL.revokeObjectURL(url);
+      }, { once:true });
+
+    }catch(e){ console.warn(e); }
+  }
+
   function openAdjustModal(rec){
     const wrap = document.createElement('div');
     wrap.className='modal fade';
@@ -713,7 +867,7 @@
     <div class="modal-header"><h5 class="modal-title">Adjust 在庫</h5>
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
-      <div class="mb-2"><b>コード：</b>${escapeHtml(rec.code)}</div>
+      <div class="mb-2"><b>品番：</b>${escapeHtml(rec.code)}</div>
       <div class="mb-2"><b>名称：</b>${escapeHtml(rec.name)}</div>
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label">帳簿</label><input class="form-control" value="${rec.book}" readonly></div>
@@ -910,6 +1064,13 @@
   window.addEventListener('DOMContentLoaded', ()=>{
     const logo = document.getElementById('brand-logo');
     if (logo && window.CONFIG && CONFIG.LOGO_URL){ logo.src = CONFIG.LOGO_URL; logo.alt='logo'; logo.onerror = ()=>{ logo.style.display='none'; }; }
+
+    // Tampilkan tombol baru hanya untuk admin
+    const newItemBtn = $('#btn-open-new-item');
+    const newUserBtn = $('#btn-open-new-user');
+    if(newItemBtn){ newItemBtn.classList.toggle('d-none', !isAdmin()); newItemBtn.addEventListener('click', openNewItem); }
+    if(newUserBtn){ newUserBtn.classList.toggle('d-none', !isAdmin()); newUserBtn.addEventListener('click', openNewUser); }
+
     renderDashboard();
     $('#btn-logout')?.addEventListener('click', logout);
   });
