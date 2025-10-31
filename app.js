@@ -77,20 +77,42 @@
   function isAdmin(){ return (getCurrentUser()?.role || 'user').toLowerCase() === 'admin'; }
 
   (function navHandler(){
-    const sb = $('#sb'), bd = $('#sb-backdrop');
-    function closeSB(){ sb?.classList.remove('open'); bd?.classList.remove('show'); }
-    function toggleSB(){ sb?.classList.toggle('open'); bd?.classList.toggle('show'); }
-    document.addEventListener('click', (e)=>{
-      const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
-      if(trg){ e.preventDefault(); toggleSB(); }
-    });
-    // Tambah dukungan tap (mobile)
-    document.addEventListener('touchend', (e)=>{
-      const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
-      if(trg){ e.preventDefault(); e.stopPropagation(); (sb?.classList.toggle('open'), bd?.classList.toggle('show')); }
-    },{passive:false});
+  // Toggle berbasis body class → tidak bergantung cache elemen
+  function toggleSB(){
+    document.body.classList.toggle('sb-open');
+  }
+  function closeSB(){
+    document.body.classList.remove('sb-open');
+  }
 
-    bd?.addEventListener('click', closeSB);
+  // Dengarkan klik pada tombol dengan selector umum
+  document.addEventListener('click', (e)=>{
+    const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
+    if(trg){
+      e.preventDefault();
+      toggleSB();
+    }
+    // Klik pada backdrop (apapun id-nya)
+    const isBackdrop = e.target.id === 'sb-backdrop' || e.target.closest('#sb-backdrop');
+    if(isBackdrop){ closeSB(); }
+  });
+
+  // Sentuhan mobile (supaya tidak double-tap)
+  document.addEventListener('touchend', (e)=>{
+    const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
+    if(trg){
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSB();
+    }
+  }, { passive:false });
+
+  // Tutup ketika pilih menu di sidebar
+  document.addEventListener('click', (e)=>{
+    const a = e.target.closest('aside nav a[data-view]');
+    if(a){ closeSB(); }
+  });
+})();
 
     document.addEventListener('click', (e)=>{
       const a = e.target.closest('aside nav a[data-view]'); if(!a) return;
