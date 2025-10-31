@@ -427,171 +427,32 @@ document.addEventListener('touchend', (e)=>{
   }
 
   /* ================= Users ================= */
-
-  // ==== Set User Photo ====
-
-  function resizeImageToAvatar(src){
-    return new Promise((resolve,reject)=>{
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = ()=>{
-        const CANVAS_SIZE = 256;
-        const c = document.createElement('canvas'); c.width = CANVAS_SIZE; c.height = CANVAS_SIZE;
-        const ctx = c.getContext('2d');
-        // cover fit
-        const iw = img.naturalWidth||img.width, ih = img.naturalHeight||img.height;
-        const scale = Math.max(CANVAS_SIZE/iw, CANVAS_SIZE/ih);
-        const dw = Math.round(iw*scale), dh = Math.round(ih*scale);
-        const dx = Math.round((CANVAS_SIZE - dw)/2), dy = Math.round((CANVAS_SIZE - dh)/2);
-        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,CANVAS_SIZE,CANVAS_SIZE);
-        ctx.drawImage(img, dx, dy, dw, dh);
-        try{
-          const out = c.toDataURL('image/webp', 0.9);
-          resolve(out);
-        }catch(e){
-          try{ resolve(c.toDataURL('image/jpeg', 0.9)); }
-          catch(err){ reject(err); }
-        }
-      };
-      img.onerror = ()=> reject(new Error('画像の読み込みに失敗しました'));
-      img.src = src;
-    });
-  }
-    
-  function fileToDataURL(file){
-    return new Promise((resolve,reject)=>{
-      const fr = new FileReader();
-      fr.onload = ()=> resolve(fr.result);
-      fr.onerror = reject;
-      fr.readAsDataURL(file);
-    });
-  }
-
-  function openSetPhoto(userId){
-    const isAdm = isAdmin();
-    const me = (getCurrentUser()?.id)||'';
-    if(!isAdm && String(userId).toLowerCase()!==String(me).toLowerCase()) return alert('権限がありません');
-
-    const wrap = document.createElement('div');
-    wrap.className='modal fade'; 
-    wrap.innerHTML = `
-<div class="modal-dialog">
-  <div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">写真を設定</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-    </div>
-    <div class="modal-body">
-      <div class="mb-3">
-        <label class="form-label">画像ファイルを選択</label>
-        <input id="u-photo-file" type="file" accept="image/*" class="form-control">
-        <div class="form-text">JPG/PNG/GIF 可。サイズは 512KB 以下を推奨。</div>
-      </div>
-      <div class="mb-3">
-        <label class="form-label">または、画像URLを貼り付け</label>
-        <input id="u-photo-url" type="url" class="form-control" placeholder="https://...">
-      </div>
-      <div class="mb-2">
-        <div class="form-label">プレビュー</div>
-        <div class="d-flex align-items-center gap-2">
-          <img id="u-photo-preview" class="avatar" style="width:64px;height:64px;border-radius:50%;border:1px solid #e2e8f0;object-fit:cover" alt="preview">
-          <span id="u-photo-info" class="text-muted small"></span>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-      <button id="btn-save-photo" class="btn btn-primary">保存</button>
-    </div>
-  </div>
-</div>`;
-    document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap); modal.show();
-
-    const $file = wrap.querySelector('#u-photo-file');
-    const $url  = wrap.querySelector('#u-photo-url');
-    const $pv   = wrap.querySelector('#u-photo-preview');
-    const $info = wrap.querySelector('#u-photo-info');
-    const $save = wrap.querySelector('#btn-save-photo');
-
-    let payload = null;
-
-    function updatePreview(src, note){
-      if(src){ $pv.src = src; $pv.style.display='inline-block'; }
-      $info.textContent = note||'';
-      payload = src;
-    }
-
-    $file.addEventListener('change', async (e)=>{
-      const f = e.target.files?.[0]; if(!f) return;
-      if(f.size > 1024*1024*2) { // 2MB hard limit
-        updatePreview('', 'ファイルサイズが大きすぎます (2MBまで)');
-        return;
-      }
-      try{
-        const dataUrl = await fileToDataURL(f);
-        try{
-          const resized = await resizeImageToAvatar(dataUrl);
-          updatePreview(resized, `${f.name} → 256x256 WEBP`);
-        }catch(_){ updatePreview(dataUrl, `${f.name} (${Math.round(f.size/1024)} KB)`); }
-      }catch(err){
-        updatePreview('', '読み込みに失敗しました');
-      }
-    });
-
-    $url.addEventListener('input', ()=>{
-      const v = $url.value.trim();
-      if(/^https?:\/\//i.test(v)){
-        (async()=>{ try{ const r = await resizeImageToAvatar(v); updatePreview(r, 'URL → 256x256 WEBP'); }catch(_){ updatePreview(v, 'CORS制限のためURLのまま保存'); } })();
-      }
-    });
-
-    $save.addEventListener('click', async ()=>{
-      if(!payload){ alert('写真を選択またはURLを入力してください'); return; }
-      try{
-        const r = await api('upsertUser', { method:'POST', body:{ id:userId, photo:payload }});
-        if(r && r.ok!==false){ bootstrap.Toast && toast('保存しました'); modal.hide(); renderUsers(); }
-        else alert(r?.error||'保存に失敗しました');
-      }catch(e){ alert('保存に失敗しました'); }
-    });
-
-    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
-  }
-    
   async function renderUsers(){
     try{
-      const isAdm = isAdmin();
-      const me = (getCurrentUser()?.id)||'';
-
       const list = await api('users',{method:'GET'});
-            const arr = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
-      const rows = isAdm ? arr : arr.filter(u=>String(u.id).toLowerCase()===String(me).toLowerCase());
+      const arr = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
       const tbody = $('#tbl-userqr');
-      tbody.innerHTML = rows.map(u=>`
+      tbody.innerHTML = arr.map(u=>`
         <tr>
           <td style="width:170px"><div id="uqr-${escapeAttr(u.id)}"></div></td>
           <td>${escapeHtml(u.id)}</td>
-          <td>
-            <div class="d-flex align-items-center gap-2">
-              ${ (u.photo||u.avatar||u.photoUrl) ? `<img class=\"avatar\" src=\"${escapeAttr(u.photo||u.avatar||u.photoUrl)}\" alt=\"avatar\" onerror=\"this.style.display='none'\">` : '' }
-              <span>${escapeHtml(u.name||'')}</span>
-            </div>
-          </td>
+          <td>${escapeHtml(u.name)}</td>
           <td>${escapeHtml(u.role||'user')}</td>
           <td class="text-end">
-            ${ (isAdm || String(u.id).toLowerCase()===String(me).toLowerCase()) ? `<button class="btn btn-sm btn-outline-primary btn-set-photo" data-id="${escapeAttr(u.id)}" title="写真を設定"><i class="bi bi-camera"></i></button> ` : "" }
-            <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード"><i class="bi bi-download"></i></button>
+            <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
+              <i class="bi bi-download"></i>
+            </button>
           </td>
         </tr>
       `).join('');
 
       await ensureQRCode();
-      for(const u of rows){
+      for(const u of arr){
         const el = document.getElementById(`uqr-${u.id}`); if(!el) continue;
         el.innerHTML = ''; new QRCode(el, { text:`USER|${u.id}`, width:64, height:64, correctLevel:QRCode.CorrectLevel.M });
       }
 
       tbody.addEventListener('click', async (e)=>{
-        const p=e.target.closest('.btn-set-photo'); if(p){ e.preventDefault(); openSetPhoto(p.getAttribute('data-id')); return; }
         const b=e.target.closest('.btn-dl-user'); if(!b) return;
         const id = b.getAttribute('data-id');
         const url = await generateQrDataUrl(`USER|${id}`, 300);
@@ -1020,20 +881,6 @@ document.addEventListener('touchend', (e)=>{
       const a=document.createElement('a'); a.href=url; a.download='history.csv'; a.click(); URL.revokeObjectURL(url);
     }catch{ alert('エクスポート失敗'); }
   });
-
-  
-  // Hide admin-only toolbar in Users for non-admins
-  (function usersToolbarToggle(){
-    const isAdm = isAdmin();
-    const ids = ['btn-export-users','btn-import-users','btn-print-qr-users','btn-open-new-user'];
-    if(!isAdm){
-      ids.forEach(id=>{ const el = document.getElementById(id); if(el) el.classList.add('d-none'); });
-    }else{
-      // admin: show buttons if present
-      ids.forEach(id=>{ const el = document.getElementById(id); if(el) el) ;  /* no-op show relies on default HTML */ });
-    }
-  })();
-
 
   /* ================= Boot ================= */
   window.addEventListener('DOMContentLoaded', ()=>{
