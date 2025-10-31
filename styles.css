@@ -241,5 +241,3 @@ header.appbar #btn-logout { height: 36px; padding: 6px 10px; border-radius: 12px
 }
 #global-loading .text { font-size:.95rem; color:#475569; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-.avatar{ width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #e2e8f0; }
