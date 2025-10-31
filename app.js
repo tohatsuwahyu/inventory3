@@ -429,6 +429,35 @@ document.addEventListener('touchend', (e)=>{
   /* ================= Users ================= */
 
   // ==== Set User Photo ====
+
+  function resizeImageToAvatar(src){
+    return new Promise((resolve,reject)=>{
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = ()=>{
+        const CANVAS_SIZE = 256;
+        const c = document.createElement('canvas'); c.width = CANVAS_SIZE; c.height = CANVAS_SIZE;
+        const ctx = c.getContext('2d');
+        // cover fit
+        const iw = img.naturalWidth||img.width, ih = img.naturalHeight||img.height;
+        const scale = Math.max(CANVAS_SIZE/iw, CANVAS_SIZE/ih);
+        const dw = Math.round(iw*scale), dh = Math.round(ih*scale);
+        const dx = Math.round((CANVAS_SIZE - dw)/2), dy = Math.round((CANVAS_SIZE - dh)/2);
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,CANVAS_SIZE,CANVAS_SIZE);
+        ctx.drawImage(img, dx, dy, dw, dh);
+        try{
+          const out = c.toDataURL('image/webp', 0.9);
+          resolve(out);
+        }catch(e){
+          try{ resolve(c.toDataURL('image/jpeg', 0.9)); }
+          catch(err){ reject(err); }
+        }
+      };
+      img.onerror = ()=> reject(new Error('画像の読み込みに失敗しました'));
+      img.src = src;
+    });
+  }
+    
   function fileToDataURL(file){
     return new Promise((resolve,reject)=>{
       const fr = new FileReader();
@@ -500,7 +529,10 @@ document.addEventListener('touchend', (e)=>{
       }
       try{
         const dataUrl = await fileToDataURL(f);
-        updatePreview(dataUrl, `${f.name} (${Math.round(f.size/1024)} KB)`);
+        try{
+          const resized = await resizeImageToAvatar(dataUrl);
+          updatePreview(resized, `${f.name} → 256x256 WEBP`);
+        }catch(_){ updatePreview(dataUrl, `${f.name} (${Math.round(f.size/1024)} KB)`); }
       }catch(err){
         updatePreview('', '読み込みに失敗しました');
       }
@@ -509,7 +541,7 @@ document.addEventListener('touchend', (e)=>{
     $url.addEventListener('input', ()=>{
       const v = $url.value.trim();
       if(/^https?:\/\//i.test(v)){
-        updatePreview(v, 'URL から読み込み');
+        (async()=>{ try{ const r = await resizeImageToAvatar(v); updatePreview(r, 'URL → 256x256 WEBP'); }catch(_){ updatePreview(v, 'CORS制限のためURLのまま保存'); } })();
       }
     });
 
