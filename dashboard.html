@@ -5,13 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>在庫管理 - ダッシュボード</title>
 
-  <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
         onerror="this.onerror=null;this.href='vendor/bootstrap.min.css'"/>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"
         onerror="this.onerror=null;this.href='vendor/bootstrap-icons.css'"/>
 
-  <link href="styles.css?v=20251030b" rel="stylesheet"/>
+  <link href="styles.css?v=20251031a" rel="stylesheet"/>
   <link href="print.css?v=20251030" rel="stylesheet"/>
   <style>
     header.appbar{position:sticky;top:0;z-index:1020;background:#fff;border-bottom:1px solid #e5e7eb}
@@ -145,7 +144,7 @@
               </div>
             </div>
             <form id="form-io" class="row g-3">
-              <div class="col-md-4"><label class="form-label">コード</label><input id="io-code" class="form-control"/></div>
+              <div class="col-md-4"><label class="form-label">品番</label><input id="io-code" class="form-control"/></div>
               <div class="col-md-4"><label class="form-label">名称</label><input id="io-name" class="form-control" readonly/></div>
               <div class="col-md-2"><label class="form-label">価格</label><input id="io-price" class="form-control" readonly/></div>
               <div class="col-md-2"><label class="form-label">在庫</label><input id="io-stock" class="form-control" readonly/></div>
@@ -178,7 +177,7 @@
             <div class="items-toolbar">
               <div class="left">
                 <div class="fw-semibold">棚卸入力</div>
-                <input id="st-filter" class="form-control search" placeholder="コード/名称で絞り込み…"/>
+                <input id="st-filter" class="form-control search" placeholder="品番/名称で絞り込み…"/>
               </div>
               <div class="right">
                 <button id="st-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
@@ -189,7 +188,7 @@
             </div>
 
             <div class="row g-3 mb-2">
-              <div class="col-md-4"><label class="form-label">コード</label><input id="st-code" class="form-control"/></div>
+              <div class="col-md-4"><label class="form-label">品番</label><input id="st-code" class="form-control"/></div>
               <div class="col-md-3"><label class="form-label">実在数量</label><input id="st-qty" type="number" class="form-control"/></div>
               <div class="col-md-2 d-flex align-items-end"><button id="st-add" class="btn btn-primary w-100">追加</button></div>
             </div>
@@ -197,10 +196,41 @@
             <div class="table-responsive">
               <table class="table table-sm align-middle">
                 <thead><tr>
-                  <th>コード</th><th>名称</th><th class="text-end">帳簿</th><th class="text-end">実在</th><th class="text-end">差異</th><th class="text-end">操作</th>
+                  <th>品番</th><th>名称</th><th class="text-end">帳簿</th><th class="text-end">実在</th><th class="text-end">差異</th><th class="text-end">操作</th>
                 </tr></thead>
                 <tbody id="tbl-stocktake"></tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- Rekap bulanan & tahunan -->
+          <div class="card p-3 mt-3">
+            <div class="items-toolbar">
+              <div class="left"><div class="fw-semibold">棚卸リキャップ</div></div>
+              <div class="right">
+                <button id="st-recap-export-monthly" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> 月次CSV</button>
+                <button id="st-recap-export-yearly" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> 年次CSV</button>
+              </div>
+            </div>
+            <div class="row g-3">
+              <div class="col-lg-6">
+                <div class="fw-semibold mb-2">月次 IN/OUT</div>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle">
+                    <thead><tr><th>月</th><th class="text-end">IN</th><th class="text-end">OUT</th></tr></thead>
+                    <tbody id="st-recap-monthly"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="col-lg-6">
+                <div class="fw-semibold mb-2">年次 IN/OUT</div>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle">
+                    <thead><tr><th>年</th><th class="text-end">IN</th><th class="text-end">OUT</th></tr></thead>
+                    <tbody id="st-recap-yearly"></tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -218,7 +248,7 @@
               <button id="btn-items-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
               <input id="input-items-import" type="file" accept=".csv" class="d-none">
               <button id="btn-items-print-all" class="btn btn-sm btn-outline-secondary"><i class="bi bi-printer me-1"></i> 全件ラベルを印刷</button>
-              <button id="btn-open-new-item" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i> 新規</button>
+              <button id="btn-open-new-item" class="btn btn-sm btn-primary d-none"><i class="bi bi-plus-circle me-1"></i> 新規商品</button>
             </div>
           </div>
 
@@ -228,13 +258,13 @@
                 <thead>
                   <tr>
                     <th style="width:170px">QR</th>
-                    <th>コード</th>
+                    <th>品番</th>
                     <th>名称</th>
                     <th>画像</th>
                     <th class="text-end">価格</th>
                     <th class="text-end">在庫</th>
                     <th class="text-end">最小</th>
-                    <th>置場</th>
+                    <th class="th-location">置場</th>
                     <th class="text-end">操作</th>
                   </tr>
                 </thead>
@@ -275,8 +305,8 @@
               </div>
             </div></div>
             <div class="col-lg-5"><div class="card p-3">
-              <div class="fw-semibold mb-2">印刷プレビュー</div>
-              <div id="print-qr-users-grid" class="d-flex flex-wrap gap-2"></div>
+              <div class="fw-semibold mb-2">印刷プレビュー / 情報</div>
+              <div id="print-qr-users-grid" class="d-flex flex-column gap-2"></div>
             </div></div>
           </div>
         </section>
@@ -297,7 +327,7 @@
                 <thead>
                   <tr>
                     <th>日時</th><th>ユーザーID</th><th>ユーザー名</th>
-                    <th>コード</th><th>名称</th><th class="text-end">数量</th><th>単位</th><th>種別</th><th>備考</th><th>修正</th>
+                    <th>品番</th><th>名称</th><th class="text-end">数量</th><th>単位</th><th>種別</th><th>備考</th><th>修正</th>
                   </tr>
                 </thead>
                 <tbody id="tbl-history"></tbody>
@@ -306,10 +336,10 @@
           </div>
         </section>
       </div>
-      <footer class="app-footer">
-  © <span id="fy"></span> — Design by <b>Wahyu</b>
-</footer>
 
+      <footer class="app-footer">
+        © <span id="fy"></span> — Design by <b>Wahyu</b>
+      </footer>
     </main>
   </div>
 
@@ -328,7 +358,6 @@
   <script src="./config.js"></script>
   <script src="./app.js"></script>
 
-  <!-- Burger universal hotfix -->
   <script>
   (function(){
     const sb = document.getElementById('sb');
@@ -342,8 +371,8 @@
     }, true);
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSB(); });
     window.__toggleSidebar = toggleSB;
+    document.getElementById('fy').textContent=new Date().getFullYear();
   })();
   </script>
-  <script>document.getElementById('fy').textContent=new Date().getFullYear();</script>
 </body>
 </html>
