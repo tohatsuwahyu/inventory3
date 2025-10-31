@@ -274,3 +274,21 @@ img{ max-width:100%; height:auto; }
 /* Sedikit kencangkan padding row supaya sejajar rapi */
 #view-items .table td, 
 #view-items .table th{ padding:.56rem .7rem; }
+/* Off-canvas via body class (fallback kalau elemen tak ketemu saat init) */
+@media (max-width: 991px){
+  .sidebar{
+    position:fixed; left:0; top:0; bottom:0;
+    width:86%; max-width:360px;
+    background:#0b1727; color:#c9d2e3; overflow:auto;
+    transform: translateX(-100%);       /* tertutup */
+    transition: transform .18s ease-out;
+    z-index:1040;
+  }
+  body.sb-open .sidebar{ transform:none; }      /* TERBUKA */
+
+  #sb-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,.35);
+    display:none; z-index:1030;
+  }
+  body.sb-open #sb-backdrop{ display:block; }   /* TERBUKA */
+}
