@@ -65,7 +65,7 @@
     const cdns = [
       'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js',
       'https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js'
+      'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/minified/html5-qrcode.min.js'
     ];
     for(const u of cdns){ try{ await loadScriptOnce(u); if(window.Html5Qrcode) return; }catch(e){} }
     throw new Error('html5-qrcode tidak tersedia');
@@ -625,7 +625,9 @@
 
   /* ================= IO Scanner ================= */
   let IO_SCANNER = null;
-  async function startBackCameraScan(mountId, onScan, boxSize = (isMobile()? 160 : 190)) {
+  async function startBackCameraScan(mountId, onScan, boxSize) {
+    const isPhone = isMobile();
+    const qrboxSize = boxSize ?? (isPhone ? 220 : 240);
     const mount = document.getElementById(mountId);
     if (mount) Object.assign(mount.style, { maxWidth:'420px', margin:'0 auto', aspectRatio:'4/3', position:'relative' });
 
@@ -649,6 +651,9 @@
           };
           stream = await navigator.mediaDevices.getUserMedia(constraints);
           video.srcObject = stream;
+
+          // beri waktu kecil untuk autofocus/exposure
+          await new Promise(r=>setTimeout(r, 500));
 
           const detector = new BarcodeDetector({ formats:['qr_code'] });
           let raf=0, stopped=false;
@@ -676,8 +681,8 @@
       ? { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] }
       : {};
     const cfg = {
-      fps: 24,
-      qrbox: { width: boxSize, height: boxSize },
+      fps: 30,
+      qrbox: { width: qrboxSize, height: qrboxSize },
       aspectRatio: 1.33,
       rememberLastUsedCamera: true,
       disableFlip: true,
@@ -694,6 +699,7 @@
     async function startWith(source){
       await scanner.start(source, cfg, txt => onScan(txt));
       try{
+        await new Promise(r=>setTimeout(r, 600));
         await scanner.applyVideoConstraints({ advanced: [{ focusMode:'continuous' }, { exposureMode:'continuous' }, { zoom:3 }] }).catch(()=>{});
       }catch(_){}
       return scanner;
@@ -911,7 +917,7 @@
         area.textContent = 'カメラ起動中…';
         SHELF_SCANNER = await startBackCameraScan('scan-area', async (text)=>{
           const code = parseScanText(String(text||'')); if(code){ await addOrUpdateStocktake(code, ST.rows.get(code)?.qty ?? undefined); }
-        }, (isMobile()? 160 : 180));
+        });
       }catch(e){ toast(e?.message||String(e)); }
     });
 
