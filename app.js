@@ -85,10 +85,10 @@
       if(trg){ e.preventDefault(); toggleSB(); }
     });
     // Tambah dukungan tap (mobile)
-document.addEventListener('touchend', (e)=>{
-  const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
-  if(trg){ e.preventDefault(); e.stopPropagation(); (sb?.classList.toggle('open'), bd?.classList.toggle('show')); }
-},{passive:false});
+    document.addEventListener('touchend', (e)=>{
+      const trg = e.target.closest('[data-burger], .btn-burger, #burger, #btn-menu');
+      if(trg){ e.preventDefault(); e.stopPropagation(); (sb?.classList.toggle('open'), bd?.classList.toggle('show')); }
+    },{passive:false});
 
     bd?.addEventListener('click', closeSB);
 
@@ -429,14 +429,21 @@ document.addEventListener('touchend', (e)=>{
   /* ================= Users ================= */
   async function renderUsers(){
     try{
+      const isAdm = isAdmin();
+      const me = (getCurrentUser()?.id) || '';
+
       const list = await api('users',{method:'GET'});
-      const arr = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
+      const arr  = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
+
+      // Admin: semua user. Non-admin: hanya dirinya sendiri
+      const rows = isAdm ? arr : arr.filter(u => String(u.id).toLowerCase() === String(me).toLowerCase());
+
       const tbody = $('#tbl-userqr');
-      tbody.innerHTML = arr.map(u=>`
+      tbody.innerHTML = rows.map(u=>`
         <tr>
           <td style="width:170px"><div id="uqr-${escapeAttr(u.id)}"></div></td>
           <td>${escapeHtml(u.id)}</td>
-          <td>${escapeHtml(u.name)}</td>
+          <td>${escapeHtml(u.name||'')}</td>
           <td>${escapeHtml(u.role||'user')}</td>
           <td class="text-end">
             <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
@@ -447,7 +454,7 @@ document.addEventListener('touchend', (e)=>{
       `).join('');
 
       await ensureQRCode();
-      for(const u of arr){
+      for(const u of rows){
         const el = document.getElementById(`uqr-${u.id}`); if(!el) continue;
         el.innerHTML = ''; new QRCode(el, { text:`USER|${u.id}`, width:64, height:64, correctLevel:QRCode.CorrectLevel.M });
       }
@@ -458,7 +465,24 @@ document.addEventListener('touchend', (e)=>{
         const url = await generateQrDataUrl(`USER|${id}`, 300);
         const a=document.createElement('a'); a.href=url; a.download=`user_${id}.png`; a.click();
       });
-    }catch{ toast('ユーザーQRの読み込みに失敗しました。'); }
+
+      // Sembunyikan tombol admin-only jika bukan admin
+      (function usersToolbarToggle(){
+        const admin = isAdm;
+        const ids = [
+          'btn-users-export','btn-users-import','btn-print-qr-users','btn-open-new-user',
+          // kompatibel dengan kemungkinan id lama:
+          'btn-export-users','btn-import-users'
+        ];
+        ids.forEach(id=>{
+          const el = document.getElementById(id);
+          if(el) el.classList.toggle('d-none', !admin);
+        });
+      })();
+
+    }catch{
+      toast('ユーザーQRの読み込みに失敗しました。');
+    }
   }
 
   /* ================= History ================= */
