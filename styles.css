@@ -242,8 +242,4 @@ header.appbar #btn-logout { height: 36px; padding: 6px 10px; border-radius: 12px
 #global-loading .text { font-size:.95rem; color:#475569; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-
-/* Extra spacing between 最小 and 置場 headers for 商品一覧 */
-#view-items thead th:nth-child(8){ padding-left: 18px; } /* 置場 */
-#view-items thead th:nth-child(7){ padding-right: 18px; } /* 最小 */
-
+.avatar{ width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #e2e8f0; }
