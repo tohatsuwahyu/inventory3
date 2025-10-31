@@ -261,7 +261,7 @@ document.addEventListener('touchend', (e)=>{
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">品番</label><input id="md-code" class="form-control" value="${escapeAttr(it.code)}" readonly></div>
+        <div class="col-md-6"><label class="form-label">コード</label><input id="md-code" class="form-control" value="${escapeAttr(it.code)}" readonly></div>
         <div class="col-md-6"><label class="form-label">名称</label><input id="md-name" class="form-control" value="${escapeAttr(it.name)}"></div>
         <div class="col-md-4"><label class="form-label">価格</label><input id="md-price" type="number" class="form-control" value="${Number(it.price||0)}"></div>
         <div class="col-md-4"><label class="form-label">在庫</label><input id="md-stock" type="number" class="form-control" value="${Number(it.stock||0)}"></div>
@@ -313,7 +313,7 @@ document.addEventListener('touchend', (e)=>{
           ${it.img ? `<img src="${escapeAttr(it.img)}" style="max-width:100%;max-height:100%">` : '<span class="text-primary">画像</span>'}
         </div>
         <div class="flex-1">
-          <div><b>品番</b>：${escapeHtml(it.code)}</div>
+          <div><b>コード</b>：${escapeHtml(it.code)}</div>
           <div><b>名称</b>：${escapeHtml(it.name)}</div>
           <div><b>価格</b>：¥${fmt(it.price)}</div>
           <div><b>在庫</b>：${fmt(it.stock)}</div>
@@ -356,7 +356,7 @@ document.addEventListener('touchend', (e)=>{
     const labelX=gridX+12, valX=gridX+112, valMaxW=W - pad - valX - 8;
     g.textAlign='left'; g.textBaseline='middle'; g.fillStyle='#000';
     g.font='16px "Noto Sans JP", system-ui';
-    g.fillText('品番：', labelX, pad + cellH*0.5);
+    g.fillText('コード：', labelX, pad + cellH*0.5);
     g.fillText('商品名：', labelX, pad + cellH*1.5);
     g.fillText('置場：',   labelX, pad + cellH*2.5);
     g.font='bold 18px "Noto Sans JP", system-ui';
@@ -427,32 +427,138 @@ document.addEventListener('touchend', (e)=>{
   }
 
   /* ================= Users ================= */
+
+  // ==== Set User Photo ====
+  function fileToDataURL(file){
+    return new Promise((resolve,reject)=>{
+      const fr = new FileReader();
+      fr.onload = ()=> resolve(fr.result);
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function openSetPhoto(userId){
+    const isAdm = isAdmin();
+    const me = (getCurrentUser()?.id)||'';
+    if(!isAdm && String(userId).toLowerCase()!==String(me).toLowerCase()) return alert('権限がありません');
+
+    const wrap = document.createElement('div');
+    wrap.className='modal fade'; 
+    wrap.innerHTML = `
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">写真を設定</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="mb-3">
+        <label class="form-label">画像ファイルを選択</label>
+        <input id="u-photo-file" type="file" accept="image/*" class="form-control">
+        <div class="form-text">JPG/PNG/GIF 可。サイズは 512KB 以下を推奨。</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">または、画像URLを貼り付け</label>
+        <input id="u-photo-url" type="url" class="form-control" placeholder="https://...">
+      </div>
+      <div class="mb-2">
+        <div class="form-label">プレビュー</div>
+        <div class="d-flex align-items-center gap-2">
+          <img id="u-photo-preview" class="avatar" style="width:64px;height:64px;border-radius:50%;border:1px solid #e2e8f0;object-fit:cover" alt="preview">
+          <span id="u-photo-info" class="text-muted small"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+      <button id="btn-save-photo" class="btn btn-primary">保存</button>
+    </div>
+  </div>
+</div>`;
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap); modal.show();
+
+    const $file = wrap.querySelector('#u-photo-file');
+    const $url  = wrap.querySelector('#u-photo-url');
+    const $pv   = wrap.querySelector('#u-photo-preview');
+    const $info = wrap.querySelector('#u-photo-info');
+    const $save = wrap.querySelector('#btn-save-photo');
+
+    let payload = null;
+
+    function updatePreview(src, note){
+      if(src){ $pv.src = src; $pv.style.display='inline-block'; }
+      $info.textContent = note||'';
+      payload = src;
+    }
+
+    $file.addEventListener('change', async (e)=>{
+      const f = e.target.files?.[0]; if(!f) return;
+      if(f.size > 1024*1024*2) { // 2MB hard limit
+        updatePreview('', 'ファイルサイズが大きすぎます (2MBまで)');
+        return;
+      }
+      try{
+        const dataUrl = await fileToDataURL(f);
+        updatePreview(dataUrl, `${f.name} (${Math.round(f.size/1024)} KB)`);
+      }catch(err){
+        updatePreview('', '読み込みに失敗しました');
+      }
+    });
+
+    $url.addEventListener('input', ()=>{
+      const v = $url.value.trim();
+      if(/^https?:\/\//i.test(v)){
+        updatePreview(v, 'URL から読み込み');
+      }
+    });
+
+    $save.addEventListener('click', async ()=>{
+      if(!payload){ alert('写真を選択またはURLを入力してください'); return; }
+      try{
+        const r = await api('upsertUser', { method:'POST', body:{ id:userId, photo:payload }});
+        if(r && r.ok!==false){ bootstrap.Toast && toast('保存しました'); modal.hide(); renderUsers(); }
+        else alert(r?.error||'保存に失敗しました');
+      }catch(e){ alert('保存に失敗しました'); }
+    });
+
+    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
+  }
+    
   async function renderUsers(){
     try{
+      const isAdm = isAdmin();
+      const me = (getCurrentUser()?.id)||'';
+
       const list = await api('users',{method:'GET'});
-      const arr = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
+      \1      const rows = isAdm ? arr : arr.filter(u=>String(u.id).toLowerCase()===String(me).toLowerCase());
       const tbody = $('#tbl-userqr');
-      tbody.innerHTML = arr.map(u=>`
+      tbody.innerHTML = rows.map(u=>`
         <tr>
           <td style="width:170px"><div id="uqr-${escapeAttr(u.id)}"></div></td>
           <td>${escapeHtml(u.id)}</td>
-          <td>${escapeHtml(u.name)}</td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              ${ (u.photo||u.avatar||u.photoUrl) ? `<img class=\"avatar\" src=\"${escapeAttr(u.photo||u.avatar||u.photoUrl)}\" alt=\"avatar\" onerror=\"this.style.display='none'\">` : '' }
+              <span>${escapeHtml(u.name||'')}</span>
+            </div>
+          </td>
           <td>${escapeHtml(u.role||'user')}</td>
           <td class="text-end">
-            <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
-              <i class="bi bi-download"></i>
-            </button>
+            ${ (isAdm || String(u.id).toLowerCase()===String(me).toLowerCase()) ? `<button class="btn btn-sm btn-outline-primary btn-set-photo" data-id="${escapeAttr(u.id)}" title="写真を設定"><i class="bi bi-camera"></i></button> ` : "" }
+            <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード"><i class="bi bi-download"></i></button>
           </td>
         </tr>
       `).join('');
 
       await ensureQRCode();
-      for(const u of arr){
+      for(const u of rows){
         const el = document.getElementById(`uqr-${u.id}`); if(!el) continue;
         el.innerHTML = ''; new QRCode(el, { text:`USER|${u.id}`, width:64, height:64, correctLevel:QRCode.CorrectLevel.M });
       }
 
       tbody.addEventListener('click', async (e)=>{
+        const p=e.target.closest('.btn-set-photo'); if(p){ e.preventDefault(); openSetPhoto(p.getAttribute('data-id')); return; }
         const b=e.target.closest('.btn-dl-user'); if(!b) return;
         const id = b.getAttribute('data-id');
         const url = await generateQrDataUrl(`USER|${id}`, 300);
@@ -689,7 +795,7 @@ document.addEventListener('touchend', (e)=>{
     <div class="modal-header"><h5 class="modal-title">Adjust 在庫</h5>
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
-      <div class="mb-2"><b>品番：</b>${escapeHtml(rec.code)}</div>
+      <div class="mb-2"><b>コード：</b>${escapeHtml(rec.code)}</div>
       <div class="mb-2"><b>名称：</b>${escapeHtml(rec.name)}</div>
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label">帳簿</label><input class="form-control" value="${rec.book}" readonly></div>
@@ -883,140 +989,16 @@ document.addEventListener('touchend', (e)=>{
   });
 
   
-  // ==== 棚卸 月次/年次リキャップ（フロント側CSVエクスポート） ====
-  (function bindShelfRecap(){
-    const ysel = document.getElementById('st-year');
-    const msel = document.getElementById('st-month');
-    if(ysel && !ysel.children.length){
-      const now = new Date(); const y = now.getFullYear();
-      for(let i=y-5;i<=y+1;i++){ const opt=document.createElement('option'); opt.value=String(i); opt.textContent=String(i); if(i===y) opt.selected=true; ysel.appendChild(opt); }
-      if(msel){ const m = String(now.getMonth()+1).padStart(2,'0'); [...msel.options].forEach(o=>{ if(o.value===m) o.selected=true; }); }
+  // Hide admin-only toolbar in Users for non-admins
+  (function usersToolbarToggle(){
+    const isAdm = isAdmin();
+    const ids = ['btn-export-users','btn-import-users','btn-print-qr-users','btn-open-new-user'];
+    if(!isAdm){
+      ids.forEach(id=>{ const el = document.getElementById(id); if(el) el.classList.add('d-none'); });
+    }else{
+      // admin: show buttons if present
+      ids.forEach(id=>{ const el = document.getElementById(id); if(el) el) ;  /* no-op show relies on default HTML */ });
     }
-    function exportCSV(kind){
-      const arr = [...(ST.rows?.values?.()||[])];
-      const lines = ['code,name,book,qty,diff'];
-      arr.forEach(r=>{
-        lines.push([r.code, (r.name||'').replace(/,/g,' '), r.book, r.qty, r.diff].join(','));
-      });
-      const y = (document.getElementById('st-year')?.value)||new Date().getFullYear();
-      const m = (document.getElementById('st-month')?.value)||String(new Date().getMonth()+1).padStart(2,'0');
-      const hdr = (kind==='monthly') ? `# period,${y}-${m}` : `# period,${y}`;
-      const csv = hdr + '\n' + lines.join('\n');
-      const blob = new Blob([csv], {type:'text/csv'});
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-      a.download = (kind==='monthly') ? `stocktake_${y}-${m}.csv` : `stocktake_${y}.csv`;
-      a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 500);
-    }
-    document.getElementById('st-export-monthly')?.addEventListener('click', ()=>exportCSV('monthly'));
-    document.getElementById('st-export-yearly')?.addEventListener('click',  ()=>exportCSV('yearly'));
-  })();
-
-
-  // ==== 新規アイテム作成 ====
-  function openCreateItem(){
-    if(!isAdmin()) return toast('Akses ditolak (admin only)');
-    const wrap = document.createElement('div');
-    wrap.className='modal fade';
-    wrap.innerHTML = `
-<div class="modal-dialog">
-  <div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">商品 新規</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">品番</label><input id="md-code" class="form-control" placeholder="例: P-001"></div>
-        <div class="col-md-6"><label class="form-label">名称</label><input id="md-name" class="form-control" placeholder="商品名"></div>
-        <div class="col-md-4"><label class="form-label">価格</label><input id="md-price" type="number" class="form-control" value="0"></div>
-        <div class="col-md-4"><label class="form-label">在庫</label><input id="md-stock" type="number" class="form-control" value="0"></div>
-        <div class="col-md-4"><label class="form-label">最小</label><input id="md-min" type="number" class="form-control" value="0"></div>
-        <div class="col-md-6"><label class="form-label">置場</label><input id="md-location" class="form-control" placeholder="A-01 など"></div>
-        <div class="col-md-6"><label class="form-label">画像URL</label><input id="md-img" class="form-control" placeholder="https://..."></div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-      <button id="btn-save-new-item" class="btn btn-primary">保存</button>
-    </div>
-  </div>
-</div>`;
-    document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap); modal.show();
-
-    $('#btn-save-new-item', wrap)?.addEventListener('click', async ()=>{
-      const code = $('#md-code',wrap).value?.trim();
-      if(!code) return toast('品番を入力してください');
-      try{
-        const body = {
-          code,
-          name: $('#md-name',wrap).value||'',
-          price: Number($('#md-price',wrap).value||0),
-          stock: Number($('#md-stock',wrap).value||0),
-          min: Number($('#md-min',wrap).value||0),
-          location: ($('#md-location',wrap).value||'').toUpperCase(),
-          img: $('#md-img',wrap).value||'',
-          overwrite: false
-        };
-        const r = await api('updateItem',{method:'POST', body});
-        if(r?.ok){ toast('作成しました'); modal.hide(); renderItems(); }
-        else toast(r?.error||'作成失敗');
-      }catch(e){ toast('作成失敗: '+(e?.message||e)); }
-    });
-
-    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
-  }
-
-  // bind 新規 button
-  document.getElementById('btn-open-new-item')?.addEventListener('click', openCreateItem);
-
-  // ==== 新規ユーザー ====
-  function openCreateUser(){
-    if(!isAdmin()) return alert('権限がありません（admin のみ）');
-    const wrap = document.createElement('div');
-    wrap.className='modal fade';
-    wrap.innerHTML = `
-<div class="modal-dialog">
-  <div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">ユーザー 新規</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">ユーザーID</label><input id="ud-id" class="form-control" placeholder="社員番号など"></div>
-        <div class="col-md-6"><label class="form-label">名前</label><input id="ud-name" class="form-control"></div>
-        <div class="col-md-6"><label class="form-label">権限</label>
-          <select id="ud-role" class="form-select">
-            <option value="user">user</option>
-            <option value="admin">admin</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-      <button id="btn-save-new-user" class="btn btn-primary">保存</button>
-    </div>
-  </div>
-</div>`;
-    document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap); modal.show();
-
-    $('#btn-save-new-user', wrap)?.addEventListener('click', async ()=>{
-      const id = $('#ud-id',wrap).value?.trim();
-      if(!id) return alert('ユーザーIDを入力してください');
-      try{
-        const body = { id, name: $('#ud-name',wrap).value||'', role: ($('#ud-role',wrap).value||'user') };
-        const r = await api('upsertUser',{method:'POST', body});
-        if(r?.ok){ alert('作成しました'); modal.hide(); renderUsers(); }
-        else alert(r?.error||'作成失敗');
-      }catch(e){ alert('作成失敗'); }
-    });
-
-    wrap.addEventListener('hidden.bs.modal', ()=> wrap.remove(), {once:true});
-  }
-
-  // tampilkan tombol add user untuk admin
-  (function showAdminButtons(){
-    const b = document.getElementById('btn-open-new-user');
-    if(b){ if(isAdmin()) b.classList.remove('d-none'); else b.classList.add('d-none'); b.addEventListener('click', openCreateUser); }
   })();
 
 
