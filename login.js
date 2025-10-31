@@ -16,6 +16,36 @@
     const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style);
   })();
 
+  // ==== Lightweight loading overlay khusus halaman login ====
+  function ensureLoading(){
+    let el = document.getElementById('global-loading');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'global-loading';
+      el.className = 'd-none';
+      el.innerHTML = `
+        <div class="box" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 18px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 8px 26px rgba(15,23,42,.06)">
+          <div class="spinner" style="width:28px;height:28px;border-radius:50%;border:3px solid #cbd5e1;border-top-color:#2563eb;animation:spin 1s linear infinite"></div>
+          <div id="loading-text" class="text" style="font-size:.95rem;color:#475569">読み込み中…</div>
+        </div>`;
+      Object.assign(el.style, {position:'fixed', inset:'0', background:'rgba(255,255,255,.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:'2000'});
+      const kf = document.createElement('style'); kf.textContent='@keyframes spin{to{transform:rotate(360deg)}}';
+      document.head.appendChild(kf);
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function setLoading(show, text){
+    const el = ensureLoading();
+    const boxText = document.getElementById('loading-text');
+    if(show){
+      el.classList.remove('d-none');
+      if(boxText) boxText.textContent = text || '読み込み中…';
+    }else{
+      el.classList.add('d-none');
+    }
+  }
+
   /* API */
   async function api(action, {method='GET', body}={}){
     if(!window.CONFIG || !CONFIG.BASE_URL) throw new Error('config.js belum ter-load / BASE_URL kosong');
@@ -71,11 +101,13 @@
     const id=($id?.value||'').trim(), pin=($pin?.value||'').trim();
     if(!id) return toast('ユーザーIDを入力してください。');
     try{
+      setLoading(true, 'ログイン中…');
       const r=await api('login',{method:'POST',body:{id,pass:pin}});
-      if(!r || r.ok===false) return toast(r?.error||'ログインに失敗しました。');
+      if(!r || r.ok===false){ setLoading(false); return toast(r?.error||'ログインに失敗しました。'); }
       localStorage.setItem('currentUser', JSON.stringify(r.user));
+      setLoading(true, 'ダッシュボードへ移動中…');
       location.href='dashboard.html';
-    }catch(err){ toast('ログイン失敗: '+(err?.message||err)); }
+    }catch(err){ setLoading(false); toast('ログイン失敗: '+(err?.message||err)); }
   });
   [$id,$pin].forEach(el=>el?.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $btn?.click(); }}));
 
@@ -108,13 +140,15 @@
     const p = parseQR(String(txt||'')); if(!p) return;
     await stopQR();
     try{
+      setLoading(true, 'QRでログイン中…');
       const r = (p.kind==='byId')
         ? await api('loginById',{method:'POST',body:{id:p.id}})
         : await api('login',{method:'POST',body:{id:p.id,pass:p.pin}});
-      if(!r || r.ok===false) return toast(r?.error||'ログインに失敗しました。');
+      if(!r || r.ok===false){ setLoading(false); return toast(r?.error||'ログインに失敗しました。'); }
       localStorage.setItem('currentUser', JSON.stringify(r.user));
+      setLoading(true, 'ダッシュボードへ移動中…');
       location.href='dashboard.html';
-    }catch(err){ toast('QRログイン失敗: '+(err?.message||err)); }
+    }catch(err){ setLoading(false); toast('QRログイン失敗: '+(err?.message||err)); }
   }
 
   async function startNative(){
