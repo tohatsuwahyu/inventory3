@@ -1,9 +1,10 @@
 /* =========================================================
- * login.js — Login USER+PIN & QR (versi cepat & stabil, mobile-safe)
+ * login.js — Login USER+PIN & QR (fast scan, mobile-safe)
  * =======================================================*/
 (function(){
   "use strict";
   const qs = (s, el=document)=>el.querySelector(s);
+  const isPhone = /Android|iPhone|iPad/i.test(navigator.userAgent);
 
   /* CSS anti overlay/tap miss */
   (function injectTapCss(){
@@ -79,7 +80,7 @@
     const cdns=[
       'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js',
       'https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js'
+      'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/minified/html5-qrcode.min.js'
     ];
     for(const u of cdns){ try{ await loadScriptOnce(u); if(window.Html5Qrcode) return; }catch{} }
     throw new Error('html5-qrcode tidak tersedia');
@@ -119,7 +120,7 @@
     let a = qs('#qr-area');
     if(!a){ a=document.createElement('div'); a.id='qr-area'; document.body.appendChild(a); }
     Object.assign(a.style,{
-      display:'none', width:'100%', maxWidth:'400px', aspectRatio:'4 / 3',
+      display:'none', width:'100%', maxWidth:'420px', aspectRatio:'4 / 3',
       margin:'12px auto', borderRadius:'12px', overflow:'hidden', background:'#0b0b0b10'
     });
     return a;
@@ -169,6 +170,9 @@
       });
       video.srcObject=stream;
 
+      // beri waktu autofocus/exposure lock
+      await new Promise(r=>setTimeout(r, 500));
+
       const det = new BarcodeDetector({ formats:['qr_code'] });
       let raf=0, stopped=false;
       const loop = async ()=>{
@@ -190,13 +194,18 @@
     try{
       await ensureHtml5(); $area.style.display='block'; $area.style.pointerEvents='auto';
       const cfg = {
-        fps: 24, qrbox:{ width:150, height:150 }, aspectRatio:1.33,
-        rememberLastUsedCamera:true, disableFlip:true,
+        fps: 30,
+        qrbox:{ width: isPhone? 220 : 240, height: isPhone? 220 : 240 },
+        aspectRatio: 1.33,
+        rememberLastUsedCamera:true,
+        disableFlip:true,
         videoConstraints:{ facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 }, focusMode:'continuous', exposureMode:'continuous' }
       };
       scanner = new Html5Qrcode('qr-area', { useBarCodeDetectorIfSupported:true });
       async function startWith(source){
         await scanner.start(source, cfg, onScan);
+        // jeda kecil untuk autofocus lalu set zoom/constraints
+        await new Promise(r=>setTimeout(r, 600));
         try{
           await scanner.applyVideoConstraints({ advanced:[{focusMode:'continuous'},{exposureMode:'continuous'},{zoom:3}] }).catch(()=>{});
         }catch(_){}
