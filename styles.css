@@ -292,3 +292,65 @@ img{ max-width:100%; height:auto; }
   }
   body.sb-open #sb-backdrop{ display:block; }   /* TERBUKA */
 }
+/* ===== 商品一覧: perapihan header & isi ===== */
+.table-items th,
+.table-items td { vertical-align: middle; }
+
+.table-items thead th {
+  white-space: nowrap;
+  font-size: 0.95rem;
+  padding-top: .6rem;
+  padding-bottom: .6rem;
+  color: #334155;          /* abu-abu elegan */
+}
+
+/* Lebar kolom (desktop) */
+.table-items .th-qr     { width: 120px; }
+.table-items .th-code   { width: 120px; }
+.table-items .th-img    { width: 110px; }
+.table-items .th-price  { width: 110px; }
+.table-items .th-stock,
+.table-items .th-min    { width: 90px; }
+.table-items .th-dept   { width: 140px; }
+.table-items .th-location { width: 140px; }
+.table-items .th-actions  { width: 140px; }
+
+/* Kolom 名称: potong rapi bila panjang */
+.table-items td:nth-child(3) { /* kolom 名称 */
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* QR & 画像 sel kecil rapi */
+.table-items td:nth-child(1) img,
+.table-items td:nth-child(4) img {
+  max-height: 64px;
+  width: auto;
+}
+
+/* Tombol 操作 jadi 2×2 grid hemat tempat */
+.table-items .act-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 6px;
+}
+.table-items .act-grid .btn {
+  width: 100%;
+  padding: .35rem .5rem;
+  border-radius: .75rem;
+}
+
+/* Responsif: saat layar lebih sempit, sesuaikan */
+@media (max-width: 1400px) {
+  .table-items .th-name      { max-width: 300px; }
+  .table-items .th-dept,
+  .table-items .th-location  { width: 120px; }
+  .table-items .th-actions   { width: 128px; }
+}
+@media (max-width: 992px) {
+  .table-items .th-name      { max-width: 220px; }
+  .table-items .th-qr        { width: 100px; }
+  .table-items .th-img       { width: 88px; }
+}
