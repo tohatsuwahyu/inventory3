@@ -238,7 +238,22 @@
               <div class="fw-semibold">商品一覧</div>
               <input id="items-search" class="form-control search" placeholder="名称で検索…"/>
             </div>
-            <div class="right">
+           <!-- ========= baru ditambah 251102 untuk reload ========= --> <div class="right">
+              <div class="btn-group me-2">
+  <button id="btn-items-reload" class="btn btn-sm btn-outline-secondary" title="Reload">
+    <i class="bi bi-arrow-clockwise"></i>
+  </button>
+  <button id="btn-items-auto" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+    Auto
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><a class="dropdown-item" data-autorefresh="0">Off</a></li>
+    <li><a class="dropdown-item" data-autorefresh="30">30秒</a></li>
+    <li><a class="dropdown-item" data-autorefresh="60">60秒</a></li>
+    <li><a class="dropdown-item" data-autorefresh="120">120秒</a></li>
+  </ul>
+</div>
+
               <button id="btn-items-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
               <button id="btn-items-xlsx" class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
               <button id="btn-items-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
