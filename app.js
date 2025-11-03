@@ -430,18 +430,34 @@
     g.strokeRect(gridX, pad, W - gridX - pad, H - 2 * pad);
     for (let i = 1; i <= 2; i++) { const y = pad + cellH * i; g.beginPath(); g.moveTo(gridX, y); g.lineTo(W - pad, y); g.stroke(); }
 
-    const labelX = gridX + 12, valX = gridX + 112, valMaxW = W - pad - valX - 8;
-    g.textAlign = "left"; g.textBaseline = "middle"; g.fillStyle = "#000";
+       const labelX = gridX + 12, valX = gridX + 112, valMaxW = W - pad - valX - 8;
+    const cellPad = 6;                         // padding kecil di dalam sel
+
+    g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = "#000";
     g.font = '16px "Noto Sans JP", system-ui';
-    g.fillText("コード：", labelX, pad + cellH * 0.5);
-    g.fillText("商品名：", labelX, pad + cellH * 1.5);
-    g.fillText("部門／置場：", labelX, pad + cellH * 2.5);
-    g.font = 'bold 18px "Noto Sans JP", system-ui';
-    drawSingleLineFit(g, String(item.code || ""), valX, pad + cellH * 0.5, valMaxW);
-    drawWrapAuto(g, String(item.name || ""), valX, pad + cellH * 1.5, valMaxW, { maxLines: 2, base: 22, min: 16, lineGap: 4 });
-    g.font = 'bold 18px "Noto Sans JP", system-ui';
-    const loc = String(item.location || "").toUpperCase();const dep = String(item.department || "");drawSingleLineFit(g, (dep ? dep : "") + (dep && loc ? "／" : "") + (loc ? loc : ""),valX, pad + cellH * 2.5, valMaxW);
+
+    // judul kolom (tetap 1 baris)
+    g.fillText("コード：", labelX, pad + cellPad + 0 * cellH);
+    g.fillText("商品名：", labelX, pad + cellPad + 1 * cellH);
+    g.fillText("部門／置場：", labelX, pad + cellPad + 2 * cellH);
+
+    // nilai: WRAP TANPA POTONG, otomatis kecil jika perlu agar muat tinggi sel
+    drawWrapBox(g, String(item.code || ""),    // コード
+                valX, pad + cellPad + 0 * cellH, valMaxW, cellH - 2 * cellPad,
+                { base: 18, min: 12, lineGap: 4, weight: "bold" });
+
+    drawWrapBox(g, String(item.name || ""),    // 商品名
+                valX, pad + cellPad + 1 * cellH, valMaxW, cellH - 2 * cellPad,
+                { base: 22, min: 12, lineGap: 4, weight: "bold" });
+
+    const loc = String(item.location || "").toUpperCase();
+    const dep = String(item.department || "");
+    drawWrapBox(g, (dep ? dep : "") + (dep && loc ? "／" : "") + (loc ? loc : ""), // 部門／置場
+                valX, pad + cellPad + 2 * cellH, valMaxW, cellH - 2 * cellPad,
+                { base: 18, min: 12, lineGap: 4, weight: "bold" });
+
     return c.toDataURL("image/png");
+
 
     function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
       ctx.save(); ctx.beginPath();
@@ -467,26 +483,38 @@
         ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
       } catch { }
     }
-    function drawSingleLineFit(ctx, text, x, y, maxW) {
-      let size = parseInt((ctx.font.match(/(\d+)px/) || [])[1] || 22, 10);
-      const fam = ctx.font.split(" ").slice(1).join(" ");
-      while (ctx.measureText(text).width > maxW && size > 12) { size -= 1; ctx.font = `bold ${size}px ${fam}`; }
-      ctx.fillText(text, x, y);
-    }
-    function splitByWidth(ctx, text, maxW) {
-      const arr = [...String(text)]; const lines = []; let buf = "";
-      for (const ch of arr) { const trial = buf + ch; if (ctx.measureText(trial).width <= maxW) buf = trial; else { if (buf) lines.push(buf); buf = ch; } }
-      if (buf) lines.push(buf); return lines;
-    }
-    function drawWrapAuto(ctx, text, x, centerY, maxW, opt) {
-      const base = opt.base || 22, min = opt.min || 16, gap = opt.lineGap || 4, maxLines = opt.maxLines || 2;
-      const fam = ctx.font.split(" ").slice(1).join(" "); let size = base, lines;
-      while (true) { ctx.font = `bold ${size}px ${fam}`; lines = splitByWidth(ctx, text, maxW); if (lines.length <= maxLines || size <= min) break; size -= 1; }
-      if (lines.length > maxLines) {
-        lines = lines.slice(0, maxLines); let last = lines[lines.length - 1];
-        while (ctx.measureText(last + "…").width > maxW && last.length > 0) last = last.slice(0, -1);
-        lines[lines.length - 1] = last + "…";
+        function measureLines(ctx, text, maxW) {
+      const words = String(text).split(/(\s+)/); // pisah dengan spasi, pertahankan spasi
+      const lines = []; let line = "";
+      for (const w of words) {
+        const t = line + w;
+        if (ctx.measureText(t).width <= maxW || !line) line = t;
+        else { lines.push(line.trim()); line = w.trimStart(); }
       }
+      if (line) lines.push(line.trim());
+      return lines;
+    }
+    function drawWrapBox(ctx, text, x, yTop, maxW, maxH, opt = {}) {
+      const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
+      const fam = '"Noto Sans JP", system-ui';
+      const weight = opt.weight || "normal";
+      let size = base, lines;
+
+      while (true) {
+        ctx.font = `${weight} ${size}px ${fam}`;
+        lines = measureLines(ctx, text, maxW);
+        const totalH = lines.length * size + (lines.length - 1) * gap;
+        if (totalH <= maxH || size <= min) break;
+        size -= 1; // kecilkan sampai muat tanpa memotong
+      }
+      let y = yTop; // top-align di dalam sel
+      for (const ln of lines) {
+        ctx.fillText(ln, x, y);
+        y += size + gap;
+        if (y - yTop > maxH) break; // guard (harusnya sudah muat)
+      }
+    }
+
       const totalH = lines.length * size + (lines.length - 1) * gap; let y = centerY - totalH / 2 + size / 2;
       for (const ln of lines) { ctx.fillText(ln, x, y); y += size + gap; }
     }
