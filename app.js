@@ -401,137 +401,158 @@
   }
 
   // ---------- LABEL CANVAS (wrap teks & grid cetak) ----------
-  async function makeItemLabelDataURL(item) {
-    const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
-    const QUIET = 20, qrSize = 156, gapQR = 18;
-    const c = document.createElement("canvas"); c.width = W; c.height = H;
-    const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
+ async function makeItemLabelDataURL(item) {
+  // — ukuran di-tune ulang agar area teks lebih lebar —
+  const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
+  const QUIET = 16, qrSize = 136, gapQR = 14; // QR lebih kecil → ruang teks lebih besar
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
 
-    // border luar
-    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
-    g.strokeStyle = "#000"; g.lineWidth = 2; g.strokeRect(1, 1, W - 2, H - 2);
+  // border
+  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+  g.strokeStyle = "#000"; g.lineWidth = 2; g.strokeRect(1, 1, W - 2, H - 2);
 
-    // kolom kiri (gambar)
-    const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
-    roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
-    await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
+  // kolom kiri (gambar)
+  const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
+  roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
+  await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
 
-    // QR
-    const colStart = pad + imgW + gap;
-    const qy = pad + Math.max(0, ((H - 2 * pad) - qrSize) / 2);
-    const qx = colStart + gapQR + QUIET;
-    g.fillStyle = "#fff";
-    g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
-    try {
-      const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
-      const im = new Image(); im.src = du; await imgLoaded(im);
-      g.drawImage(im, qx, qy, qrSize, qrSize);
-    } catch {}
+  // QR
+  const colStart = pad + imgW + gap;
+  const qy = pad + Math.max(0, ((H - 2 * pad) - qrSize) / 2);
+  const qx = colStart + gapQR + QUIET;
+  g.fillStyle = "#fff";
+  g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
+  try {
+    const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
+    const im = new Image(); im.src = du; await imgLoaded(im);
+    g.drawImage(im, qx, qy, qrSize, qrSize);
+  } catch {}
 
-    // grid kanan
-    const colQRW = qrSize + 2 * QUIET;
-    const gridX = colStart + gapQR + colQRW + gapQR;
-    const cellH = (H - 2 * pad) / 3;
-    g.strokeStyle = "#000"; g.lineWidth = 2;
-    g.strokeRect(gridX, pad, W - gridX - pad, H - 2 * pad);
-    for (let i = 1; i <= 2; i++) {
-      const y = pad + cellH * i;
-      g.beginPath(); g.moveTo(gridX, y); g.lineTo(W - pad, y); g.stroke();
+  // grid kanan
+  const colQRW = qrSize + 2 * QUIET;
+  const gridX = colStart + gapQR + colQRW + gapQR;
+  const cellH = (H - 2 * pad) / 3;
+  g.strokeStyle = "#000"; g.lineWidth = 2;
+  g.strokeRect(gridX, pad, W - gridX - pad, H - 2 * pad);
+  for (let i = 1; i <= 2; i++) {
+    const y = pad + cellH * i;
+    g.beginPath(); g.moveTo(gridX, y); g.lineTo(W - pad, y); g.stroke();
+  }
+
+  // label & nilai
+  const labelX = gridX + 10;
+  const valX   = gridX + 96;                // kolom label + nilai dipersempit label → nilai lebih lebar
+  const valMaxW = W - pad - valX - 8;
+  const cellPad = 6;
+
+  g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = "#000";
+  g.font = '16px "Noto Sans JP", system-ui';
+  g.fillText("コード：",     labelX, pad + cellPad + 0 * cellH);
+  g.fillText("商品名：",     labelX, pad + cellPad + 1 * cellH);
+  g.fillText("部門／置場：", labelX, pad + cellPad + 2 * cellH);
+
+  drawWrapBox(g, String(item.code || ""),
+              valX, pad + cellPad + 0 * cellH, valMaxW, cellH - 2*cellPad,
+              { base: 20, min: 11, lineGap: 3, weight: "bold" });
+
+  drawWrapBox(g, String(item.name || ""),
+              valX, pad + cellPad + 1 * cellH, valMaxW, cellH - 2*cellPad,
+              { base: 22, min: 11, lineGap: 3, weight: "bold" });
+
+  const loc = String(item.location || "").toUpperCase();
+  const dep = String(item.department || "");
+  drawWrapBox(g, (dep ? dep : "") + (dep && loc ? "／" : "") + (loc ? loc : ""),
+              valX, pad + cellPad + 2 * cellH, valMaxW, cellH - 2*cellPad,
+              { base: 18, min: 11, lineGap: 3, weight: "bold" });
+
+  return c.toDataURL("image/png");
+
+  // ---- helpers ----
+  function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
+    ctx.save(); ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    if (fill)   { ctx.fillStyle = fillColor || "#eef"; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = border || "#000"; ctx.stroke(); }
+    ctx.restore();
+  }
+  function imgLoaded(im){ return new Promise(res => { im.onload = res; im.onerror = res; }); }
+  async function drawImageIfAny(ctx, url, x, y, w, h, rr){
+    if (!url){
+      ctx.save(); ctx.fillStyle="#3B82F6"; ctx.font='bold 28px "Noto Sans JP", system-ui';
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText("画像", x + w/2, y + h/2);
+      ctx.restore(); return;
     }
-
-    // teks (auto-wrap tanpa memotong)
-    const labelX = gridX + 12, valX = gridX + 112, valMaxW = W - pad - valX - 8;
-    const cellPad = 6;
-
-    g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = "#000";
-    g.font = '16px "Noto Sans JP", system-ui';
-    g.fillText("コード：",      labelX, pad + cellPad + 0 * cellH);
-    g.fillText("商品名：",      labelX, pad + cellPad + 1 * cellH);
-    g.fillText("部門／置場：",  labelX, pad + cellPad + 2 * cellH);
-
-    drawWrapBox(g, String(item.code || ""),
-                valX, pad + cellPad + 0 * cellH, valMaxW, cellH - 2*cellPad,
-                { base: 18, min: 12, lineGap: 4, weight: "bold" });
-
-    drawWrapBox(g, String(item.name || ""),
-                valX, pad + cellPad + 1 * cellH, valMaxW, cellH - 2*cellPad,
-                { base: 22, min: 12, lineGap: 4, weight: "bold" });
-
-    const loc = String(item.location || "").toUpperCase();
-    const dep = String(item.department || "");
-    drawWrapBox(g, (dep ? dep : "") + (dep && loc ? "／" : "") + (loc ? loc : ""),
-                valX, pad + cellPad + 2 * cellH, valMaxW, cellH - 2*cellPad,
-                { base: 18, min: 12, lineGap: 4, weight: "bold" });
-
-    return c.toDataURL("image/png");
-
-    // ---- helpers khusus label ----
-    function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
+    try{
+      const im = new Image(); im.crossOrigin="anonymous"; im.src=url; await imgLoaded(im);
+      const s = Math.min(w/im.width, h/im.height), iw = im.width*s, ih = im.height*s;
+      const ix = x + (w - iw)/2, iy = y + (h - ih)/2;
       ctx.save(); ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.arcTo(x + w, y, x + w, y + h, r);
-      ctx.arcTo(x + w, y + h, x, y + h, r);
-      ctx.arcTo(x, y + h, x, y, r);
-      ctx.arcTo(x, y, x + w, y, r);
-      ctx.closePath();
-      if (fill)   { ctx.fillStyle = fillColor || "#eef"; ctx.fill(); }
-      if (stroke) { ctx.strokeStyle = border || "#000"; ctx.stroke(); }
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr);
+      ctx.closePath(); ctx.clip();
+      ctx.drawImage(im, ix, iy, iw, ih);
       ctx.restore();
+    } catch {}
+  }
+
+  // ——— Wrap aware CJK: fallback ke per-karakter jika tanpa spasi / token kepanjangan ———
+  function measureLines(ctx, text, maxW){
+    const raw = String(text ?? "");
+    // Tokenisasi: pisah spasi dan non-spasi; kalau satu token terlalu panjang -> pecah per karakter
+    const tokens = raw.split(/(\s+)/);
+    const lines = []; let line = "";
+
+    const pushToken = (tok) => {
+      // jika token sendiri melebihi maxW, pecah per karakter (grapheme)
+      if (ctx.measureText(tok).width <= maxW) {
+        const t = line + tok;
+        if (!line || ctx.measureText(t).width <= maxW) line = t;
+        else { lines.push(line.trim()); line = tok.trimStart(); }
+      } else {
+        for (const ch of Array.from(tok)) {
+          const t = line + ch;
+          if (!line || ctx.measureText(t).width <= maxW) line = t;
+          else { lines.push(line.trim()); line = ch; }
+        }
+      }
+    };
+
+    for (const tk of tokens) { pushToken(tk); }
+    if (line) lines.push(line.trim());
+    return lines;
+  }
+
+  function drawWrapBox(ctx, text, x, yTop, maxW, maxH, opt={}){
+    const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
+    const fam  = '"Noto Sans JP", system-ui';
+    const weight = opt.weight || "normal";
+    let size = base, lines;
+    while (true){
+      ctx.font = `${weight} ${size}px ${fam}`;
+      lines = measureLines(ctx, text, maxW);
+      const totalH = lines.length * size + (lines.length - 1) * gap;
+      if (totalH <= maxH || size <= min) break;
+      size -= 1;
     }
-    function imgLoaded(im){ return new Promise(res => { im.onload = res; im.onerror = res; }); }
-    async function drawImageIfAny(ctx, url, x, y, w, h, rr){
-      if (!url){
-        ctx.save(); ctx.fillStyle="#3B82F6"; ctx.font='bold 28px "Noto Sans JP", system-ui';
-        ctx.textAlign="center"; ctx.textBaseline="middle";
-        ctx.fillText("画像", x + w/2, y + h/2);
-        ctx.restore(); return;
-      }
-      try{
-        const im = new Image(); im.crossOrigin="anonymous"; im.src=url; await imgLoaded(im);
-        const s = Math.min(w/im.width, h/im.height), iw = im.width*s, ih = im.height*s;
-        const ix = x + (w - iw)/2, iy = y + (h - ih)/2;
-        ctx.save(); ctx.beginPath();
-        ctx.moveTo(x + rr, y);
-        ctx.arcTo(x + w, y, x + w, y + h, rr);
-        ctx.arcTo(x + w, y + h, x, y + h, rr);
-        ctx.arcTo(x, y + h, x, y, rr);
-        ctx.arcTo(x, y, x + w, y, rr);
-        ctx.closePath(); ctx.clip();
-        ctx.drawImage(im, ix, iy, iw, ih);
-        ctx.restore();
-      } catch {}
-    }
-    function measureLines(ctx, text, maxW){
-      const words = String(text).split(/(\s+)/); // pertahankan spasi
-      const lines = []; let line = "";
-      for (const w of words){
-        const t = line + w;
-        if (ctx.measureText(t).width <= maxW || !line) line = t;
-        else { lines.push(line.trim()); line = w.trimStart(); }
-      }
-      if (line) lines.push(line.trim());
-      return lines;
-    }
-    function drawWrapBox(ctx, text, x, yTop, maxW, maxH, opt={}){
-      const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
-      const fam  = '"Noto Sans JP", system-ui';
-      const weight = opt.weight || "normal";
-      let size = base, lines;
-      while (true){
-        ctx.font = `${weight} ${size}px ${fam}`;
-        lines = measureLines(ctx, text, maxW);
-        const totalH = lines.length * size + (lines.length - 1) * gap;
-        if (totalH <= maxH || size <= min) break;
-        size -= 1;
-      }
-      let y = yTop;
-      for (const ln of lines){
-        ctx.fillText(ln, x, y);
-        y += size + gap;
-        if (y - yTop > maxH) break;
-      }
+    let y = yTop;
+    for (const ln of lines){
+      ctx.fillText(ln, x, y);
+      y += size + gap;
+      if (y - yTop > maxH) break;
     }
   }
+}
+
 
   async function generateQrDataUrl(text, size) {
     await ensureQRCode();
