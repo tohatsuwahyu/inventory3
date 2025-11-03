@@ -172,6 +172,25 @@
                 <button id="st-export2" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
                 <button id="st-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
                 <input id="input-st-import" type="file" accept=".csv" class="d-none">
+                <button id="st-save" class="btn btn-sm btn-outline-secondary">
+  <i class="bi bi-save me-1"></i> 下書き保存
+</button>
+<button id="st-load" class="btn btn-sm btn-outline-secondary">
+  <i class="bi bi-folder2-open me-1"></i> 読込
+</button>
+<button id="st-clear" class="btn btn-sm btn-outline-secondary">
+  <i class="bi bi-eraser me-1"></i> クリア
+</button>
+
+<label class="ms-2 small d-inline-flex align-items-center">
+  <input id="st-only-diff" type="checkbox" class="form-check-input me-1"/>
+  差異のみ
+</label>
+
+<button id="st-finalize" class="btn btn-sm btn-danger">
+  <i class="bi bi-check2-circle me-1"></i> 確定(在庫更新)
+</button>
+
               </div>
             </div>
 
@@ -196,6 +215,8 @@
     </thead>
     <tbody id="tbl-stocktake"></tbody>
   </table>
+             <div id="st-summary" class="mt-2 small text-muted"></div>
+
 </div>
 
 
