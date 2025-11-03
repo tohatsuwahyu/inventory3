@@ -200,6 +200,7 @@
       <td class="text-end">¥${fmt(it.price)}</td>
       <td class="text-end">${fmt(it.stock)}</td>
       <td class="text-end">${fmt(it.min)}</td>
+      <td>${escapeHtml(it.department || "")}</td>
       <td>${escapeHtml(it.location || "")}</td>
       <td>
         <div class="act-grid">
@@ -286,6 +287,8 @@
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="md-img" class="form-control" value="${escapeAttr(it.img || "")}"></div>
         <div class="col-md-4"><label class="form-label">置場</label>
           <input id="md-location" class="form-control text-uppercase" value="${escapeAttr(it.location || "")}" placeholder="A-01-03">
+          <div class="col-md-4"><label class="form-label">部門</label>
+          <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など"></div>
         </div>
       </div>
     </div>
@@ -310,6 +313,7 @@
           min: Number($("#md-min", wrap).value || 0),
           img: $("#md-img", wrap).value,
           location: ($("#md-location", wrap).value || "").toUpperCase().trim(),
+          department: ($("#md-department", wrap).value || "").trim(),
           overwrite: true
         };
         const r = await api("updateItem", { method: "POST", body: payload });
@@ -340,6 +344,9 @@
         <div class="col-md-4"><label class="form-label">最小</label><input id="nw-min" type="number" class="form-control" value="0"></div>
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="nw-img" class="form-control"></div>
         <div class="col-md-4"><label class="form-label">置場</label><input id="nw-location" class="form-control text-uppercase" placeholder="A-01-03"></div>
+        <div class="col-md-4"><label class="form-label">部門</label>
+  <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
+</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -361,6 +368,7 @@
           min: Number($("#nw-min", wrap).value || 0),
           img: $("#nw-img", wrap).value,
           location: ($("#nw-location", wrap).value || "").toUpperCase().trim(),
+          department: ($("#nw-department", wrap).value || "").trim(),
           overwrite: false
         };
         if (!payload.code) return toast("コードを入力してください。");
@@ -386,6 +394,7 @@
           <div><b>価格</b>：¥${fmt(it.price)}</div>
           <div><b>在庫</b>：${fmt(it.stock)}</div>
           <div><b>最小</b>：${fmt(it.min)}</div>
+          <div><b>部門</b>：${escapeHtml(it.department || "")}</div>
           <div><b>置場</b>：<span class="badge text-bg-light border">${escapeHtml(it.location || "")}</span></div>
         </div>
       </div>`;
@@ -426,12 +435,12 @@
     g.font = '16px "Noto Sans JP", system-ui';
     g.fillText("コード：", labelX, pad + cellH * 0.5);
     g.fillText("商品名：", labelX, pad + cellH * 1.5);
-    g.fillText("置場：", labelX, pad + cellH * 2.5);
+    g.fillText("部門／置場：", labelX, pad + cellH * 2.5);
     g.font = 'bold 18px "Noto Sans JP", system-ui';
     drawSingleLineFit(g, String(item.code || ""), valX, pad + cellH * 0.5, valMaxW);
     drawWrapAuto(g, String(item.name || ""), valX, pad + cellH * 1.5, valMaxW, { maxLines: 2, base: 22, min: 16, lineGap: 4 });
     g.font = 'bold 18px "Noto Sans JP", system-ui';
-    drawSingleLineFit(g, String(item.location || "").toUpperCase(), valX, pad + cellH * 2.5, valMaxW);
+    const loc = String(item.location || "").toUpperCase();const dep = String(item.department || "");drawSingleLineFit(g, (dep ? dep : "") + (dep && loc ? "／" : "") + (loc ? loc : ""),valX, pad + cellH * 2.5, valMaxW);
     return c.toDataURL("image/png");
 
     function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
@@ -796,7 +805,7 @@
     const book = Number(item.stock || 0);
     const qty = Number(realQty ?? book);
     const diff = qty - book;
-    ST.rows.set(code, { code, name: item.name, book, qty, diff });
+   ST.rows.set(code, { code, name: item.name, department: (item.department || ""), book, qty, diff });
     renderShelfTable();
   }
 
@@ -808,6 +817,7 @@
       <tr data-code="${escapeAttr(r.code)}">
         <td>${escapeHtml(r.code)}</td>
         <td>${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(r.department || "")}</td>
         <td class="text-end">${fmt(r.book)}</td>
         <td class="text-end"><input type="number" class="form-control form-control-sm st-qty" value="${r.qty}"></td>
         <td class="text-end ${r.diff === 0 ? "" : "fw-bold"}">${fmt(r.qty - r.book)}</td>
@@ -825,8 +835,8 @@
       if (!e.target.classList.contains("st-qty")) return;
       const code = tr.getAttribute("data-code"); const rec = ST.rows.get(code); if (!rec) return;
       rec.qty = Number(e.target.value || 0); rec.diff = rec.qty - rec.book;
-      tr.children[4].textContent = fmt(rec.diff);
-      tr.children[4].classList.toggle("fw-bold", rec.diff !== 0);
+      tr.children[5].textContent = fmt(rec.diff);
+      tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
     };
 
     tbody.onclick = (e) => {
@@ -1039,6 +1049,52 @@ $("#btn-items-xlsx")?.addEventListener("click", async () => {
     XLSX.writeFile(wb, "items.xlsx");
   } catch { alert("エクスポート失敗"); }
 });
+// Items export (CSV)
+$("#btn-items-export")?.addEventListener("click", async () => {
+  try {
+    const list = await api("items", { method: "GET" });
+    const arr = Array.isArray(list) ? list : (list?.data || []);
+    const csv = ["code,name,price,stock,min,location,department,img"]
+      .concat(arr.map(i => [
+        i.code,
+        String(i.name || "").replace(/,/g, " "),
+        Number(i.price || 0),
+        Number(i.stock || 0),
+        Number(i.min || 0),
+        String(i.location || "").toUpperCase(),
+        String(i.department || "").replace(/,/g, " "),
+        i.img || ""
+      ].join(",")))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "items.csv"; a.click();
+    URL.revokeObjectURL(url);
+  } catch { alert("エクスポート失敗"); }
+});
+
+// Items export (Excel)
+$("#btn-items-xlsx")?.addEventListener("click", async () => {
+  try {
+    const list = await api("items", { method: "GET" });
+    const arr = Array.isArray(list) ? list : (list?.data || []);
+    const rows = arr.map(i => ({
+      code: i.code,
+      name: i.name || "",
+      price: Number(i.price || 0),
+      stock: Number(i.stock || 0),
+      min: Number(i.min || 0),
+      location: String(i.location || "").toUpperCase(),
+      department: i.department || "",
+      img: i.img || ""
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows, { header: ["code","name","price","stock","min","location","department","img"] });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "items");
+    XLSX.writeFile(wb, "items.xlsx");
+  } catch { alert("エクスポート失敗"); }
+});
 
   // Items import (CSV)
   $("#btn-items-import")?.addEventListener("click", () => $("#input-items-import")?.click());
@@ -1048,13 +1104,13 @@ $("#btn-items-xlsx")?.addEventListener("click", async () => {
     const start = rows[0]?.toLowerCase?.().includes("code") ? 1 : 0;
     let ok = 0, fail = 0;
     for (let i = start; i < rows.length; i++) {
-      const [code, name, price, stock, min, location, img] = rows[i].split(",").map(s => s?.trim());
+      const cols = rows[i].split(",").map(s => s?.trim());const [code, name, price, stock, min, location, img, department] = [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7]];
       if (!code) { fail++; continue; }
       try {
         await api("updateItem", {
           method: "POST", body: {
             code, name, price: Number(price || 0), stock: Number(stock || 0), min: Number(min || 0),
-            location: (location || "").toUpperCase(), img, overwrite: true
+            location: (location || "").toUpperCase(), img, department: (department || "").trim(), overwrite: true
           }
         });
         ok++;
