@@ -79,30 +79,24 @@
 
   /* -------------------- Sidebar + Router -------------------- */
   (function navHandler() {
-    // Toggle via body class → stabil di mobile
     function toggleSB() { document.body.classList.toggle("sb-open"); }
     function closeSB() { document.body.classList.remove("sb-open"); }
 
-    // Klik tombol burger / menu
     document.addEventListener("click", (e) => {
       const trg = e.target.closest("[data-burger], .btn-burger, #burger, #btn-menu");
       if (trg) { e.preventDefault(); toggleSB(); }
-      // Klik backdrop
       const isBackdrop = e.target.id === "sb-backdrop" || e.target.closest?.("#sb-backdrop");
       if (isBackdrop) closeSB();
     });
 
-    // Sentuhan mobile
     document.addEventListener("touchend", (e) => {
       const trg = e.target.closest("[data-burger], .btn-burger, #burger, #btn-menu");
       if (trg) { e.preventDefault(); e.stopPropagation(); toggleSB(); }
     }, { passive: false });
 
-    // Router SPA + tutup sidebar
     document.addEventListener("click", (e) => {
       const a = e.target.closest("aside nav a[data-view]");
-      if (!a) return;
-      e.preventDefault();
+      if (!a) return; e.preventDefault();
 
       $$("aside nav a").forEach(n => n.classList.remove("active"));
       a.classList.add("active");
@@ -112,8 +106,7 @@
       const sec = document.getElementById(id);
       if (sec) { sec.classList.remove("d-none"); sec.classList.add("active"); }
 
-      const h = $("#page-title");
-      if (h) h.textContent = a.textContent.trim();
+      const h = $("#page-title"); if (h) h.textContent = a.textContent.trim();
 
       closeSB();
 
@@ -172,7 +165,6 @@
         });
       }
 
-      // CSV monthly
       $("#btn-export-mov")?.addEventListener("click", () => {
         const csv = ["month,in,out"].concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(","))).join("\n");
         const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
@@ -408,7 +400,8 @@
     w.document.write(`<img src="${url}" style="max-width:100%">`);
   }
 
- async function makeItemLabelDataURL(item) {
+  // ---------- LABEL CANVAS (wrap teks & grid cetak) ----------
+  async function makeItemLabelDataURL(item) {
     const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
     const QUIET = 20, qrSize = 156, gapQR = 18;
     const c = document.createElement("canvas"); c.width = W; c.height = H;
@@ -540,48 +533,36 @@
     }
   }
 
-      const totalH = lines.length * size + (lines.length - 1) * gap; let y = centerY - totalH / 2 + size / 2;
-      for (const ln of lines) { ctx.fillText(ln, x, y); y += size + gap; }
-    }
+  async function generateQrDataUrl(text, size) {
+    await ensureQRCode();
+    return await new Promise((resolve) => {
+      const tmp = document.createElement("div");
+      Object.assign(tmp.style, {
+        position: "fixed", left: "-9999px", top: "0", width: size + "px", height: size + "px"
+      });
+      document.body.appendChild(tmp);
+
+      new QRCode(tmp, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+
+      const grab = () => {
+        const node = tmp.querySelector("img,canvas");
+        if (!node) return "";
+        try { return node.tagName === "IMG" ? node.src : node.toDataURL("image/png"); }
+        catch { return ""; }
+      };
+
+      let tries = 0;
+      (function waitRender() {
+        const url = grab();
+        if (url || tries >= 5) {
+          document.body.removeChild(tmp);
+          resolve(url || "");
+          return;
+        }
+        tries++; setTimeout(waitRender, 30);
+      })();
+    });
   }
- async function generateQrDataUrl(text, size) {
-  await ensureQRCode();
-
-  return await new Promise((resolve) => {
-    // temp container harus ditempel ke DOM
-    const tmp = document.createElement("div");
-    Object.assign(tmp.style, {
-      position: "fixed", left: "-9999px", top: "0", width: size + "px", height: size + "px"
-    });
-    document.body.appendChild(tmp);
-
-    const qr = new QRCode(tmp, {
-      text, width: size, height: size,
-      correctLevel: QRCode.CorrectLevel.M
-    });
-
-    // helper ambil dataURL dari <img> atau <canvas>
-    const grab = () => {
-      const node = tmp.querySelector("img,canvas");
-      if (!node) return "";
-      try { return node.tagName === "IMG" ? node.src : node.toDataURL("image/png"); }
-      catch { return ""; }
-    };
-
-    // beri waktu render; coba beberapa kali jika masih kosong
-    let tries = 0;
-    (function waitRender() {
-      const url = grab();
-      if (url || tries >= 5) {
-        document.body.removeChild(tmp);
-        resolve(url || ""); // kalau tetap kosong, biarkan saja (QR tidak digambar)
-        return;
-      }
-      tries++;
-      setTimeout(waitRender, 30); // 30ms x 5 = 150ms max
-    })();
-  });
-}
 
   /* -------------------- Users -------------------- */
   async function renderUsers() {
@@ -592,13 +573,11 @@
 
       const admin = isAdmin();
 
-      // Kontrol tombol (hanya admin)
       $("#btn-users-import")?.classList.toggle("d-none", !admin);
       $("#btn-users-export")?.classList.toggle("d-none", !admin);
       $("#btn-print-qr-users")?.classList.toggle("d-none", !admin);
       $("#btn-open-new-user")?.classList.toggle("d-none", !admin);
 
-      // Non-admin: hanya dirinya
       if (!admin && who) {
         arr = arr.filter(u => String(u.id) === String(who.id));
       }
@@ -631,7 +610,6 @@
         const a = document.createElement("a"); a.href = url; a.download = `user_${id}.png`; a.click();
       });
 
-      // Panel kanan
       const right = $("#print-qr-users-grid");
       if (right) {
         if (!admin && who) {
@@ -755,7 +733,6 @@
           stream = await navigator.mediaDevices.getUserMedia(constraints);
           video.srcObject = stream;
 
-          // beri waktu kecil untuk autofocus/exposure
           await new Promise(r => setTimeout(r, 500));
 
           const detector = new BarcodeDetector({ formats: ["qr_code"] });
@@ -884,7 +861,7 @@
     const book = Number(item.stock || 0);
     const qty = Number(realQty ?? book);
     const diff = qty - book;
-   ST.rows.set(code, { code, name: item.name, department: (item.department || ""), book, qty, diff });
+    ST.rows.set(code, { code, name: item.name, department: (item.department || ""), book, qty, diff });
     renderShelfTable();
   }
 
@@ -925,13 +902,12 @@
     };
   }
 
-  // Rekap bulanan & tahunan
   async function renderShelfRecap() {
     try {
       const raw = await api("history", { method: "GET" });
       const list = Array.isArray(raw) ? raw : (raw?.history || raw?.data || []);
-      const byMonth = new Map(); // YYYY-MM => {in,out}
-      const byYear = new Map();  // YYYY    => {in,out}
+      const byMonth = new Map();
+      const byYear = new Map();
       for (const h of list) {
         const d = new Date(h.timestamp || h.date || ""); if (isNaN(d)) continue;
         const m = d.toISOString().slice(0, 7);
@@ -953,7 +929,6 @@
         tbY.innerHTML = rows.join("");
       }
 
-      // Export buttons
       $("#st-recap-export-monthly")?.addEventListener("click", () => {
         const csv = ["month,in,out"].concat([...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, v.in, v.out].join(","))).join("\n");
         const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
@@ -1084,197 +1059,198 @@
     }
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderUsers();
   });
-// Items export (CSV & Excel)
-$("#btn-items-export")?.addEventListener("click", async () => {
-  try {
-    const list = await api("items", { method: "GET" });
-    const arr = Array.isArray(list) ? list : (list?.data || []);
-    const csv = ["code,name,price,stock,min,location,img"]
-      .concat(arr.map(i => [
-        i.code,
-        String(i.name || "").replace(/,/g, " "),   // hindari pecah kolom
-        Number(i.price || 0),
-        Number(i.stock || 0),
-        Number(i.min || 0),
-        String(i.location || "").toUpperCase(),
-        i.img || ""
-      ].join(",")))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "items.csv"; a.click();
-    URL.revokeObjectURL(url);
-  } catch { alert("エクスポート失敗"); }
-});
 
-$("#btn-items-xlsx")?.addEventListener("click", async () => {
-  try {
-    const list = await api("items", { method: "GET" });
-    const arr = Array.isArray(list) ? list : (list?.data || []);
-    // Bentuk data tabular yang rapi untuk Excel:
-    const rows = arr.map(i => ({
-      code: i.code,
-      name: i.name || "",
-      price: Number(i.price || 0),
-      stock: Number(i.stock || 0),
-      min: Number(i.min || 0),
-      location: String(i.location || "").toUpperCase(),
-      img: i.img || ""
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows, { header: ["code","name","price","stock","min","location","img"] });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "items");
-    XLSX.writeFile(wb, "items.xlsx");
-  } catch { alert("エクスポート失敗"); }
-});
-// Items export (CSV)
-$("#btn-items-export")?.addEventListener("click", async () => {
-  try {
-    const list = await api("items", { method: "GET" });
-    const arr = Array.isArray(list) ? list : (list?.data || []);
-    const csv = ["code,name,price,stock,min,location,department,img"]
-      .concat(arr.map(i => [
-        i.code,
-        String(i.name || "").replace(/,/g, " "),
-        Number(i.price || 0),
-        Number(i.stock || 0),
-        Number(i.min || 0),
-        String(i.location || "").toUpperCase(),
-        String(i.department || "").replace(/,/g, " "),
-        i.img || ""
-      ].join(",")))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "items.csv"; a.click();
-    URL.revokeObjectURL(url);
-  } catch { alert("エクスポート失敗"); }
-});
-
-// Items export (Excel)
-$("#btn-items-xlsx")?.addEventListener("click", async () => {
-  try {
-    const list = await api("items", { method: "GET" });
-    const arr = Array.isArray(list) ? list : (list?.data || []);
-    const rows = arr.map(i => ({
-      code: i.code,
-      name: i.name || "",
-      price: Number(i.price || 0),
-      stock: Number(i.stock || 0),
-      min: Number(i.min || 0),
-      location: String(i.location || "").toUpperCase(),
-      department: i.department || "",
-      img: i.img || ""
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows, { header: ["code","name","price","stock","min","location","department","img"] });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "items");
-    XLSX.writeFile(wb, "items.xlsx");
-  } catch { alert("エクスポート失敗"); }
-});
- // --- Print all item labels ---
-document.getElementById("btn-items-print-all")?.addEventListener("click", async () => {
-  try {
-    setLoading(true, "ラベルを生成中…");
-
-    let arr = _ITEMS_CACHE && _ITEMS_CACHE.length
-      ? _ITEMS_CACHE
-      : (await api("items", { method: "GET" })) || [];
-    if (!Array.isArray(arr)) arr = arr.data || [];
-
-    const urls = [];
-    for (const it of arr) { urls.push(await makeItemLabelDataURL(it)); }
-
-    const w = window.open("", "_blank");
-    const doc = w.document;
-    doc.write(`<!doctype html><html><head><meta charset="utf-8">
-      <title>Labels</title>
-      <style>
-        @page { size: A4; margin: 6mm; }
-        html,body{margin:0;padding:0}
-        .sheet{
-          display:grid;
-          grid-template-columns: repeat(auto-fill, minmax(90mm, 1fr));
-          gap:6mm;
-          align-items:start;
-        }
-        .label{ break-inside: avoid; page-break-inside: avoid; }
-        .label img{ width:100%; height:auto; display:block; }
-      </style>
-    </head><body><div class="sheet"></div></body></html>`);
-
-    const wrap = doc.querySelector(".sheet");
-    urls.forEach(u => {
-      const d = doc.createElement("div");
-      d.className = "label";
-      d.innerHTML = `<img src="${u}">`;
-      wrap.appendChild(d);
-    });
-
-    const imgs = [...doc.images];
-    let loaded = 0;
-    const done = () => { if (++loaded >= imgs.length) { w.focus(); w.print(); } };
-    if (imgs.length === 0) { w.focus(); w.print(); }
-    else imgs.forEach(im => (im.complete ? done() : im.onload = done));
-  } catch (e) {
-    console.error(e);
-    toast("印刷データの生成に失敗しました。");
-  } finally {
-    setLoading(false);
-  }
-});
-
-
-// ---------- Items Reload & Auto-refresh ----------
-(function(){
-  let itemsAutoTimer = null;
-  let itemsAutoSec   = 0;
-
-  function isItemsViewActive(){
-    const v = document.getElementById("view-items");
-    return v && !v.classList.contains("d-none");
-  }
-
-  async function reloadItemsSoft(){
+  // Items export (CSV & Excel) — (dibiarkan ganda jika memang sudah ada tombol gandanya)
+  $("#btn-items-export")?.addEventListener("click", async () => {
     try {
-      if (typeof window.renderItems === "function") {
-        await window.renderItems();
-      } else if (typeof window.loadItems === "function") {
-        await window.loadItems();
-      } else {
-        location.reload();
-        return;
-      }
-      if (isItemsViewActive() && typeof toast === "function") toast("更新しました");
-    } catch (e){
+      const list = await api("items", { method: "GET" });
+      const arr = Array.isArray(list) ? list : (list?.data || []);
+      const csv = ["code,name,price,stock,min,location,img"]
+        .concat(arr.map(i => [
+          i.code,
+          String(i.name || "").replace(/,/g, " "),
+          Number(i.price || 0),
+          Number(i.stock || 0),
+          Number(i.min || 0),
+          String(i.location || "").toUpperCase(),
+          i.img || ""
+        ].join(",")))
+        .join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "items.csv"; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("エクスポート失敗"); }
+  });
+
+  $("#btn-items-xlsx")?.addEventListener("click", async () => {
+    try {
+      const list = await api("items", { method: "GET" });
+      const arr = Array.isArray(list) ? list : (list?.data || []);
+      const rows = arr.map(i => ({
+        code: i.code,
+        name: i.name || "",
+        price: Number(i.price || 0),
+        stock: Number(i.stock || 0),
+        min: Number(i.min || 0),
+        location: String(i.location || "").toUpperCase(),
+        img: i.img || ""
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows, { header: ["code","name","price","stock","min","location","img"] });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "items");
+      XLSX.writeFile(wb, "items.xlsx");
+    } catch { alert("エクスポート失敗"); }
+  });
+
+  // Items export (CSV) + department
+  $("#btn-items-export")?.addEventListener("click", async () => {
+    try {
+      const list = await api("items", { method: "GET" });
+      const arr = Array.isArray(list) ? list : (list?.data || []);
+      const csv = ["code,name,price,stock,min,location,department,img"]
+        .concat(arr.map(i => [
+          i.code,
+          String(i.name || "").replace(/,/g, " "),
+          Number(i.price || 0),
+          Number(i.stock || 0),
+          Number(i.min || 0),
+          String(i.location || "").toUpperCase(),
+          String(i.department || "").replace(/,/g, " "),
+          i.img || ""
+        ].join(",")))
+        .join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "items.csv"; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("エクスポート失敗"); }
+  });
+
+  // Items export (Excel) + department
+  $("#btn-items-xlsx")?.addEventListener("click", async () => {
+    try {
+      const list = await api("items", { method: "GET" });
+      const arr = Array.isArray(list) ? list : (list?.data || []);
+      const rows = arr.map(i => ({
+        code: i.code,
+        name: i.name || "",
+        price: Number(i.price || 0),
+        stock: Number(i.stock || 0),
+        min: Number(i.min || 0),
+        location: String(i.location || "").toUpperCase(),
+        department: i.department || "",
+        img: i.img || ""
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows, { header: ["code","name","price","stock","min","location","department","img"] });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "items");
+      XLSX.writeFile(wb, "items.xlsx");
+    } catch { alert("エクスポート失敗"); }
+  });
+
+  // --- Print all item labels (grid, banyak per lembar) ---
+  document.getElementById("btn-items-print-all")?.addEventListener("click", async () => {
+    try {
+      setLoading(true, "ラベルを生成中…");
+
+      let arr = _ITEMS_CACHE && _ITEMS_CACHE.length
+        ? _ITEMS_CACHE
+        : (await api("items", { method: "GET" })) || [];
+      if (!Array.isArray(arr)) arr = arr.data || [];
+
+      const urls = [];
+      for (const it of arr) { urls.push(await makeItemLabelDataURL(it)); }
+
+      const w = window.open("", "_blank");
+      const doc = w.document;
+      doc.write(`<!doctype html><html><head><meta charset="utf-8">
+        <title>Labels</title>
+        <style>
+          @page { size: A4; margin: 6mm; }
+          html,body{margin:0;padding:0}
+          .sheet{
+            display:grid;
+            grid-template-columns: repeat(auto-fill, minmax(90mm, 1fr));
+            gap:6mm;
+            align-items:start;
+          }
+          .label{ break-inside: avoid; page-break-inside: avoid; }
+          .label img{ width:100%; height:auto; display:block; }
+        </style>
+      </head><body><div class="sheet"></div></body></html>`);
+
+      const wrap = doc.querySelector(".sheet");
+      urls.forEach(u => {
+        const d = doc.createElement("div");
+        d.className = "label";
+        d.innerHTML = `<img src="${u}">`;
+        wrap.appendChild(d);
+      });
+
+      const imgs = [...doc.images];
+      let loaded = 0;
+      const done = () => { if (++loaded >= imgs.length) { w.focus(); w.print(); } };
+      if (imgs.length === 0) { w.focus(); w.print(); }
+      else imgs.forEach(im => (im.complete ? done() : im.onload = done));
+    } catch (e) {
       console.error(e);
-      location.reload();
+      toast("印刷データの生成に失敗しました。");
+    } finally {
+      setLoading(false);
     }
-  }
-
-  document.getElementById("btn-items-reload")?.addEventListener("click", (e)=>{
-    e.preventDefault();
-    reloadItemsSoft();
   });
 
-  document.querySelectorAll('[data-autorefresh]').forEach(el=>{
-    el.addEventListener("click", ()=>{
-      const sec = Number(el.getAttribute("data-autorefresh") || "0");
-      itemsAutoSec = sec;
-      if (itemsAutoTimer) { clearInterval(itemsAutoTimer); itemsAutoTimer = null; }
-      const btn = document.getElementById("btn-items-auto");
-      if (btn) btn.textContent = sec ? `Auto ${sec}s` : "Auto";
-      if (!sec) return;
-      itemsAutoTimer = setInterval(()=>{
-        if (isItemsViewActive()) reloadItemsSoft();
-      }, sec * 1000);
+  // ---------- Items Reload & Auto-refresh ----------
+  (function(){
+    let itemsAutoTimer = null;
+    let itemsAutoSec   = 0;
+
+    function isItemsViewActive(){
+      const v = document.getElementById("view-items");
+      return v && !v.classList.contains("d-none");
+    }
+
+    async function reloadItemsSoft(){
+      try {
+        if (typeof window.renderItems === "function") {
+          await window.renderItems();
+        } else if (typeof window.loadItems === "function") {
+          await window.loadItems();
+        } else {
+          location.reload();
+          return;
+        }
+        if (isItemsViewActive() && typeof toast === "function") toast("更新しました");
+      } catch (e){
+        console.error(e);
+        location.reload();
+      }
+    }
+
+    document.getElementById("btn-items-reload")?.addEventListener("click", (e)=>{
+      e.preventDefault();
+      reloadItemsSoft();
     });
-  });
 
-  window.addEventListener("beforeunload", ()=>{ if (itemsAutoTimer) clearInterval(itemsAutoTimer); });
-})();
+    document.querySelectorAll('[data-autorefresh]').forEach(el=>{
+      el.addEventListener("click", ()=>{
+        const sec = Number(el.getAttribute("data-autorefresh") || "0");
+        itemsAutoSec = sec;
+        if (itemsAutoTimer) { clearInterval(itemsAutoTimer); itemsAutoTimer = null; }
+        const btn = document.getElementById("btn-items-auto");
+        if (btn) btn.textContent = sec ? `Auto ${sec}s` : "Auto";
+        if (!sec) return;
+        itemsAutoTimer = setInterval(()=>{
+          if (isItemsViewActive()) reloadItemsSoft();
+        }, sec * 1000);
+      });
+    });
+
+    window.addEventListener("beforeunload", ()=>{ if (itemsAutoTimer) clearInterval(itemsAutoTimer); });
+  })();
 
   // Items import (CSV)
   $("#btn-items-import")?.addEventListener("click", () => $("#input-items-import")?.click());
@@ -1284,7 +1260,8 @@ document.getElementById("btn-items-print-all")?.addEventListener("click", async 
     const start = rows[0]?.toLowerCase?.().includes("code") ? 1 : 0;
     let ok = 0, fail = 0;
     for (let i = start; i < rows.length; i++) {
-      const cols = rows[i].split(",").map(s => s?.trim());const [code, name, price, stock, min, location, img, department] = [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7]];
+      const cols = rows[i].split(",").map(s => s?.trim());
+      const [code, name, price, stock, min, location, img, department] = [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7]];
       if (!code) { fail++; continue; }
       try {
         await api("updateItem", {
@@ -1368,7 +1345,6 @@ document.getElementById("btn-items-print-all")?.addEventListener("click", async 
     const logo = document.getElementById("brand-logo");
     if (logo && window.CONFIG && CONFIG.LOGO_URL) { logo.src = CONFIG.LOGO_URL; logo.alt = "logo"; logo.onerror = () => { logo.style.display = "none"; }; }
 
-    // Tampilkan tombol baru hanya untuk admin
     const newItemBtn = $("#btn-open-new-item");
     const newUserBtn = $("#btn-open-new-user");
     if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
