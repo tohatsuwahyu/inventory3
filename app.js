@@ -401,25 +401,25 @@
   }
 
   // ---------- LABEL CANVAS (wrap teks & grid cetak) ----------
- async function makeItemLabelDataURL(item) {
-  // — ukuran di-tune ulang agar area teks lebih lebar —
+async function makeItemLabelDataURL(item) {
   const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
-  const QUIET = 16, qrSize = 136, gapQR = 14; // QR lebih kecil → ruang teks lebih besar
+  const QUIET = 16, qrSize = 136, gapQR = 14;
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
 
-  // border
+  // --- border luar (garis tajam 0.5px align) ---
   g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
-  g.strokeStyle = "#000"; g.lineWidth = 2; g.strokeRect(1, 1, W - 2, H - 2);
+  g.strokeStyle = "#000"; g.lineWidth = 1;
+  g.strokeRect(0.5, 0.5, W - 1, H - 1);
 
-  // kolom kiri (gambar)
+  // --- kolom kiri (gambar) ---
   const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
   roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
   await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
 
-  // QR
+  // --- QR ---
   const colStart = pad + imgW + gap;
-  const qy = pad + Math.max(0, ((H - 2 * pad) - qrSize) / 2);
+  const qy = pad + ((H - 2 * pad) - qrSize) / 2;
   const qx = colStart + gapQR + QUIET;
   g.fillStyle = "#fff";
   g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
@@ -429,46 +429,51 @@
     g.drawImage(im, qx, qy, qrSize, qrSize);
   } catch {}
 
-  // grid kanan
+  // --- grid kanan ---
   const colQRW = qrSize + 2 * QUIET;
-  const gridX = colStart + gapQR + colQRW + gapQR;
-  const cellH = (H - 2 * pad) / 3;
-  g.strokeStyle = "#000"; g.lineWidth = 2;
-  g.strokeRect(gridX, pad, W - gridX - pad, H - 2 * pad);
+  const gridX  = colStart + gapQR + colQRW + gapQR;
+  const cellH  = (H - 2 * pad) / 3;
+  g.strokeStyle = "#000"; g.lineWidth = 1;
+  g.strokeRect(gridX + 0.5, pad + 0.5, W - gridX - pad - 1, H - 2 * pad - 1);
   for (let i = 1; i <= 2; i++) {
     const y = pad + cellH * i;
-    g.beginPath(); g.moveTo(gridX, y); g.lineTo(W - pad, y); g.stroke();
+    g.beginPath(); g.moveTo(gridX + 0.5, y + 0.5); g.lineTo(W - pad - 0.5, y + 0.5); g.stroke();
   }
 
-  // label & nilai
+  // --- label & nilai (rapi & tengah) ---
+  const labelWidth = 96;             // ruang label (kolom kiri di grid)
   const labelX = gridX + 10;
-  const valX   = gridX + 96;                // kolom label + nilai dipersempit label → nilai lebih lebar
-  const valMaxW = W - pad - valX - 8;
-  const cellPad = 6;
+  const valX   = gridX + 10 + labelWidth;   // mulai nilai setelah label
+  const valMaxW = W - pad - valX - 10;
 
-  g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = "#000";
-  g.font = '16px "Noto Sans JP", system-ui';
-  g.fillText("コード：",     labelX, pad + cellPad + 0 * cellH);
-  g.fillText("商品名：",     labelX, pad + cellPad + 1 * cellH);
-  g.fillText("部門／置場：", labelX, pad + cellPad + 2 * cellH);
+  const LBL_FONT = '600 14px "Noto Sans JP", system-ui';
+  const VAL_WEIGHT = "700";
 
-  drawWrapBox(g, String(item.code || ""),
-              valX, pad + cellPad + 0 * cellH, valMaxW, cellH - 2*cellPad,
-              { base: 20, min: 11, lineGap: 3, weight: "bold" });
+  const cells = [
+    { title: "コード：",     value: String(item.code || ""),            base: 20, min: 11 },
+    { title: "商品名：",     value: String(item.name || ""),            base: 22, min: 11 },
+    { title: "部門／置場：", value: [item.department||"", item.location? "／"+String(item.location).toUpperCase():""].join(""), base: 18, min: 11 }
+  ];
 
-  drawWrapBox(g, String(item.name || ""),
-              valX, pad + cellPad + 1 * cellH, valMaxW, cellH - 2*cellPad,
-              { base: 22, min: 11, lineGap: 3, weight: "bold" });
+  cells.forEach((cell, i) => {
+    const yTop = pad + i * cellH;
+    // label (vertikal center)
+    g.font = LBL_FONT; g.fillStyle = "#000";
+    const labelH = 14; // dari font di atas
+    const ly = yTop + (cellH - labelH) / 2;
+    g.textBaseline = "top"; g.textAlign = "left";
+    g.fillText(cell.title, labelX, Math.round(ly));
 
-  const loc = String(item.location || "").toUpperCase();
-  const dep = String(item.department || "");
-  drawWrapBox(g, (dep ? dep : "") + (dep && loc ? "／" : "") + (loc ? loc : ""),
-              valX, pad + cellPad + 2 * cellH, valMaxW, cellH - 2*cellPad,
-              { base: 18, min: 11, lineGap: 3, weight: "bold" });
+    // nilai (wrap & center vertikal)
+    drawWrapBoxVCenter(
+      g, cell.value, valX, yTop + 4, valMaxW, cellH - 8,
+      { base: cell.base, min: cell.min, lineGap: 3, weight: VAL_WEIGHT }
+    );
+  });
 
   return c.toDataURL("image/png");
 
-  // ---- helpers ----
+  // ===== helpers =====
   function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
     ctx.save(); ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -494,26 +499,18 @@
       const s = Math.min(w/im.width, h/im.height), iw = im.width*s, ih = im.height*s;
       const ix = x + (w - iw)/2, iy = y + (h - ih)/2;
       ctx.save(); ctx.beginPath();
-      ctx.moveTo(x + rr, y);
-      ctx.arcTo(x + w, y, x + w, y + h, rr);
-      ctx.arcTo(x + w, y + h, x, y + h, rr);
-      ctx.arcTo(x, y + h, x, y, rr);
-      ctx.arcTo(x, y, x + w, y, rr);
-      ctx.closePath(); ctx.clip();
-      ctx.drawImage(im, ix, iy, iw, ih);
-      ctx.restore();
+      ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr); ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr); ctx.closePath(); ctx.clip();
+      ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
     } catch {}
   }
 
-  // ——— Wrap aware CJK: fallback ke per-karakter jika tanpa spasi / token kepanjangan ———
+  // token-aware + pecah per karakter bila perlu (CJK)
   function measureLines(ctx, text, maxW){
-    const raw = String(text ?? "");
-    // Tokenisasi: pisah spasi dan non-spasi; kalau satu token terlalu panjang -> pecah per karakter
-    const tokens = raw.split(/(\s+)/);
+    const tokens = String(text ?? "").split(/(\s+)/);
     const lines = []; let line = "";
-
-    const pushToken = (tok) => {
-      // jika token sendiri melebihi maxW, pecah per karakter (grapheme)
+    const push = (tok) => {
       if (ctx.measureText(tok).width <= maxW) {
         const t = line + tok;
         if (!line || ctx.measureText(t).width <= maxW) line = t;
@@ -526,13 +523,12 @@
         }
       }
     };
-
-    for (const tk of tokens) { pushToken(tk); }
+    tokens.forEach(push);
     if (line) lines.push(line.trim());
     return lines;
   }
 
-  function drawWrapBox(ctx, text, x, yTop, maxW, maxH, opt={}){
+  function drawWrapBoxVCenter(ctx, text, x, yTop, maxW, maxH, opt={}){
     const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
     const fam  = '"Noto Sans JP", system-ui';
     const weight = opt.weight || "normal";
@@ -544,14 +540,18 @@
       if (totalH <= maxH || size <= min) break;
       size -= 1;
     }
-    let y = yTop;
+    // vertikal tengah
+    const totalH = lines.length * size + (lines.length - 1) * gap;
+    let y = yTop + (maxH - totalH) / 2;
+    ctx.textBaseline = "top"; ctx.textAlign = "left"; ctx.fillStyle = "#000";
     for (const ln of lines){
-      ctx.fillText(ln, x, y);
+      ctx.fillText(ln, x, Math.round(y));
       y += size + gap;
       if (y - yTop > maxH) break;
     }
   }
 }
+
 
 
   async function generateQrDataUrl(text, size) {
