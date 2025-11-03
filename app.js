@@ -278,7 +278,7 @@
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">品番</label><input id="md-code" class="form-control" value="${escapeAttr(it.code)}" readonly></div>
+        <div class="col-md-6"><label class="form-label">コード</label><input id="md-code" class="form-control" value="${escapeAttr(it.code)}" readonly></div>
         <div class="col-md-6"><label class="form-label">名称</label><input id="md-name" class="form-control" value="${escapeAttr(it.name)}"></div>
         <div class="col-md-4"><label class="form-label">価格</label><input id="md-price" type="number" class="form-control" value="${Number(it.price || 0)}"></div>
         <div class="col-md-4"><label class="form-label">在庫</label><input id="md-stock" type="number" class="form-control" value="${Number(it.stock || 0)}"></div>
@@ -333,7 +333,7 @@
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">品番</label><input id="nw-code" class="form-control" placeholder="SKU-001"></div>
+        <div class="col-md-6"><label class="form-label">コード</label><input id="nw-code" class="form-control" placeholder="SKU-001"></div>
         <div class="col-md-6"><label class="form-label">名称</label><input id="nw-name" class="form-control"></div>
         <div class="col-md-4"><label class="form-label">価格</label><input id="nw-price" type="number" class="form-control" value="0"></div>
         <div class="col-md-4"><label class="form-label">在庫</label><input id="nw-stock" type="number" class="form-control" value="0"></div>
@@ -363,7 +363,7 @@
           location: ($("#nw-location", wrap).value || "").toUpperCase().trim(),
           overwrite: false
         };
-        if (!payload.code) return toast("品番を入力してください。");
+        if (!payload.code) return toast("コードを入力してください。");
         const r = await api("updateItem", { method: "POST", body: payload });
         if (r?.ok) { modal.hide(); wrap.remove(); renderItems(); toast("作成しました"); }
         else toast(r?.error || "作成失敗");
@@ -381,7 +381,7 @@
           ${it.img ? `<img src="${escapeAttr(it.img)}" style="max-width:100%;max-height:100%">` : '<span class="text-primary">画像</span>'}
         </div>
         <div class="flex-1">
-          <div><b>品番</b>：${escapeHtml(it.code)}</div>
+          <div><b>コード</b>：${escapeHtml(it.code)}</div>
           <div><b>名称</b>：${escapeHtml(it.name)}</div>
           <div><b>価格</b>：¥${fmt(it.price)}</div>
           <div><b>在庫</b>：${fmt(it.stock)}</div>
@@ -424,7 +424,7 @@
     const labelX = gridX + 12, valX = gridX + 112, valMaxW = W - pad - valX - 8;
     g.textAlign = "left"; g.textBaseline = "middle"; g.fillStyle = "#000";
     g.font = '16px "Noto Sans JP", system-ui';
-    g.fillText("品番：", labelX, pad + cellH * 0.5);
+    g.fillText("コード：", labelX, pad + cellH * 0.5);
     g.fillText("商品名：", labelX, pad + cellH * 1.5);
     g.fillText("置場：", labelX, pad + cellH * 2.5);
     g.font = 'bold 18px "Noto Sans JP", system-ui';
@@ -888,7 +888,7 @@
     <div class="modal-header"><h5 class="modal-title">Adjust 在庫</h5>
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
-      <div class="mb-2"><b>品番：</b>${escapeHtml(rec.code)}</div>
+      <div class="mb-2"><b>コード：</b>${escapeHtml(rec.code)}</div>
       <div class="mb-2"><b>名称：</b>${escapeHtml(rec.name)}</div>
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label">帳簿</label><input class="form-control" value="${rec.book}" readonly></div>
