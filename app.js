@@ -491,18 +491,44 @@
       for (const ln of lines) { ctx.fillText(ln, x, y); y += size + gap; }
     }
   }
-  async function generateQrDataUrl(text, size) {
-    await ensureQRCode();
-    return await new Promise((resolve) => {
-      const tmp = document.createElement("div");
-      const qr = new QRCode(tmp, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
-      setTimeout(() => {
-        const img = tmp.querySelector("img") || tmp.querySelector("canvas"); let url = "";
-        try { url = (img.tagName === "IMG") ? img.src : img.toDataURL("image/png"); } catch { }
-        tmp.remove(); resolve(url);
-      }, 0);
+ async function generateQrDataUrl(text, size) {
+  await ensureQRCode();
+
+  return await new Promise((resolve) => {
+    // temp container harus ditempel ke DOM
+    const tmp = document.createElement("div");
+    Object.assign(tmp.style, {
+      position: "fixed", left: "-9999px", top: "0", width: size + "px", height: size + "px"
     });
-  }
+    document.body.appendChild(tmp);
+
+    const qr = new QRCode(tmp, {
+      text, width: size, height: size,
+      correctLevel: QRCode.CorrectLevel.M
+    });
+
+    // helper ambil dataURL dari <img> atau <canvas>
+    const grab = () => {
+      const node = tmp.querySelector("img,canvas");
+      if (!node) return "";
+      try { return node.tagName === "IMG" ? node.src : node.toDataURL("image/png"); }
+      catch { return ""; }
+    };
+
+    // beri waktu render; coba beberapa kali jika masih kosong
+    let tries = 0;
+    (function waitRender() {
+      const url = grab();
+      if (url || tries >= 5) {
+        document.body.removeChild(tmp);
+        resolve(url || ""); // kalau tetap kosong, biarkan saja (QR tidak digambar)
+        return;
+      }
+      tries++;
+      setTimeout(waitRender, 30); // 30ms x 5 = 150ms max
+    })();
+  });
+}
 
   /* -------------------- Users -------------------- */
   async function renderUsers() {
