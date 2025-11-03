@@ -408,85 +408,110 @@
     w.document.write(`<img src="${url}" style="max-width:100%">`);
   }
 
-  async function makeItemLabelDataURL(item) {
+ async function makeItemLabelDataURL(item) {
     const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
     const QUIET = 20, qrSize = 156, gapQR = 18;
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
-    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); g.strokeStyle = "#000"; g.lineWidth = 2; g.strokeRect(1, 1, W - 2, H - 2);
-    const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
-    roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1"); await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
 
+    // border luar
+    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+    g.strokeStyle = "#000"; g.lineWidth = 2; g.strokeRect(1, 1, W - 2, H - 2);
+
+    // kolom kiri (gambar)
+    const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
+    roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
+    await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
+
+    // QR
     const colStart = pad + imgW + gap;
     const qy = pad + Math.max(0, ((H - 2 * pad) - qrSize) / 2);
     const qx = colStart + gapQR + QUIET;
-    g.fillStyle = "#fff"; g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
-    try { const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize); const im = new Image(); im.src = du; await imgLoaded(im); g.drawImage(im, qx, qy, qrSize, qrSize); } catch { }
+    g.fillStyle = "#fff";
+    g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
+    try {
+      const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
+      const im = new Image(); im.src = du; await imgLoaded(im);
+      g.drawImage(im, qx, qy, qrSize, qrSize);
+    } catch {}
 
+    // grid kanan
     const colQRW = qrSize + 2 * QUIET;
     const gridX = colStart + gapQR + colQRW + gapQR;
     const cellH = (H - 2 * pad) / 3;
     g.strokeStyle = "#000"; g.lineWidth = 2;
     g.strokeRect(gridX, pad, W - gridX - pad, H - 2 * pad);
-    for (let i = 1; i <= 2; i++) { const y = pad + cellH * i; g.beginPath(); g.moveTo(gridX, y); g.lineTo(W - pad, y); g.stroke(); }
+    for (let i = 1; i <= 2; i++) {
+      const y = pad + cellH * i;
+      g.beginPath(); g.moveTo(gridX, y); g.lineTo(W - pad, y); g.stroke();
+    }
 
-       const labelX = gridX + 12, valX = gridX + 112, valMaxW = W - pad - valX - 8;
-    const cellPad = 6;                         // padding kecil di dalam sel
+    // teks (auto-wrap tanpa memotong)
+    const labelX = gridX + 12, valX = gridX + 112, valMaxW = W - pad - valX - 8;
+    const cellPad = 6;
 
     g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = "#000";
     g.font = '16px "Noto Sans JP", system-ui';
+    g.fillText("コード：",      labelX, pad + cellPad + 0 * cellH);
+    g.fillText("商品名：",      labelX, pad + cellPad + 1 * cellH);
+    g.fillText("部門／置場：",  labelX, pad + cellPad + 2 * cellH);
 
-    // judul kolom (tetap 1 baris)
-    g.fillText("コード：", labelX, pad + cellPad + 0 * cellH);
-    g.fillText("商品名：", labelX, pad + cellPad + 1 * cellH);
-    g.fillText("部門／置場：", labelX, pad + cellPad + 2 * cellH);
-
-    // nilai: WRAP TANPA POTONG, otomatis kecil jika perlu agar muat tinggi sel
-    drawWrapBox(g, String(item.code || ""),    // コード
-                valX, pad + cellPad + 0 * cellH, valMaxW, cellH - 2 * cellPad,
+    drawWrapBox(g, String(item.code || ""),
+                valX, pad + cellPad + 0 * cellH, valMaxW, cellH - 2*cellPad,
                 { base: 18, min: 12, lineGap: 4, weight: "bold" });
 
-    drawWrapBox(g, String(item.name || ""),    // 商品名
-                valX, pad + cellPad + 1 * cellH, valMaxW, cellH - 2 * cellPad,
+    drawWrapBox(g, String(item.name || ""),
+                valX, pad + cellPad + 1 * cellH, valMaxW, cellH - 2*cellPad,
                 { base: 22, min: 12, lineGap: 4, weight: "bold" });
 
     const loc = String(item.location || "").toUpperCase();
     const dep = String(item.department || "");
-    drawWrapBox(g, (dep ? dep : "") + (dep && loc ? "／" : "") + (loc ? loc : ""), // 部門／置場
-                valX, pad + cellPad + 2 * cellH, valMaxW, cellH - 2 * cellPad,
+    drawWrapBox(g, (dep ? dep : "") + (dep && loc ? "／" : "") + (loc ? loc : ""),
+                valX, pad + cellPad + 2 * cellH, valMaxW, cellH - 2*cellPad,
                 { base: 18, min: 12, lineGap: 4, weight: "bold" });
 
     return c.toDataURL("image/png");
 
-
+    // ---- helpers khusus label ----
     function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
       ctx.save(); ctx.beginPath();
-      ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
-      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
-      if (fill) { ctx.fillStyle = fillColor || "#eef"; ctx.fill(); }
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+      if (fill)   { ctx.fillStyle = fillColor || "#eef"; ctx.fill(); }
       if (stroke) { ctx.strokeStyle = border || "#000"; ctx.stroke(); }
       ctx.restore();
     }
-    function imgLoaded(im) { return new Promise(res => { im.onload = res; im.onerror = res; }); }
-    async function drawImageIfAny(ctx, url, x, y, w, h, rr) {
-      if (!url) {
-        ctx.save(); ctx.fillStyle = "#3B82F6"; ctx.font = 'bold 28px "Noto Sans JP", system-ui';
-        ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("画像", x + w / 2, y + h / 2); ctx.restore(); return;
+    function imgLoaded(im){ return new Promise(res => { im.onload = res; im.onerror = res; }); }
+    async function drawImageIfAny(ctx, url, x, y, w, h, rr){
+      if (!url){
+        ctx.save(); ctx.fillStyle="#3B82F6"; ctx.font='bold 28px "Noto Sans JP", system-ui';
+        ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText("画像", x + w/2, y + h/2);
+        ctx.restore(); return;
       }
-      try {
-        const im = new Image(); im.crossOrigin = "anonymous"; im.src = url; await imgLoaded(im);
-        const s = Math.min(w / im.width, h / im.height), iw = im.width * s, ih = im.height * s;
-        const ix = x + (w - iw) / 2, iy = y + (h - ih) / 2;
+      try{
+        const im = new Image(); im.crossOrigin="anonymous"; im.src=url; await imgLoaded(im);
+        const s = Math.min(w/im.width, h/im.height), iw = im.width*s, ih = im.height*s;
+        const ix = x + (w - iw)/2, iy = y + (h - ih)/2;
         ctx.save(); ctx.beginPath();
-        ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr); ctx.arcTo(x + w, y + h, x, y + h, rr);
-        ctx.arcTo(x, y + h, x, y, rr); ctx.arcTo(x, y, x + w, y, rr); ctx.closePath(); ctx.clip();
-        ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
-      } catch { }
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr);
+        ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.closePath(); ctx.clip();
+        ctx.drawImage(im, ix, iy, iw, ih);
+        ctx.restore();
+      } catch {}
     }
-        function measureLines(ctx, text, maxW) {
-      const words = String(text).split(/(\s+)/); // pisah dengan spasi, pertahankan spasi
+    function measureLines(ctx, text, maxW){
+      const words = String(text).split(/(\s+)/); // pertahankan spasi
       const lines = []; let line = "";
-      for (const w of words) {
+      for (const w of words){
         const t = line + w;
         if (ctx.measureText(t).width <= maxW || !line) line = t;
         else { lines.push(line.trim()); line = w.trimStart(); }
@@ -494,26 +519,26 @@
       if (line) lines.push(line.trim());
       return lines;
     }
-    function drawWrapBox(ctx, text, x, yTop, maxW, maxH, opt = {}) {
+    function drawWrapBox(ctx, text, x, yTop, maxW, maxH, opt={}){
       const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
-      const fam = '"Noto Sans JP", system-ui';
+      const fam  = '"Noto Sans JP", system-ui';
       const weight = opt.weight || "normal";
       let size = base, lines;
-
-      while (true) {
+      while (true){
         ctx.font = `${weight} ${size}px ${fam}`;
         lines = measureLines(ctx, text, maxW);
         const totalH = lines.length * size + (lines.length - 1) * gap;
         if (totalH <= maxH || size <= min) break;
-        size -= 1; // kecilkan sampai muat tanpa memotong
+        size -= 1;
       }
-      let y = yTop; // top-align di dalam sel
-      for (const ln of lines) {
+      let y = yTop;
+      for (const ln of lines){
         ctx.fillText(ln, x, y);
         y += size + gap;
-        if (y - yTop > maxH) break; // guard (harusnya sudah muat)
+        if (y - yTop > maxH) break;
       }
     }
+  }
 
       const totalH = lines.length * size + (lines.length - 1) * gap; let y = centerY - totalH / 2 + size / 2;
       for (const ln of lines) { ctx.fillText(ln, x, y); y += size + gap; }
@@ -1149,51 +1174,48 @@ $("#btn-items-xlsx")?.addEventListener("click", async () => {
     XLSX.writeFile(wb, "items.xlsx");
   } catch { alert("エクスポート失敗"); }
 });
-  // --- Print all item labels ---
+ // --- Print all item labels ---
 document.getElementById("btn-items-print-all")?.addEventListener("click", async () => {
   try {
     setLoading(true, "ラベルを生成中…");
 
-    // Pakai cache jika sudah terisi, kalau belum fetch dulu
     let arr = _ITEMS_CACHE && _ITEMS_CACHE.length
       ? _ITEMS_CACHE
       : (await api("items", { method: "GET" })) || [];
     if (!Array.isArray(arr)) arr = arr.data || [];
 
-    // Buat semua dataURL label (urut)
     const urls = [];
-    for (const it of arr) {
-      const url = await makeItemLabelDataURL(it);
-      urls.push(url);
-    }
+    for (const it of arr) { urls.push(await makeItemLabelDataURL(it)); }
 
-    // Tab cetak
     const w = window.open("", "_blank");
     const doc = w.document;
     doc.write(`<!doctype html><html><head><meta charset="utf-8">
       <title>Labels</title>
       <style>
+        @page { size: A4; margin: 6mm; }
         html,body{margin:0;padding:0}
-        .page{display:flex;justify-content:center;align-items:center;padding:6mm;}
-        .page img{max-width:100%;height:auto}
-        /* Satu label per halaman */
-        @media print{ .page{page-break-after: always;} }
+        .sheet{
+          display:grid;
+          grid-template-columns: repeat(auto-fill, minmax(90mm, 1fr));
+          gap:6mm;
+          align-items:start;
+        }
+        .label{ break-inside: avoid; page-break-inside: avoid; }
+        .label img{ width:100%; height:auto; display:block; }
       </style>
-    </head><body></body></html>`);
+    </head><body><div class="sheet"></div></body></html>`);
 
+    const wrap = doc.querySelector(".sheet");
     urls.forEach(u => {
       const d = doc.createElement("div");
-      d.className = "page";
-      const img = doc.createElement("img");
-      img.src = u;
-      d.appendChild(img);
-      doc.body.appendChild(d);
+      d.className = "label";
+      d.innerHTML = `<img src="${u}">`;
+      wrap.appendChild(d);
     });
 
-    // Tunggu gambar termuat lalu print
     const imgs = [...doc.images];
     let loaded = 0;
-    const done = () => { if (++loaded >= imgs.length) w.focus(), w.print(); };
+    const done = () => { if (++loaded >= imgs.length) { w.focus(); w.print(); } };
     if (imgs.length === 0) { w.focus(); w.print(); }
     else imgs.forEach(im => (im.complete ? done() : im.onload = done));
   } catch (e) {
@@ -1203,6 +1225,7 @@ document.getElementById("btn-items-print-all")?.addEventListener("click", async 
     setLoading(false);
   }
 });
+
 
 // ---------- Items Reload & Auto-refresh ----------
 (function(){
