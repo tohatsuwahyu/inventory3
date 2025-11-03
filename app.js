@@ -1095,6 +1095,54 @@ $("#btn-items-xlsx")?.addEventListener("click", async () => {
     XLSX.writeFile(wb, "items.xlsx");
   } catch { alert("エクスポート失敗"); }
 });
+// ---------- Items Reload & Auto-refresh ----------
+(function(){
+  let itemsAutoTimer = null;
+  let itemsAutoSec   = 0;
+
+  function isItemsViewActive(){
+    const v = document.getElementById("view-items");
+    return v && !v.classList.contains("d-none");
+  }
+
+  async function reloadItemsSoft(){
+    try {
+      if (typeof window.renderItems === "function") {
+        await window.renderItems();
+      } else if (typeof window.loadItems === "function") {
+        await window.loadItems();
+      } else {
+        location.reload();
+        return;
+      }
+      if (isItemsViewActive() && typeof toast === "function") toast("更新しました");
+    } catch (e){
+      console.error(e);
+      location.reload();
+    }
+  }
+
+  document.getElementById("btn-items-reload")?.addEventListener("click", (e)=>{
+    e.preventDefault();
+    reloadItemsSoft();
+  });
+
+  document.querySelectorAll('[data-autorefresh]').forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const sec = Number(el.getAttribute("data-autorefresh") || "0");
+      itemsAutoSec = sec;
+      if (itemsAutoTimer) { clearInterval(itemsAutoTimer); itemsAutoTimer = null; }
+      const btn = document.getElementById("btn-items-auto");
+      if (btn) btn.textContent = sec ? `Auto ${sec}s` : "Auto";
+      if (!sec) return;
+      itemsAutoTimer = setInterval(()=>{
+        if (isItemsViewActive()) reloadItemsSoft();
+      }, sec * 1000);
+    });
+  });
+
+  window.addEventListener("beforeunload", ()=>{ if (itemsAutoTimer) clearInterval(itemsAutoTimer); });
+})();
 
   // Items import (CSV)
   $("#btn-items-import")?.addEventListener("click", () => $("#input-items-import")?.click());
