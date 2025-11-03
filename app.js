@@ -1121,6 +1121,61 @@ $("#btn-items-xlsx")?.addEventListener("click", async () => {
     XLSX.writeFile(wb, "items.xlsx");
   } catch { alert("エクスポート失敗"); }
 });
+  // --- Print all item labels ---
+document.getElementById("btn-items-print-all")?.addEventListener("click", async () => {
+  try {
+    setLoading(true, "ラベルを生成中…");
+
+    // Pakai cache jika sudah terisi, kalau belum fetch dulu
+    let arr = _ITEMS_CACHE && _ITEMS_CACHE.length
+      ? _ITEMS_CACHE
+      : (await api("items", { method: "GET" })) || [];
+    if (!Array.isArray(arr)) arr = arr.data || [];
+
+    // Buat semua dataURL label (urut)
+    const urls = [];
+    for (const it of arr) {
+      const url = await makeItemLabelDataURL(it);
+      urls.push(url);
+    }
+
+    // Tab cetak
+    const w = window.open("", "_blank");
+    const doc = w.document;
+    doc.write(`<!doctype html><html><head><meta charset="utf-8">
+      <title>Labels</title>
+      <style>
+        html,body{margin:0;padding:0}
+        .page{display:flex;justify-content:center;align-items:center;padding:6mm;}
+        .page img{max-width:100%;height:auto}
+        /* Satu label per halaman */
+        @media print{ .page{page-break-after: always;} }
+      </style>
+    </head><body></body></html>`);
+
+    urls.forEach(u => {
+      const d = doc.createElement("div");
+      d.className = "page";
+      const img = doc.createElement("img");
+      img.src = u;
+      d.appendChild(img);
+      doc.body.appendChild(d);
+    });
+
+    // Tunggu gambar termuat lalu print
+    const imgs = [...doc.images];
+    let loaded = 0;
+    const done = () => { if (++loaded >= imgs.length) w.focus(), w.print(); };
+    if (imgs.length === 0) { w.focus(); w.print(); }
+    else imgs.forEach(im => (im.complete ? done() : im.onload = done));
+  } catch (e) {
+    console.error(e);
+    toast("印刷データの生成に失敗しました。");
+  } finally {
+    setLoading(false);
+  }
+});
+
 // ---------- Items Reload & Auto-refresh ----------
 (function(){
   let itemsAutoTimer = null;
