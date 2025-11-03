@@ -995,6 +995,50 @@
     }
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderUsers();
   });
+// Items export (CSV & Excel)
+$("#btn-items-export")?.addEventListener("click", async () => {
+  try {
+    const list = await api("items", { method: "GET" });
+    const arr = Array.isArray(list) ? list : (list?.data || []);
+    const csv = ["code,name,price,stock,min,location,img"]
+      .concat(arr.map(i => [
+        i.code,
+        String(i.name || "").replace(/,/g, " "),   // hindari pecah kolom
+        Number(i.price || 0),
+        Number(i.stock || 0),
+        Number(i.min || 0),
+        String(i.location || "").toUpperCase(),
+        i.img || ""
+      ].join(",")))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "items.csv"; a.click();
+    URL.revokeObjectURL(url);
+  } catch { alert("エクスポート失敗"); }
+});
+
+$("#btn-items-xlsx")?.addEventListener("click", async () => {
+  try {
+    const list = await api("items", { method: "GET" });
+    const arr = Array.isArray(list) ? list : (list?.data || []);
+    // Bentuk data tabular yang rapi untuk Excel:
+    const rows = arr.map(i => ({
+      code: i.code,
+      name: i.name || "",
+      price: Number(i.price || 0),
+      stock: Number(i.stock || 0),
+      min: Number(i.min || 0),
+      location: String(i.location || "").toUpperCase(),
+      img: i.img || ""
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows, { header: ["code","name","price","stock","min","location","img"] });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "items");
+    XLSX.writeFile(wb, "items.xlsx");
+  } catch { alert("エクスポート失敗"); }
+});
 
   // Items import (CSV)
   $("#btn-items-import")?.addEventListener("click", () => $("#input-items-import")?.click());
