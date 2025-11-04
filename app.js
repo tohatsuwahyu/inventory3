@@ -177,7 +177,7 @@
 
   /* -------------------- Items -------------------- */
   let _ITEMS_CACHE = [];
-  function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", "&gt;": "&gt;", "\"": "&quot;", "'": "&#39;" }[m])); }
+  function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[m])); }
   function escapeAttr(s) { return escapeHtml(s); }
 
   function tplItemRow(it) {
@@ -279,8 +279,9 @@
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="md-img" class="form-control" value="${escapeAttr(it.img || "")}"></div>
         <div class="col-md-4"><label class="form-label">置場</label>
           <input id="md-location" class="form-control text-uppercase" value="${escapeAttr(it.location || "")}" placeholder="A-01-03">
-          <div class="col-md-4"><label class="form-label">部門</label>
-          <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など"></div>
+        </div>
+        <div class="col-md-4"><label class="form-label">部門</label>
+          <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など">
         </div>
       </div>
     </div>
@@ -337,8 +338,8 @@
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="nw-img" class="form-control"></div>
         <div class="col-md-4"><label class="form-label">置場</label><input id="nw-location" class="form-control text-uppercase" placeholder="A-01-03"></div>
         <div class="col-md-4"><label class="form-label">部門</label>
-  <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
-</div>
+          <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -401,158 +402,156 @@
   }
 
   // ---------- LABEL CANVAS (wrap teks & grid cetak) ----------
-async function makeItemLabelDataURL(item) {
-  const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
-  const QUIET = 16, qrSize = 136, gapQR = 14;
-  const c = document.createElement("canvas"); c.width = W; c.height = H;
-  const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
+  async function makeItemLabelDataURL(item) {
+    const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
+    const QUIET = 16, qrSize = 136, gapQR = 14;
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
 
-  // --- border luar (garis tajam 0.5px align) ---
-  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
-  g.strokeStyle = "#000"; g.lineWidth = 1;
-  g.strokeRect(0.5, 0.5, W - 1, H - 1);
+    // --- border luar (garis tajam 0.5px align) ---
+    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+    g.strokeStyle = "#000"; g.lineWidth = 1;
+    g.strokeRect(0.5, 0.5, W - 1, H - 1);
 
-  // --- kolom kiri (gambar) ---
-  const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
-  roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
-  await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
+    // --- kolom kiri (gambar) ---
+    const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
+    roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
+    await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
 
-  // --- QR ---
-  const colStart = pad + imgW + gap;
-  const qy = pad + ((H - 2 * pad) - qrSize) / 2;
-  const qx = colStart + gapQR + QUIET;
-  g.fillStyle = "#fff";
-  g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
-  try {
-    const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
-    const im = new Image(); im.src = du; await imgLoaded(im);
-    g.drawImage(im, qx, qy, qrSize, qrSize);
-  } catch {}
-
-  // --- grid kanan ---
-  const colQRW = qrSize + 2 * QUIET;
-  const gridX  = colStart + gapQR + colQRW + gapQR;
-  const cellH  = (H - 2 * pad) / 3;
-  g.strokeStyle = "#000"; g.lineWidth = 1;
-  g.strokeRect(gridX + 0.5, pad + 0.5, W - gridX - pad - 1, H - 2 * pad - 1);
-  for (let i = 1; i <= 2; i++) {
-    const y = pad + cellH * i;
-    g.beginPath(); g.moveTo(gridX + 0.5, y + 0.5); g.lineTo(W - pad - 0.5, y + 0.5); g.stroke();
-  }
-
-  // --- label & nilai (rapi & tengah) ---
-  const labelWidth = 96;             // ruang label (kolom kiri di grid)
-  const labelX = gridX + 10;
-  const valX   = gridX + 10 + labelWidth;   // mulai nilai setelah label
-  const valMaxW = W - pad - valX - 10;
-
-  const LBL_FONT = '600 14px "Noto Sans JP", system-ui';
-  const VAL_WEIGHT = "700";
-
-  const cells = [
-    { title: "コード：",     value: String(item.code || ""),            base: 20, min: 11 },
-    { title: "商品名：",     value: String(item.name || ""),            base: 22, min: 11 },
-    { title: "部門／置場：", value: [item.department||"", item.location? "／"+String(item.location).toUpperCase():""].join(""), base: 18, min: 11 }
-  ];
-
-  cells.forEach((cell, i) => {
-    const yTop = pad + i * cellH;
-    // label (vertikal center)
-    g.font = LBL_FONT; g.fillStyle = "#000";
-    const labelH = 14; // dari font di atas
-    const ly = yTop + (cellH - labelH) / 2;
-    g.textBaseline = "top"; g.textAlign = "left";
-    g.fillText(cell.title, labelX, Math.round(ly));
-
-    // nilai (wrap & center vertikal)
-    drawWrapBoxVCenter(
-      g, cell.value, valX, yTop + 4, valMaxW, cellH - 8,
-      { base: cell.base, min: cell.min, lineGap: 3, weight: VAL_WEIGHT }
-    );
-  });
-
-  return c.toDataURL("image/png");
-
-  // ===== helpers =====
-  function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
-    ctx.save(); ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-    if (fill)   { ctx.fillStyle = fillColor || "#eef"; ctx.fill(); }
-    if (stroke) { ctx.strokeStyle = border || "#000"; ctx.stroke(); }
-    ctx.restore();
-  }
-  function imgLoaded(im){ return new Promise(res => { im.onload = res; im.onerror = res; }); }
-  async function drawImageIfAny(ctx, url, x, y, w, h, rr){
-    if (!url){
-      ctx.save(); ctx.fillStyle="#3B82F6"; ctx.font='bold 28px "Noto Sans JP", system-ui';
-      ctx.textAlign="center"; ctx.textBaseline="middle";
-      ctx.fillText("画像", x + w/2, y + h/2);
-      ctx.restore(); return;
-    }
-    try{
-      const im = new Image(); im.crossOrigin="anonymous"; im.src=url; await imgLoaded(im);
-      const s = Math.min(w/im.width, h/im.height), iw = im.width*s, ih = im.height*s;
-      const ix = x + (w - iw)/2, iy = y + (h - ih)/2;
-      ctx.save(); ctx.beginPath();
-      ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr);
-      ctx.arcTo(x + w, y + h, x, y + h, rr); ctx.arcTo(x, y + h, x, y, rr);
-      ctx.arcTo(x, y, x + w, y, rr); ctx.closePath(); ctx.clip();
-      ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
+    // --- QR ---
+    const colStart = pad + imgW + gap;
+    const qy = pad + ((H - 2 * pad) - qrSize) / 2;
+    const qx = colStart + gapQR + QUIET;
+    g.fillStyle = "#fff";
+    g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
+    try {
+      const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
+      const im = new Image(); im.src = du; await imgLoaded(im);
+      g.drawImage(im, qx, qy, qrSize, qrSize);
     } catch {}
-  }
 
-  // token-aware + pecah per karakter bila perlu (CJK)
-  function measureLines(ctx, text, maxW){
-    const tokens = String(text ?? "").split(/(\s+)/);
-    const lines = []; let line = "";
-    const push = (tok) => {
-      if (ctx.measureText(tok).width <= maxW) {
-        const t = line + tok;
-        if (!line || ctx.measureText(t).width <= maxW) line = t;
-        else { lines.push(line.trim()); line = tok.trimStart(); }
-      } else {
-        for (const ch of Array.from(tok)) {
-          const t = line + ch;
-          if (!line || ctx.measureText(t).width <= maxW) line = t;
-          else { lines.push(line.trim()); line = ch; }
-        }
+    // --- grid kanan ---
+    const colQRW = qrSize + 2 * QUIET;
+    const gridX  = colStart + gapQR + colQRW + gapQR;
+    const cellH  = (H - 2 * pad) / 3;
+    g.strokeStyle = "#000"; g.lineWidth = 1;
+    g.strokeRect(gridX + 0.5, pad + 0.5, W - gridX - pad - 1, H - 2 * pad - 1);
+    for (let i = 1; i <= 2; i++) {
+      const y = pad + cellH * i;
+      g.beginPath(); g.moveTo(gridX + 0.5, y + 0.5); g.lineTo(W - pad - 0.5, y + 0.5); g.stroke();
+    }
+
+    // --- label & nilai (rapi & tengah) ---
+    const labelWidth = 96;             // ruang label (kolom kiri di grid)
+    const labelX = gridX + 10;
+    const valX   = gridX + 10 + labelWidth;   // mulai nilai setelah label
+    const valMaxW = W - pad - valX - 10;
+
+    const LBL_FONT = '600 14px "Noto Sans JP", system-ui';
+    const VAL_WEIGHT = "700";
+
+    const cells = [
+      { title: "コード：",     value: String(item.code || ""),            base: 20, min: 11 },
+      { title: "商品名：",     value: String(item.name || ""),            base: 22, min: 11 },
+      { title: "部門／置場：", value: [item.department||"", item.location? "／"+String(item.location).toUpperCase():""].join(""), base: 18, min: 11 }
+    ];
+
+    cells.forEach((cell, i) => {
+      const yTop = pad + i * cellH;
+      // label (vertikal center)
+      g.font = LBL_FONT; g.fillStyle = "#000";
+      const labelH = 14; // dari font di atas
+      const ly = yTop + (cellH - labelH) / 2;
+      g.textBaseline = "top"; g.textAlign = "left";
+      g.fillText(cell.title, labelX, Math.round(ly));
+
+      // nilai (wrap & center vertikal)
+      drawWrapBoxVCenter(
+        g, cell.value, valX, yTop + 4, valMaxW, cellH - 8,
+        { base: cell.base, min: cell.min, lineGap: 3, weight: VAL_WEIGHT }
+      );
+    });
+
+    return c.toDataURL("image/png");
+
+    // ===== helpers =====
+    function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
+      ctx.save(); ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+      if (fill)   { ctx.fillStyle = fillColor || "#eef"; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = border || "#000"; ctx.stroke(); }
+      ctx.restore();
+    }
+    function imgLoaded(im){ return new Promise(res => { im.onload = res; im.onerror = res; }); }
+    async function drawImageIfAny(ctx, url, x, y, w, h, rr){
+      if (!url){
+        ctx.save(); ctx.fillStyle="#3B82F6"; ctx.font='bold 28px "Noto Sans JP", system-ui';
+        ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText("画像", x + w/2, y + h/2);
+        ctx.restore(); return;
       }
-    };
-    tokens.forEach(push);
-    if (line) lines.push(line.trim());
-    return lines;
-  }
+      try{
+        const im = new Image(); im.crossOrigin="anonymous"; im.src=url; await imgLoaded(im);
+        const s = Math.min(w/im.width, h/im.height), iw = im.width*s, ih = im.height*s;
+        const ix = x + (w - iw)/2, iy = y + (h - ih)/2;
+        ctx.save(); ctx.beginPath();
+        ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr); ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr); ctx.closePath(); ctx.clip();
+        ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
+      } catch {}
+    }
 
-  function drawWrapBoxVCenter(ctx, text, x, yTop, maxW, maxH, opt={}){
-    const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
-    const fam  = '"Noto Sans JP", system-ui';
-    const weight = opt.weight || "normal";
-    let size = base, lines;
-    while (true){
-      ctx.font = `${weight} ${size}px ${fam}`;
-      lines = measureLines(ctx, text, maxW);
+    // token-aware + pecah per karakter bila perlu (CJK)
+    function measureLines(ctx, text, maxW){
+      const tokens = String(text ?? "").split(/(\s+)/);
+      const lines = []; let line = "";
+      const push = (tok) => {
+        if (ctx.measureText(tok).width <= maxW) {
+          const t = line + tok;
+          if (!line || ctx.measureText(t).width <= maxW) line = t;
+          else { lines.push(line.trim()); line = tok.trimStart(); }
+        } else {
+          for (const ch of Array.from(tok)) {
+            const t = line + ch;
+            if (!line || ctx.measureText(t).width <= maxW) line = t;
+            else { lines.push(line.trim()); line = ch; }
+          }
+        }
+      };
+      tokens.forEach(push);
+      if (line) lines.push(line.trim());
+      return lines;
+    }
+
+    function drawWrapBoxVCenter(ctx, text, x, yTop, maxW, maxH, opt={}){
+      const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
+      const fam  = '"Noto Sans JP", system-ui';
+      const weight = opt.weight || "normal";
+      let size = base, lines;
+      while (true){
+        ctx.font = `${weight} ${size}px ${fam}`;
+        lines = measureLines(ctx, text, maxW);
+        const totalH = lines.length * size + (lines.length - 1) * gap;
+        if (totalH <= maxH || size <= min) break;
+        size -= 1;
+      }
+      // vertikal tengah
       const totalH = lines.length * size + (lines.length - 1) * gap;
-      if (totalH <= maxH || size <= min) break;
-      size -= 1;
-    }
-    // vertikal tengah
-    const totalH = lines.length * size + (lines.length - 1) * gap;
-    let y = yTop + (maxH - totalH) / 2;
-    ctx.textBaseline = "top"; ctx.textAlign = "left"; ctx.fillStyle = "#000";
-    for (const ln of lines){
-      ctx.fillText(ln, x, Math.round(y));
-      y += size + gap;
-      if (y - yTop > maxH) break;
+      let y = yTop + (maxH - totalH) / 2;
+      ctx.textBaseline = "top"; ctx.textAlign = "left"; ctx.fillStyle = "#000";
+      for (const ln of lines){
+        ctx.fillText(ln, x, Math.round(y));
+        y += size + gap;
+        if (y - yTop > maxH) break;
+      }
     }
   }
-}
-
-
 
   async function generateQrDataUrl(text, size) {
     await ensureQRCode();
@@ -914,6 +913,7 @@ async function makeItemLabelDataURL(item) {
       rec.qty = Number(e.target.value || 0); rec.diff = rec.qty - rec.book;
       tr.children[5].textContent = fmt(rec.diff);
       tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
+      updateShelfFilterAndSummary();
     };
 
     tbody.onclick = (e) => {
@@ -921,6 +921,8 @@ async function makeItemLabelDataURL(item) {
       if (e.target.closest(".btn-st-adjust")) { if (!isAdmin()) return toast("Akses ditolak (admin only)"); openAdjustModal(rec); }
       else if (e.target.closest(".btn-st-edit")) { if (!isAdmin()) return toast("Akses ditolak (admin only)"); openEditItem(code); }
     };
+    // update ringkasan & filter setiap render
+    updateShelfFilterAndSummary();
   }
 
   async function renderShelfRecap() {
@@ -1043,7 +1045,188 @@ async function makeItemLabelDataURL(item) {
       await addOrUpdateStocktake(code, qty || undefined);
       $("#st-code").value = ""; $("#st-qty").value = "";
     });
+
+    // === Tambahan binding (BARU) ===
+    document.getElementById("st-save")?.addEventListener("click", () => {
+      const note = prompt("下書きメモ（任意）", "");
+      const payload = saveStocktakeDraft(note || "");
+      toast("下書きを保存しました：" + (payload?.at || ""));
+    });
+
+    document.getElementById("st-load")?.addEventListener("click", () => {
+      const payload = loadStocktakeDraft(true);
+      if (!payload) return toast("下書きが見つかりません。");
+      renderShelfTable();
+      toast("下書きを読み込みました：" + (payload?.at || ""));
+    });
+
+    document.getElementById("st-clear")?.addEventListener("click", () => {
+      if (confirm("現在の棚卸入力をクリアしますか？（下書きは保持）")) clearStocktake({ andDraft: false });
+    });
+
+    document.getElementById("st-only-diff")?.addEventListener("change", () => {
+      applyShelfDiffFilter();
+    });
+
+    document.getElementById("st-finalize")?.addEventListener("click", () => {
+      finalizeStocktake();
+    });
+
+    document.getElementById("st-export")?.addEventListener("click", () => {
+      const who = getCurrentUser();
+      const meta = {
+        exportedAt: new Date().toISOString(),
+        userId: who?.id || "",
+      };
+      const rows = [...(ST.rows?.values?.() || [])];
+      const header = [
+        `#exportedAt,${meta.exportedAt}`,
+        `#userId,${meta.userId}`,
+        "code,name,book,qty,diff,department"
+      ];
+      const lines = rows.map(r => [
+        r.code,
+        String(r.name || "").replace(/,/g, " "),
+        r.book,
+        r.qty,
+        r.diff,
+        String(r.department || "").replace(/,/g, " ")
+      ].join(","));
+      const csv = header.concat(lines).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "stocktake_with_meta.csv"; a.click();
+      URL.revokeObjectURL(url);
+    });
   })();
+
+  /* ==== Stocktake helpers (BARU, khusus 棚卸) ==== */
+
+  // Kunci localStorage untuk draft
+  const ST_DRAFT_KEY = "ST_DRAFT_V1";
+
+  // Recalc ringkasan + apply filter "差異のみ"
+  function updateShelfFilterAndSummary() {
+    applyShelfDiffFilter();
+    recalcShelfSummary();
+  }
+
+  // Hanya tampilkan baris dengan diff ≠ 0 bila checkbox aktif
+  function applyShelfDiffFilter() {
+    const only = !!document.getElementById("st-only-diff")?.checked;
+    const tbody = document.getElementById("tbl-stocktake"); if (!tbody) return;
+    [...tbody.querySelectorAll("tr")].forEach(tr => {
+      if (!only) { tr.style.display = ""; return; }
+      const code = tr.getAttribute("data-code");
+      const rec = ST.rows.get(code);
+      tr.style.display = (rec && Number(rec.diff || 0) !== 0) ? "" : "none";
+    });
+  }
+
+  // Hitung ringkasan progres opname
+  function recalcShelfSummary() {
+    const arr = [...ST.rows.values()];
+    const total = arr.length;
+    const diffRows = arr.filter(r => Number(r.diff || 0) !== 0).length;
+    const sumDiff = arr.reduce((a, r) => a + Number(r.diff || 0), 0);
+    const absDiff = arr.reduce((a, r) => a + Math.abs(Number(r.diff || 0)), 0);
+
+    const el = document.getElementById("st-summary");
+    if (el) {
+      el.innerHTML = [
+        `明細：<b>${total}</b> 件`,
+        `差異あり：<b class="${diffRows ? 'text-danger' : ''}">${diffRows}</b> 件`,
+        `差異合計：<b>${fmt(sumDiff)}</b>`,
+        `| 絶対差異：<b>${fmt(absDiff)}</b>`
+      ].join("　");
+    }
+  }
+
+  // Simpan draft (optional: note)
+  function saveStocktakeDraft(note) {
+    const who = getCurrentUser();
+    const payload = {
+      at: new Date().toISOString(),
+      userId: who?.id || "",
+      note: note || "",
+      rows: [...ST.rows.values()]
+    };
+    localStorage.setItem(ST_DRAFT_KEY, JSON.stringify(payload));
+    return payload;
+  }
+
+  // Baca draft; merge=true akan menggabungkan dengan data saat ini (by code)
+  function loadStocktakeDraft(merge) {
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(ST_DRAFT_KEY) || "null"); } catch {}
+    if (!raw || !Array.isArray(raw.rows)) return null;
+
+    if (!merge) ST.rows.clear();
+    raw.rows.forEach(r => {
+      const book = Number(r.book || 0);
+      const qty  = Number(r.qty  || book);
+      ST.rows.set(String(r.code), {
+        code: String(r.code),
+        name: String(r.name || ""),
+        department: String(r.department || ""),
+        book, qty, diff: qty - book
+      });
+    });
+    return raw;
+  }
+
+  // Bersihkan data opname di memori (dan optional draft)
+  function clearStocktake({ andDraft = false } = {}) {
+    ST.rows.clear();
+    if (andDraft) localStorage.removeItem(ST_DRAFT_KEY);
+    const tbody = document.getElementById("tbl-stocktake");
+    if (tbody) tbody.innerHTML = "";
+    updateShelfFilterAndSummary();
+  }
+
+  // Finalize (commit ke master stock) — ADMIN ONLY
+  async function finalizeStocktake() {
+    if (!isAdmin()) { toast("Akses ditolak (admin only)"); return; }
+    const who = getCurrentUser();
+    const arr = [...ST.rows.values()];
+    if (!arr.length) { toast("棚卸データがありません。"); return; }
+
+    const total = arr.length;
+    const diffRows = arr.filter(r => Number(r.diff || 0) !== 0);
+    if (!confirm(`在庫を確定しますか？\n明細: ${total} 件\n差異あり: ${diffRows.length} 件\n※各アイテムの在庫は「実在数量」に上書きされます。`)) return;
+
+    try {
+      setLoading(true, "在庫更新中…");
+      for (const r of arr) {
+        // 1) Update stok sesuai hasil opname
+        await api("updateItem", { method: "POST", body: {
+          code: r.code, name: r.name, stock: Number(r.qty || 0), overwrite: true
+        }});
+
+        // 2) Catat histori sebagai ADJUST (opsional; aman untuk existing schema)
+        const diff = Number(r.diff || 0);
+        await api("log", { method: "POST", body: {
+          userId: who?.id || "",
+          code: r.code,
+          qty: diff,
+          unit: "",                // unit tidak tersimpan di item; biarkan kosong
+          type: "ADJUST",
+          note: "stocktake finalize"
+        }}).catch(()=>{ /* abaikan jika backend belum mendukung type=ADJUST */ });
+      }
+
+      // Refresh cache tampilan minimal
+      clearStocktake({ andDraft: true });
+      await renderItems?.();
+      await renderShelfTable?.();
+      toast("棚卸を確定しました。");
+    } catch (e) {
+      toast("確定に失敗しました: " + (e?.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   /* -------------------- Export / Import wiring -------------------- */
 
@@ -1081,7 +1264,7 @@ async function makeItemLabelDataURL(item) {
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderUsers();
   });
 
-  // Items export (CSV & Excel) — (dibiarkan ganda jika memang sudah ada tombol gandanya)
+  // Items export (CSV & Excel) — dibiarkan apa adanya (ada kemungkinan tombol ganda di HTML)
   $("#btn-items-export")?.addEventListener("click", async () => {
     try {
       const list = await api("items", { method: "GET" });
@@ -1125,7 +1308,7 @@ async function makeItemLabelDataURL(item) {
     } catch { alert("エクスポート失敗"); }
   });
 
-  // Items export (CSV) + department
+  // Items export (CSV) + department (ID sama bisa menyebabkan dua unduhan bila keduanya ada di DOM)
   $("#btn-items-export")?.addEventListener("click", async () => {
     try {
       const list = await api("items", { method: "GET" });
@@ -1150,7 +1333,7 @@ async function makeItemLabelDataURL(item) {
     } catch { alert("エクスポート失敗"); }
   });
 
-  // Items export (Excel) + department
+  // Items export (Excel) + department (ID sama bisa menyebabkan dua unduhan bila keduanya ada di DOM)
   $("#btn-items-xlsx")?.addEventListener("click", async () => {
     try {
       const list = await api("items", { method: "GET" });
