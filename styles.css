@@ -538,3 +538,35 @@ header.appbar{ position: sticky; top: 0; z-index: 1020; } /* terasa app-like */
     font-size: .8rem;
   }
 }
+/* === Rapikan tombol Help / Logout / メニュー di HP ================= */
+@media (max-width: 480px){
+  /* Semua button di header jadi compact & satu baris */
+  header.appbar .btn{
+    font-size: .78rem !important;
+    line-height: 1 !important;
+    padding: .22rem .45rem !important;
+    height: 32px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: .3rem !important;
+
+    white-space: nowrap !important;   /* cegah "ヘル\nプ" */
+    word-break: keep-all !important;   /* hindari pecah huruf Jepang */
+    overflow: hidden !important;
+    border-radius: 10px !important;
+  }
+  header.appbar .btn .bi{ font-size: .95rem !important; }
+
+  /* Sedikit rapatkan jarak antartombol di kanan header */
+  header.appbar .btn + .btn{ margin-left: 6px !important; }
+
+  /* Khusus tombol di judul ("メニュー") */
+  #btn-menu{
+    font-size: .8rem !important;
+    padding: .22rem .55rem !important;
+    height: 32px !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+  }
+}
