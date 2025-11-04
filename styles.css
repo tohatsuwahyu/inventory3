@@ -377,3 +377,84 @@ img{ max-width:100%; height:auto; }
   /* Hindari wrap vertikal judul sidebar */
   .sidebar nav a{ white-space:nowrap; }
 }
+/* === Mobile polish (tanpa ganggu fungsi) ===================== */
+/* Header: biar tidak tumpang-tindih & jadi dua baris rapi */
+@media (max-width: 420px){
+  header.appbar .container-fluid > .d-flex{
+    flex-wrap: wrap;                /* izinkan turun ke baris 2 */
+    row-gap: 8px;
+  }
+  header.appbar .brand{ min-width:0; }
+  #who{
+    max-width: 58vw;                /* nama user tidak nabrak tombol */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  header.appbar .btn{ padding:.4rem .6rem; }
+
+  /* Konten lebih padat */
+  .content{ padding: 12px; }
+  .card{ border-radius: 14px; }
+
+  /* Kartu metrik dashboard: angka besar tidak pecah layout */
+  .fs-3{ line-height: 1.1; }
+
+  /* Toolbar jadi kolom (sudah ada, ini penguat) */
+  .items-toolbar{ flex-direction: column; align-items: stretch; gap:.6rem; }
+  .items-toolbar .left, .items-toolbar .right{ width: 100%; }
+  .items-toolbar .search{ width: 100%; min-width: 0; }
+
+  /* Area kamera (IO & 棚卸) aman penuh lebar & tidak menutup tombol */
+  #io-scan-area, #scan-area{
+    max-width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  /* Tabel: header nowrap, nama item pakai ellipsis */
+  .table thead th{ white-space: nowrap; font-size: .9rem; }
+  #view-items td:nth-child(3){         /* 商品名 */
+    max-width: 55vw;                    /* cukup panjang di HP */
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+
+  /* Kolom QR diberi lebar tetap agar baris tidak geser-geser */
+  #view-items thead th.th-qr,
+  #view-items tbody td:nth-child(1){
+    width: 120px !important; min-width: 120px !important;
+  }
+
+  /* Kolom 置場 & 部門 rapih, tidak terlalu sempit */
+  .table-items .th-dept,
+  .table-items .th-location{
+    min-width: 110px;
+  }
+
+  /* Grid tombol 操作: 2x2 agar tidak mepet */
+  .table-items .act-grid{
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 6px;
+  }
+  .table-items .act-grid .btn{
+    width: 100%; padding: .35rem .5rem; border-radius: .75rem;
+  }
+}
+
+/* === Off-canvas sidebar (sinkron dengan class body.sb-open) === */
+/* (Sudah ada di file, ini fallback agar selalu nyala di HP/tablet) */
+@media (max-width: 991px){
+  .sidebar{
+    position: fixed; left: 0; top: 0; bottom: 0;
+    width: 86%; max-width: 360px; background: #0b1727; color:#c9d2e3;
+    overflow: auto; transform: translateX(-100%);
+    transition: transform .18s ease-out; z-index: 1040;
+  }
+  body.sb-open .sidebar{ transform: none; }
+
+  #sb-backdrop{
+    position: fixed; inset: 0; background: rgba(0,0,0,.35);
+    display: none; z-index: 1030;
+  }
+  body.sb-open #sb-backdrop{ display: block; }
+}
