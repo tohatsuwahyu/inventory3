@@ -177,7 +177,7 @@
 
   /* -------------------- Items -------------------- */
   let _ITEMS_CACHE = [];
-  function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[m])); }
+  function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", "&gt;": "&gt;", "\"": "&quot;", "'": "&#39;" }[m])); }
   function escapeAttr(s) { return escapeHtml(s); }
 
   function tplItemRow(it) {
@@ -258,8 +258,6 @@
 
     } catch { toast("商品一覧の読み込みに失敗しました。"); }
   }
-  // expose untuk auto-reload
-  window.renderItems = renderItems;
 
   function openEditItem(code) {
     if (!isAdmin()) return toast("Akses ditolak (admin only)");
@@ -281,9 +279,8 @@
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="md-img" class="form-control" value="${escapeAttr(it.img || "")}"></div>
         <div class="col-md-4"><label class="form-label">置場</label>
           <input id="md-location" class="form-control text-uppercase" value="${escapeAttr(it.location || "")}" placeholder="A-01-03">
-        </div>
-        <div class="col-md-4"><label class="form-label">部門</label>
-          <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など">
+          <div class="col-md-4"><label class="form-label">部門</label>
+          <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など"></div>
         </div>
       </div>
     </div>
@@ -340,8 +337,8 @@
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="nw-img" class="form-control"></div>
         <div class="col-md-4"><label class="form-label">置場</label><input id="nw-location" class="form-control text-uppercase" placeholder="A-01-03"></div>
         <div class="col-md-4"><label class="form-label">部門</label>
-          <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
-        </div>
+  <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
+</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -404,152 +401,225 @@
   }
 
   // ---------- LABEL CANVAS (wrap teks & grid cetak) ----------
-  async function makeItemLabelDataURL(item) {
-    const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
-    const QUIET = 16, qrSize = 136, gapQR = 14;
-    const c = document.createElement("canvas"); c.width = W; c.height = H;
-    const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
+async function makeItemLabelDataURL(item) {
+  const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
+  const QUIET = 16, qrSize = 136, gapQR = 14;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
 
-    // --- border luar (garis tajam 0.5px align) ---
-    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
-    g.strokeStyle = "#000"; g.lineWidth = 1;
-    g.strokeRect(0.5, 0.5, W - 1, H - 1);
+  // --- border luar (garis tajam 0.5px align) ---
+  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+  g.strokeStyle = "#000"; g.lineWidth = 1;
+  g.strokeRect(0.5, 0.5, W - 1, H - 1);
 
-    // --- kolom kiri (gambar) ---
-    const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
-    roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
-    await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
+  // --- kolom kiri (gambar) ---
+  const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
+  roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
+  await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
 
-    // --- QR ---
-    const colStart = pad + imgW + gap;
-    const qy = pad + ((H - 2 * pad) - qrSize) / 2;
-    const qx = colStart + gapQR + QUIET;
-    g.fillStyle = "#fff";
-    g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
-    try {
-      const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
-      const im = new Image(); im.src = du; await imgLoaded(im);
-      g.drawImage(im, qx, qy, qrSize, qrSize);
-    } catch {}
+  // --- QR ---
+  const colStart = pad + imgW + gap;
+  const qy = pad + ((H - 2 * pad) - qrSize) / 2;
+  const qx = colStart + gapQR + QUIET;
+  g.fillStyle = "#fff";
+  g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
+  try {
+    const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
+    const im = new Image(); im.src = du; await imgLoaded(im);
+    g.drawImage(im, qx, qy, qrSize, qrSize);
+  } catch {}
 
-    // --- grid kanan ---
-    const colQRW = qrSize + 2 * QUIET;
-    const gridX  = colStart + gapQR + colQRW + gapQR;
-    const cellH  = (H - 2 * pad) / 3;
-    g.strokeStyle = "#000"; g.lineWidth = 1;
-    g.strokeRect(gridX + 0.5, pad + 0.5, W - gridX - pad - 1, H - 2 * pad - 1);
-    for (let i = 1; i <= 2; i++) {
-      const y = pad + cellH * i;
-      g.beginPath(); g.moveTo(gridX + 0.5, y + 0.5); g.lineTo(W - pad - 0.5, y + 0.5); g.stroke();
+  // --- grid kanan ---
+  const colQRW = qrSize + 2 * QUIET;
+  const gridX  = colStart + gapQR + colQRW + gapQR;
+  const cellH  = (H - 2 * pad) / 3;
+  g.strokeStyle = "#000"; g.lineWidth = 1;
+  g.strokeRect(gridX + 0.5, pad + 0.5, W - gridX - pad - 1, H - 2 * pad - 1);
+  for (let i = 1; i <= 2; i++) {
+    const y = pad + cellH * i;
+    g.beginPath(); g.moveTo(gridX + 0.5, y + 0.5); g.lineTo(W - pad - 0.5, y + 0.5); g.stroke();
+  }
+
+  // --- label & nilai (rapi & tengah) ---
+  const labelWidth = 96;             // ruang label (kolom kiri di grid)
+  const labelX = gridX + 10;
+  const valX   = gridX + 10 + labelWidth;   // mulai nilai setelah label
+  const valMaxW = W - pad - valX - 10;
+
+  const LBL_FONT = '600 14px "Noto Sans JP", system-ui';
+  const VAL_WEIGHT = "700";
+
+  const cells = [
+    { title: "コード：",     value: String(item.code || ""),            base: 20, min: 11 },
+    { title: "商品名：",     value: String(item.name || ""),            base: 22, min: 11 },
+    { title: "部門／置場：", value: [item.department||"", item.location? "／"+String(item.location).toUpperCase():""].join(""), base: 18, min: 11 }
+  ];
+
+  cells.forEach((cell, i) => {
+    const yTop = pad + i * cellH;
+    // label (vertikal center)
+    g.font = LBL_FONT; g.fillStyle = "#000";
+    const labelH = 14; // dari font di atas
+    const ly = yTop + (cellH - labelH) / 2;
+    g.textBaseline = "top"; g.textAlign = "left";
+    g.fillText(cell.title, labelX, Math.round(ly));
+
+    // nilai (wrap & center vertikal)
+    drawWrapBoxVCenter(
+      g, cell.value, valX, yTop + 4, valMaxW, cellH - 8,
+      { base: cell.base, min: cell.min, lineGap: 3, weight: VAL_WEIGHT }
+    );
+  });
+
+  return c.toDataURL("image/png");
+
+  // ===== helpers =====
+  
+// ===== USER LABEL CANVAS (sesuai contoh gambar) =====
+async function makeUserLabelDataURL(user){
+  const W=1280, H=720;
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
+
+  // latar
+  g.fillStyle='#fff'; g.fillRect(0,0,W,H);
+
+  // fonts
+  const fam='"Noto Sans JP", system-ui';
+
+  // judul
+  g.fillStyle='#1f2a60';
+  g.font='700 72px '+fam;
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  g.shadowColor='rgba(0,0,0,.12)'; g.shadowBlur=18;
+  g.fillText('東京精密発條株式会社', W/2, 150);
+
+  // subjudul
+  g.shadowBlur=0;
+  g.fillStyle='#2b3a8a';
+  g.font='700 38px '+fam;
+  g.fillText('在庫管理システム', W/2, 215);
+
+  // label kiri (ID・氏名)
+  const leftX=160, baseY=320, gap=120;
+  g.fillStyle='#223';
+  g.textAlign='left'; g.textBaseline='middle';
+  g.font='700 44px '+fam;
+  g.fillText('ID  ：', leftX, baseY);
+  g.fillText('氏名：', leftX, baseY+gap);
+
+  // nilai
+  g.font='700 54px '+fam;
+  g.fillStyle='#102a6b';
+  g.fillText(String(user.id||''), leftX+160, baseY);
+
+  // nama: auto shrink
+  let nm=String(user.name||''), size=54;
+  while(size>=24){
+    g.font=`700 ${size}px ${fam}`;
+    if(g.measureText(nm).width <= (W*0.5-leftX)) break;
+    size-=2;
+  }
+  g.fillText(nm, leftX+160, baseY+gap);
+
+  // bingkai sudut kanan
+  const bx=W-520, by=180, bw=360, bh=360, k=26, lw=14, col='#2f3e98';
+  g.strokeStyle=col; g.lineWidth=lw; g.lineCap='round';
+  const L=(x1,y1,x2,y2)=>{ g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); };
+  L(bx,by+k, bx,by); L(bx,by, bx+k,by);
+  L(bx+bw,by+k, bx+bw,by); L(bx+bw-k,by, bx+bw,by);
+  L(bx,by+bh-k, bx,by+bh); L(bx,by+bh, bx+k,by+bh);
+  L(bx+bw,by+bh-k, bx+bw,by+bh); L(bx+bw-k,by+bh, bx+bw,by+bh);
+
+  // QR USER|{id}
+  const qrSize=260, qx=bx+(bw-qrSize)/2, qy=by+(bh-qrSize)/2;
+  const url=await generateQrDataUrl(`USER|${user.id}`, qrSize);
+  if(url){
+    const img=new Image(); img.src=url;
+    await new Promise(r=>{ img.onload=r; img.onerror=r; });
+    g.drawImage(img, qx, qy, qrSize, qrSize);
+  }
+  return c.toDataURL('image/png');
+}
+function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
+    ctx.save(); ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    if (fill)   { ctx.fillStyle = fillColor || "#eef"; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = border || "#000"; ctx.stroke(); }
+    ctx.restore();
+  }
+  function imgLoaded(im){ return new Promise(res => { im.onload = res; im.onerror = res; }); }
+  async function drawImageIfAny(ctx, url, x, y, w, h, rr){
+    if (!url){
+      ctx.save(); ctx.fillStyle="#3B82F6"; ctx.font='bold 28px "Noto Sans JP", system-ui';
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText("画像", x + w/2, y + h/2);
+      ctx.restore(); return;
     }
-
-    // --- label & nilai (rapi & tengah) ---
-    const labelWidth = 96;
-    const labelX = gridX + 10;
-    const valX   = gridX + 10 + labelWidth;
-    const valMaxW = W - pad - valX - 10;
-
-    const LBL_FONT = '600 14px "Noto Sans JP", system-ui';
-    const VAL_WEIGHT = "700";
-
-    const cells = [
-      { title: "コード：",     value: String(item.code || ""),            base: 20, min: 11 },
-      { title: "商品名：",     value: String(item.name || ""),            base: 22, min: 11 },
-      { title: "部門／置場：", value: [item.department||"", item.location? "／"+String(item.location).toUpperCase():""].join(""), base: 18, min: 11 }
-    ];
-
-    cells.forEach((cell, i) => {
-      const yTop = pad + i * cellH;
-      g.font = LBL_FONT; g.fillStyle = "#000";
-      const labelH = 14;
-      const ly = yTop + (cellH - labelH) / 2;
-      g.textBaseline = "top"; g.textAlign = "left";
-      g.fillText(cell.title, labelX, Math.round(ly));
-
-      drawWrapBoxVCenter(
-        g, cell.value, valX, yTop + 4, valMaxW, cellH - 8,
-        { base: cell.base, min: cell.min, lineGap: 3, weight: VAL_WEIGHT }
-      );
-    });
-
-    return c.toDataURL("image/png");
-
-    // ===== helpers =====
-    function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
+    try{
+      const im = new Image(); im.crossOrigin="anonymous"; im.src=url; await imgLoaded(im);
+      const s = Math.min(w/im.width, h/im.height), iw = im.width*s, ih = im.height*s;
+      const ix = x + (w - iw)/2, iy = y + (h - ih)/2;
       ctx.save(); ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.arcTo(x + w, y, x + w, y + h, r);
-      ctx.arcTo(x + w, y + h, x, y + h, r);
-      ctx.arcTo(x, y + h, x, y, r);
-      ctx.arcTo(x, y, x + w, y, r);
-      ctx.closePath();
-      if (fill)   { ctx.fillStyle = fillColor || "#eef"; ctx.fill(); }
-      if (stroke) { ctx.strokeStyle = border || "#000"; ctx.stroke(); }
-      ctx.restore();
-    }
-    function imgLoaded(im){ return new Promise(res => { im.onload = res; im.onerror = res; }); }
-    async function drawImageIfAny(ctx, url, x, y, w, h, rr){
-      if (!url){
-        ctx.save(); ctx.fillStyle="#3B82F6"; ctx.font='bold 28px "Noto Sans JP", system-ui';
-        ctx.textAlign="center"; ctx.textBaseline="middle";
-        ctx.fillText("画像", x + w/2, y + h/2);
-        ctx.restore(); return;
-      }
-      try{
-        const im = new Image(); im.crossOrigin="anonymous"; im.src=url; await imgLoaded(im);
-        const s = Math.min(w/im.width, h/im.height), iw = im.width*s, ih = im.height*s;
-        const ix = x + (w - iw)/2, iy = y + (h - ih)/2;
-        ctx.save(); ctx.beginPath();
-        ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr);
-        ctx.arcTo(x + w, y + h, x, y + h, rr); ctx.arcTo(x, y + h, x, y, rr);
-        ctx.arcTo(x, y, x + w, y, rr); ctx.closePath(); ctx.clip();
-        ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
-      } catch {}
-    }
+      ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr); ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr); ctx.closePath(); ctx.clip();
+      ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
+    } catch {}
+  }
 
-    function measureLines(ctx, text, maxW){
-      const tokens = String(text ?? "").split(/(\s+)/);
-      const lines = []; let line = "";
-      const push = (tok) => {
-        if (ctx.measureText(tok).width <= maxW) {
-          const t = line + tok;
+  // token-aware + pecah per karakter bila perlu (CJK)
+  function measureLines(ctx, text, maxW){
+    const tokens = String(text ?? "").split(/(\s+)/);
+    const lines = []; let line = "";
+    const push = (tok) => {
+      if (ctx.measureText(tok).width <= maxW) {
+        const t = line + tok;
+        if (!line || ctx.measureText(t).width <= maxW) line = t;
+        else { lines.push(line.trim()); line = tok.trimStart(); }
+      } else {
+        for (const ch of Array.from(tok)) {
+          const t = line + ch;
           if (!line || ctx.measureText(t).width <= maxW) line = t;
-          else { lines.push(line.trim()); line = tok.trimStart(); }
-        } else {
-          for (const ch of Array.from(tok)) {
-            const t = line + ch;
-            if (!line || ctx.measureText(t).width <= maxW) line = t;
-            else { lines.push(line.trim()); line = ch; }
-          }
+          else { lines.push(line.trim()); line = ch; }
         }
-      };
-      tokens.forEach(push);
-      if (line) lines.push(line.trim());
-      return lines;
-    }
+      }
+    };
+    tokens.forEach(push);
+    if (line) lines.push(line.trim());
+    return lines;
+  }
 
-    function drawWrapBoxVCenter(ctx, text, x, yTop, maxW, maxH, opt={}){
-      const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
-      const fam  = '"Noto Sans JP", system-ui';
-      const weight = opt.weight || "normal";
-      let size = base, lines;
-      while (true){
-        ctx.font = `${weight} ${size}px ${fam}`;
-        lines = measureLines(ctx, text, maxW);
-        const totalH = lines.length * size + (lines.length - 1) * gap;
-        if (totalH <= maxH || size <= min) break;
-        size -= 1;
-      }
+  function drawWrapBoxVCenter(ctx, text, x, yTop, maxW, maxH, opt={}){
+    const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
+    const fam  = '"Noto Sans JP", system-ui';
+    const weight = opt.weight || "normal";
+    let size = base, lines;
+    while (true){
+      ctx.font = `${weight} ${size}px ${fam}`;
+      lines = measureLines(ctx, text, maxW);
       const totalH = lines.length * size + (lines.length - 1) * gap;
-      let y = yTop + (maxH - totalH) / 2;
-      ctx.textBaseline = "top"; ctx.textAlign = "left"; ctx.fillStyle = "#000";
-      for (const ln of lines){
-        ctx.fillText(ln, x, Math.round(y));
-        y += size + gap;
-        if (y - yTop > maxH) break;
-      }
+      if (totalH <= maxH || size <= min) break;
+      size -= 1;
+    }
+    // vertikal tengah
+    const totalH = lines.length * size + (lines.length - 1) * gap;
+    let y = yTop + (maxH - totalH) / 2;
+    ctx.textBaseline = "top"; ctx.textAlign = "left"; ctx.fillStyle = "#000";
+    for (const ln of lines){
+      ctx.fillText(ln, x, Math.round(y));
+      y += size + gap;
+      if (y - yTop > maxH) break;
     }
   }
+}
+
+
 
   async function generateQrDataUrl(text, size) {
     await ensureQRCode();
@@ -607,9 +677,12 @@
           <td>${escapeHtml(u.id)}</td>
           <td>${escapeHtml(u.name)}</td>
           <td>${escapeHtml(u.role || "user")}</td>
-          <td class="text-end">
+          <td class="text-end d-flex justify-content-end gap-1">
             <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
               <i class="bi bi-download"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary btn-dl-userlabel" data-id="${escapeAttr(u.id)}" title="ラベルDL">
+              <i class="bi bi-printer"></i>
             </button>
           </td>
         </tr>
@@ -622,10 +695,21 @@
       }
 
       tbody.addEventListener("click", async (e) => {
-        const b = e.target.closest(".btn-dl-user"); if (!b) return;
-        const id = b.getAttribute("data-id");
-        const url = await generateQrDataUrl(`USER|${id}`, 300);
-        const a = document.createElement("a"); a.href = url; a.download = `user_${id}.png`; a.click();
+        const b1 = e.target.closest(".btn-dl-user");
+        const b2 = e.target.closest(".btn-dl-userlabel");
+        if (b1) {
+          const id = b1.getAttribute("data-id");
+          const url = await generateQrDataUrl(`USER|${id}`, 300);
+          const a = document.createElement("a"); a.href = url; a.download = `user_${id}.png`; a.click();
+          return;
+        }
+        if (b2) {
+          const id = b2.getAttribute("data-id");
+          const u = arr.find(x => String(x.id)===String(id)); if(!u) return;
+          const url = await makeUserLabelDataURL(u);
+          const a = document.createElement("a"); a.href = url; a.download = `userlabel_${id}.png`; a.click();
+          return;
+        }
       });
 
       const right = $("#print-qr-users-grid");
@@ -638,7 +722,7 @@
                 <div id="me-qr"></div>
                 <div class="small">
                   <div><b>ID</b>：${escapeHtml(who.id || "")}</div>
-                  <div><b>名前</b>：${escapeHtml(who.name || "")}</div>
+                  <div><b>氏名</b>：${escapeHtml(who.name || "")}</div>
                   <div><b>ユーザー</b>：${escapeHtml(who.role || "user")}</div>
                   <div><b>PIN</b>：<span class="text-muted">（非表示）</span></div>
                 </div>
@@ -647,12 +731,37 @@
           const box = document.getElementById("me-qr");
           if (box) { new QRCode(box, { text: `USER|${who.id}`, width: 120, height: 120 }); }
         } else {
-          right.innerHTML = `<div class="text-muted small">印刷するユーザーQRを左の表から選択してダウンロードしてください。</div>`;
+          // Admin: tampilkan semua label user (preview + tombol Print/DL)
+          right.innerHTML = "";
+          for (const u of arr) {
+            const url = await makeUserLabelDataURL(u);
+            const card = document.createElement("div");
+            card.className = "card p-2";
+            card.innerHTML = `
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="fw-semibold small">${escapeHtml(u.id)} — ${escapeHtml(u.name||"")}</div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-outline-secondary act-print" data-id="${escapeAttr(u.id)}">Print</button>
+                  <a class="btn btn-sm btn-outline-success" download="user_${escapeAttr(u.id)}.png" href="${url}">Download</a>
+                </div>
+              </div>
+              <img src="${url}" alt="label ${escapeAttr(u.id)}"/>
+            `;
+            right.appendChild(card);
+          }
+          // handler Print (sekali pasang)
+          right.addEventListener("click", (e) => {
+            const b = e.target.closest(".act-print"); if(!b) return;
+            const card = b.closest(".card"); const img = card?.querySelector("img"); if(!img) return;
+            const w = window.open("", "_blank", "width=1000,height=800");
+            w.document.write(`<img src="${img.src}" style="max-width:100%">`);
+            const onload = ()=>{ w.focus(); w.print(); };
+            const im = w.document.images[0]; im?.complete ? onload() : im.onload = onload;
+          }, { once:true });
         }
       }
     } catch { toast("ユーザーQRの読み込みに失敗しました。"); }
   }
-  window.renderUsers = renderUsers;
 
   // New User (admin only)
   function openNewUser() {
@@ -667,7 +776,7 @@
     <div class="modal-body">
       <div class="row g-3">
         <div class="col-md-4"><label class="form-label">ID</label><input id="nu-id" class="form-control" placeholder="USER001"></div>
-        <div class="col-md-5"><label class="form-label">名前</label><input id="nu-name" class="form-control"></div>
+        <div class="col-md-5"><label class="form-label">氏名</label><input id="nu-name" class="form-control"></div>
         <div class="col-md-3"><label class="form-label">権限</label>
           <select id="nu-role" class="form-select"><option value="user">user</option><option value="admin">admin</option></select>
         </div>
@@ -722,7 +831,6 @@
       `).join("");
     } catch { toast("履歴の読み込みに失敗しました。"); }
   }
-  window.renderHistory = renderHistory;
 
   /* -------------------- IO Scanner -------------------- */
   let IO_SCANNER = null;
@@ -821,7 +929,7 @@
       try {
         area.textContent = "カメラ起動中…";
         IO_SCANNER = await startBackCameraScan("io-scan-area", (text) => {
-          const code = parseScanText(String(text || "")) || (String(text || "").split("|")[1] || "").trim();
+          const code = (String(text || "").split("|")[1] || "").trim();
           if (code) { $("#io-code").value = code; findItemIntoIO(code); }
         });
       } catch (e) { toast(e?.message || String(e)); }
@@ -835,43 +943,6 @@
       const code = ($("#io-code").value || "").trim();
       if (code) findItemIntoIO(code);
     });
-
-    // === NEW: auto-lookup saat mengetik/paste/blur di kolom コード ===
-    (function autoLookupIOCode(){
-      const codeEl = document.getElementById("io-code");
-      const nameEl = document.getElementById("io-name");
-      const priceEl= document.getElementById("io-price");
-      const stockEl= document.getElementById("io-stock");
-      if (!codeEl) return;
-
-      let timer = null;
-
-      function clearFields(){
-        if (nameEl)  nameEl.value  = "";
-        if (priceEl) priceEl.value = "";
-        if (stockEl) stockEl.value = "";
-      }
-
-      function doLookup(raw){
-        const v = (raw || codeEl.value || "").trim();
-        if (!v){ clearFields(); return; }
-        const parsed = (typeof parseScanText === "function") ? (parseScanText(v) || v) : v;
-        findItemIntoIO(parsed);
-      }
-
-      codeEl.addEventListener("input", () => {
-        const v = codeEl.value.trim();
-        clearTimeout(timer);
-        if (!v){ clearFields(); return; }
-        timer = setTimeout(() => doLookup(v), 300);
-      });
-
-      codeEl.addEventListener("blur", () => doLookup());
-
-      codeEl.addEventListener("paste", () => {
-        setTimeout(() => doLookup(), 0);
-      });
-    })();
 
     $("#form-io")?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -950,7 +1021,6 @@
       rec.qty = Number(e.target.value || 0); rec.diff = rec.qty - rec.book;
       tr.children[5].textContent = fmt(rec.diff);
       tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
-      updateShelfFilterAndSummary();
     };
 
     tbody.onclick = (e) => {
@@ -958,9 +1028,7 @@
       if (e.target.closest(".btn-st-adjust")) { if (!isAdmin()) return toast("Akses ditolak (admin only)"); openAdjustModal(rec); }
       else if (e.target.closest(".btn-st-edit")) { if (!isAdmin()) return toast("Akses ditolak (admin only)"); openEditItem(code); }
     };
-    updateShelfFilterAndSummary();
   }
-  window.renderShelfTable = renderShelfTable;
 
   async function renderShelfRecap() {
     try {
@@ -1055,8 +1123,7 @@
       try {
         area.textContent = "カメラ起動中…";
         SHELF_SCANNER = await startBackCameraScan("scan-area", async (text) => {
-          const code = parseScanText(String(text || ""));
-          if (code) { await addOrUpdateStocktake(code, ST.rows.get(code)?.qty ?? undefined); }
+          const code = parseScanText(String(text || "")); if (code) { await addOrUpdateStocktake(code, ST.rows.get(code)?.qty ?? undefined); }
         });
       } catch (e) { toast(e?.message || String(e)); }
     });
@@ -1083,175 +1150,7 @@
       await addOrUpdateStocktake(code, qty || undefined);
       $("#st-code").value = ""; $("#st-qty").value = "";
     });
-
-    // === Tambahan binding (BARU) ===
-    document.getElementById("st-save")?.addEventListener("click", () => {
-      const note = prompt("下書きメモ（任意）", "");
-      const payload = saveStocktakeDraft(note || "");
-      toast("下書きを保存しました：" + (payload?.at || ""));
-    });
-
-    document.getElementById("st-load")?.addEventListener("click", () => {
-      const payload = loadStocktakeDraft(true);
-      if (!payload) return toast("下書きが見つかりません。");
-      renderShelfTable();
-      toast("下書きを読み込みました：" + (payload?.at || ""));
-    });
-
-    document.getElementById("st-clear")?.addEventListener("click", () => {
-      if (confirm("現在の棚卸入力をクリアしますか？（下書きは保持）")) clearStocktake({ andDraft: false });
-    });
-
-    document.getElementById("st-only-diff")?.addEventListener("change", () => {
-      applyShelfDiffFilter();
-    });
-
-    document.getElementById("st-finalize")?.addEventListener("click", () => {
-      finalizeStocktake();
-    });
-
-    document.getElementById("st-export")?.addEventListener("click", () => {
-      const who = getCurrentUser();
-      const meta = {
-        exportedAt: new Date().toISOString(),
-        userId: who?.id || "",
-      };
-      const rows = [...(ST.rows?.values?.() || [])];
-      const header = [
-        `#exportedAt,${meta.exportedAt}`,
-        `#userId,${meta.userId}`,
-        "code,name,book,qty,diff,department"
-      ];
-      const lines = rows.map(r => [
-        r.code,
-        String(r.name || "").replace(/,/g, " "),
-        r.book,
-        r.qty,
-        r.diff,
-        String(r.department || "").replace(/,/g, " ")
-      ].join(","));
-      const csv = header.concat(lines).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "stocktake_with_meta.csv"; a.click();
-      URL.revokeObjectURL(url);
-    });
   })();
-
-  /* ==== Stocktake helpers (BARU, khusus 棚卸) ==== */
-
-  const ST_DRAFT_KEY = "ST_DRAFT_V1";
-
-  function updateShelfFilterAndSummary() {
-    applyShelfDiffFilter();
-    recalcShelfSummary();
-  }
-
-  function applyShelfDiffFilter() {
-    const only = !!document.getElementById("st-only-diff")?.checked;
-    const tbody = document.getElementById("tbl-stocktake"); if (!tbody) return;
-    [...tbody.querySelectorAll("tr")].forEach(tr => {
-      if (!only) { tr.style.display = ""; return; }
-      const code = tr.getAttribute("data-code");
-      const rec = ST.rows.get(code);
-      tr.style.display = (rec && Number(rec.diff || 0) !== 0) ? "" : "none";
-    });
-  }
-
-  function recalcShelfSummary() {
-    const arr = [...ST.rows.values()];
-    const total = arr.length;
-    const diffRows = arr.filter(r => Number(r.diff || 0) !== 0).length;
-    const sumDiff = arr.reduce((a, r) => a + Number(r.diff || 0), 0);
-    const absDiff = arr.reduce((a, r) => a + Math.abs(Number(r.diff || 0)), 0);
-
-    const el = document.getElementById("st-summary");
-    if (el) {
-      el.innerHTML = [
-        `明細：<b>${total}</b> 件`,
-        `差異あり：<b class="${diffRows ? 'text-danger' : ''}">${diffRows}</b> 件`,
-        `差異合計：<b>${fmt(sumDiff)}</b>`,
-        `| 絶対差異：<b>${fmt(absDiff)}</b>`
-      ].join("　");
-    }
-  }
-
-  function saveStocktakeDraft(note) {
-    const who = getCurrentUser();
-    const payload = {
-      at: new Date().toISOString(),
-      userId: who?.id || "",
-      note: note || "",
-      rows: [...ST.rows.values()]
-    };
-    localStorage.setItem(ST_DRAFT_KEY, JSON.stringify(payload));
-    return payload;
-  }
-
-  function loadStocktakeDraft(merge) {
-    let raw = null;
-    try { raw = JSON.parse(localStorage.getItem(ST_DRAFT_KEY) || "null"); } catch {}
-    if (!raw || !Array.isArray(raw.rows)) return null;
-
-    if (!merge) ST.rows.clear();
-    raw.rows.forEach(r => {
-      const book = Number(r.book || 0);
-      const qty  = Number(r.qty  || book);
-      ST.rows.set(String(r.code), {
-        code: String(r.code),
-        name: String(r.name || ""),
-        department: String(r.department || ""),
-        book, qty, diff: qty - book
-      });
-    });
-    return raw;
-  }
-
-  function clearStocktake({ andDraft = false } = {}) {
-    ST.rows.clear();
-    if (andDraft) localStorage.removeItem(ST_DRAFT_KEY);
-    const tbody = document.getElementById("tbl-stocktake");
-    if (tbody) tbody.innerHTML = "";
-    updateShelfFilterAndSummary();
-  }
-
-  async function finalizeStocktake() {
-    if (!isAdmin()) { toast("Akses ditolak (admin only)"); return; }
-    const who = getCurrentUser();
-    const arr = [...ST.rows.values()];
-    if (!arr.length) { toast("棚卸データがありません。"); return; }
-
-    const total = arr.length;
-    const diffRows = arr.filter(r => Number(r.diff || 0) !== 0);
-    if (!confirm(`在庫を確定しますか？\n明細: ${total} 件\n差異あり: ${diffRows.length} 件\n※各アイテムの在庫は「実在数量」に上書きされます。`)) return;
-
-    try {
-      setLoading(true, "在庫更新中…");
-      for (const r of arr) {
-        await api("updateItem", { method: "POST", body: {
-          code: r.code, name: r.name, stock: Number(r.qty || 0), overwrite: true
-        }});
-        const diff = Number(r.diff || 0);
-        await api("log", { method: "POST", body: {
-          userId: who?.id || "",
-          code: r.code,
-          qty: diff,
-          unit: "",
-          type: "ADJUST",
-          note: "stocktake finalize"
-        }}).catch(()=>{});
-      }
-      clearStocktake({ andDraft: true });
-      await renderItems?.();
-      await renderShelfTable?.();
-      toast("棚卸を確定しました。");
-    } catch (e) {
-      toast("確定に失敗しました: " + (e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  }
 
   /* -------------------- Export / Import wiring -------------------- */
 
@@ -1289,7 +1188,51 @@
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderUsers();
   });
 
-  // Items export (CSV & Excel) — versi final (sekali saja, include department)
+  // Items export (CSV & Excel) — (dibiarkan ganda jika memang sudah ada tombol gandanya)
+  $("#btn-items-export")?.addEventListener("click", async () => {
+    try {
+      const list = await api("items", { method: "GET" });
+      const arr = Array.isArray(list) ? list : (list?.data || []);
+      const csv = ["code,name,price,stock,min,location,img"]
+        .concat(arr.map(i => [
+          i.code,
+          String(i.name || "").replace(/,/g, " "),
+          Number(i.price || 0),
+          Number(i.stock || 0),
+          Number(i.min || 0),
+          String(i.location || "").toUpperCase(),
+          i.img || ""
+        ].join(",")))
+        .join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "items.csv"; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("エクスポート失敗"); }
+  });
+
+  $("#btn-items-xlsx")?.addEventListener("click", async () => {
+    try {
+      const list = await api("items", { method: "GET" });
+      const arr = Array.isArray(list) ? list : (list?.data || []);
+      const rows = arr.map(i => ({
+        code: i.code,
+        name: i.name || "",
+        price: Number(i.price || 0),
+        stock: Number(i.stock || 0),
+        min: Number(i.min || 0),
+        location: String(i.location || "").toUpperCase(),
+        img: i.img || ""
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows, { header: ["code","name","price","stock","min","location","img"] });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "items");
+      XLSX.writeFile(wb, "items.xlsx");
+    } catch { alert("エクスポート失敗"); }
+  });
+
+  // Items export (CSV) + department
   $("#btn-items-export")?.addEventListener("click", async () => {
     try {
       const list = await api("items", { method: "GET" });
@@ -1314,6 +1257,7 @@
     } catch { alert("エクスポート失敗"); }
   });
 
+  // Items export (Excel) + department
   $("#btn-items-xlsx")?.addEventListener("click", async () => {
     try {
       const list = await api("items", { method: "GET" });
@@ -1390,6 +1334,7 @@
   // ---------- Items Reload & Auto-refresh ----------
   (function(){
     let itemsAutoTimer = null;
+    let itemsAutoSec   = 0;
 
     function isItemsViewActive(){
       const v = document.getElementById("view-items");
@@ -1421,6 +1366,7 @@
     document.querySelectorAll('[data-autorefresh]').forEach(el=>{
       el.addEventListener("click", ()=>{
         const sec = Number(el.getAttribute("data-autorefresh") || "0");
+        itemsAutoSec = sec;
         if (itemsAutoTimer) { clearInterval(itemsAutoTimer); itemsAutoTimer = null; }
         const btn = document.getElementById("btn-items-auto");
         if (btn) btn.textContent = sec ? `Auto ${sec}s` : "Auto";
