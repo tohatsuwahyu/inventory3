@@ -458,3 +458,52 @@ img{ max-width:100%; height:auto; }
   }
   body.sb-open #sb-backdrop{ display: block; }
 }
+/* === Fix kejelasan judul & header di smartphone ================== */
+header.appbar{ position: sticky; top: 0; z-index: 1020; } /* terasa app-like */
+
+/* ≤480px: rapikan header dan judul halaman */
+@media (max-width: 480px){
+  /* Header baris atas: biarkan wrap tapi tetap rapi */
+  header.appbar .container-fluid > .d-flex{
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  /* Brand kiri fleksibel, tidak terdorong/terpotong */
+  header.appbar .brand{ flex:1 1 auto; min-width: 0; gap: .5rem; }
+  header.appbar .brand img{ height: 24px; }
+
+  /* Teks siapa yang login (#who): singkat + ellipsis */
+  #who{
+    display:inline-block;
+    max-width: 48vw;                 /* inti: batasi lebarnya */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .85rem;
+    opacity: .9;
+  }
+  /* Tombol kecil agar tidak “berisik” */
+  header.appbar .btn,
+  header.appbar .btn.btn-outline-secondary{ padding: .35rem .55rem; }
+
+  /* Judul halaman & tombol "メニュー" presisi satu baris */
+  .section-title{                    /* <h5 id="page-title">… */
+    font-size: 1.05rem;
+    line-height: 1.25;
+    margin: 0;
+  }
+  #page-title + #btn-menu{ margin-left: auto; }
+
+  /* Kartu metrik: angka besar tetap muat */
+  .fs-3, .metric-value{ font-size: 1.6rem; line-height: 1.1; }
+
+  /* Konten sedikit dipadatkan biar lega */
+  .content{ padding: 12px; }
+  .card{ border-radius: 14px; }
+}
+
+/* ≤360px: kalau layar sangat sempit, sembunyikan #who untuk fokus */
+@media (max-width: 360px){
+  #who{ display: none; }
+}
