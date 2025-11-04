@@ -363,3 +363,17 @@ img{ max-width:100%; height:auto; }
 .metric-value{font-size:1.9rem;font-weight:700;margin-top:.25rem}
 .welcome{background:linear-gradient(135deg,#eef2ff,#f5f7ff);border:1px solid #e5e7eb;border-radius:12px;padding:.65rem .9rem;display:flex;align-items:center;gap:.6rem;box-shadow:0 10px 20px rgba(15,23,42,.04) inset}
 .welcome .avatar{width:34px;height:34px;border-radius:10px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;background:linear-gradient(135deg,#0ea5e9,#22d3ee);box-shadow:0 6px 16px rgba(14,165,233,.25)}
+@media (max-width: 480px){
+  header .brand img{ height:24px; }
+  header .brand .fw-bold{ font-size:14px; white-space:nowrap; }
+  .welcome{ padding:.5rem .65rem; }
+  .welcome .avatar{ width:28px; height:28px; font-size:14px; }
+  .metric-value{ font-size:1.5rem; }
+  .items-toolbar .right > *{ margin-top:.25rem; }
+  #io-scan-area,#scan-area{ max-width:100%; aspect-ratio:3/4; border-radius:10px; }
+  /* Tabel Users */
+  #view-users .table th, #view-users .table td{ font-size:.9rem; }
+  #view-users .table .th-qr, #view-users table td:first-child{ width:120px; }
+  /* Hindari wrap vertikal judul sidebar */
+  .sidebar nav a{ white-space:nowrap; }
+}
