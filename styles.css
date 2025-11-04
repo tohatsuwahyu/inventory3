@@ -507,3 +507,34 @@ header.appbar{ position: sticky; top: 0; z-index: 1020; } /* terasa app-like */
 @media (max-width: 360px){
   #who{ display: none; }
 }
+/* === Kecilkan tombol Help / Logout / メニュー di smartphone === */
+@media (max-width: 480px){
+  /* Semua tombol di header sedikit diperkecil */
+  header.appbar .btn{
+    padding: .28rem .5rem;
+    font-size: .82rem;
+    line-height: 1.1;
+    border-radius: 10px;
+  }
+  header.appbar .btn .bi{ font-size: 1rem; } /* icon ikut kecil */
+
+  /* Khusus tombol "メニュー" di samping judul */
+  #btn-menu{
+    padding: .25rem .55rem !important;
+    font-size: .82rem !important;
+    border-radius: 10px;
+  }
+
+  /* Jika punya id untuk help & logout—aktifkan ini */
+  #btn-help, #btn-logout{
+    padding: .25rem .5rem !important;
+    font-size: .8rem !important;
+    min-width: auto;
+  }
+
+  /* Fallback kalau id berbeda: kecilkan tombol kanan header apa pun */
+  header.appbar .actions .btn{          /* .actions = wrapper tombol kanan jika ada */
+    padding: .25rem .5rem;
+    font-size: .8rem;
+  }
+}
