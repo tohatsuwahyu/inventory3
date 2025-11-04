@@ -835,6 +835,44 @@
       const code = ($("#io-code").value || "").trim();
       if (code) findItemIntoIO(code);
     });
+    // === NEW: auto-lookup saat mengetik/paste/blur di kolom コード ===
+    (function autoLookupIOCode(){
+      const codeEl = document.getElementById("io-code");
+      const nameEl = document.getElementById("io-name");
+      const priceEl= document.getElementById("io-price");
+      const stockEl= document.getElementById("io-stock");
+      if (!codeEl) return;
+
+      let timer = null;
+
+      function clearFields(){
+        if (nameEl)  nameEl.value  = "";
+        if (priceEl) priceEl.value = "";
+        if (stockEl) stockEl.value = "";
+      }
+
+      function doLookup(raw){
+        const v = (raw || codeEl.value || "").trim();
+        if (!v){ clearFields(); return; }
+        // dukung teks QR penuh seperti "ITEM|CODE"
+        const parsed = (typeof parseScanText === "function") ? (parseScanText(v) || v) : v;
+        findItemIntoIO(parsed);
+      }
+
+      codeEl.addEventListener("input", () => {
+        const v = codeEl.value.trim();
+        clearTimeout(timer);
+        if (!v){ clearFields(); return; }
+        timer = setTimeout(() => doLookup(v), 300);
+      });
+
+      codeEl.addEventListener("blur", () => doLookup());
+
+      codeEl.addEventListener("paste", () => {
+        // jalankan setelah nilai masuk
+        setTimeout(() => doLookup(), 0);
+      });
+    })();
 
     $("#form-io")?.addEventListener("submit", async (e) => {
       e.preventDefault();
