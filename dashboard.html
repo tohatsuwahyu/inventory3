@@ -417,15 +417,19 @@
     <div class="box"><div class="spinner"></div><div id="loading-text" class="text">読み込み中…</div></div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-          onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+ <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
-  <script src="./config.js"></script>
-  <script src="./app.js"></script>
+<script src="./config.js?v=20251104a"></script>
+<script src="./qrlib.js?v=20251104a"></script>  <!-- ← WAJIB: tambahkan baris ini -->
+<script src="./app.js?v=20251104a"></script>
+
+
+ 
 
   <!-- Tahun footer -->
   <script>document.getElementById('fy').textContent=new Date().getFullYear();</script>
