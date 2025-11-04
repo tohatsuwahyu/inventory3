@@ -474,74 +474,7 @@ async function makeItemLabelDataURL(item) {
   return c.toDataURL("image/png");
 
   // ===== helpers =====
-  
-// ===== USER LABEL CANVAS (sesuai contoh gambar) =====
-async function makeUserLabelDataURL(user){
-  const W=1280, H=720;
-  const c=document.createElement('canvas'); c.width=W; c.height=H;
-  const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
-
-  // latar
-  g.fillStyle='#fff'; g.fillRect(0,0,W,H);
-
-  // fonts
-  const fam='"Noto Sans JP", system-ui';
-
-  // judul
-  g.fillStyle='#1f2a60';
-  g.font='700 72px '+fam;
-  g.textAlign='center'; g.textBaseline='alphabetic';
-  g.shadowColor='rgba(0,0,0,.12)'; g.shadowBlur=18;
-  g.fillText('東京精密発條株式会社', W/2, 150);
-
-  // subjudul
-  g.shadowBlur=0;
-  g.fillStyle='#2b3a8a';
-  g.font='700 38px '+fam;
-  g.fillText('在庫管理システム', W/2, 215);
-
-  // label kiri (ID・氏名)
-  const leftX=160, baseY=320, gap=120;
-  g.fillStyle='#223';
-  g.textAlign='left'; g.textBaseline='middle';
-  g.font='700 44px '+fam;
-  g.fillText('ID  ：', leftX, baseY);
-  g.fillText('氏名：', leftX, baseY+gap);
-
-  // nilai
-  g.font='700 54px '+fam;
-  g.fillStyle='#102a6b';
-  g.fillText(String(user.id||''), leftX+160, baseY);
-
-  // nama: auto shrink
-  let nm=String(user.name||''), size=54;
-  while(size>=24){
-    g.font=`700 ${size}px ${fam}`;
-    if(g.measureText(nm).width <= (W*0.5-leftX)) break;
-    size-=2;
-  }
-  g.fillText(nm, leftX+160, baseY+gap);
-
-  // bingkai sudut kanan
-  const bx=W-520, by=180, bw=360, bh=360, k=26, lw=14, col='#2f3e98';
-  g.strokeStyle=col; g.lineWidth=lw; g.lineCap='round';
-  const L=(x1,y1,x2,y2)=>{ g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); };
-  L(bx,by+k, bx,by); L(bx,by, bx+k,by);
-  L(bx+bw,by+k, bx+bw,by); L(bx+bw-k,by, bx+bw,by);
-  L(bx,by+bh-k, bx,by+bh); L(bx,by+bh, bx+k,by+bh);
-  L(bx+bw,by+bh-k, bx+bw,by+bh); L(bx+bw-k,by+bh, bx+bw,by+bh);
-
-  // QR USER|{id}
-  const qrSize=260, qx=bx+(bw-qrSize)/2, qy=by+(bh-qrSize)/2;
-  const url=await generateQrDataUrl(`USER|${user.id}`, qrSize);
-  if(url){
-    const img=new Image(); img.src=url;
-    await new Promise(r=>{ img.onload=r; img.onerror=r; });
-    g.drawImage(img, qx, qy, qrSize, qrSize);
-  }
-  return c.toDataURL('image/png');
-}
-function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
+  function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
     ctx.save(); ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -677,12 +610,9 @@ function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
           <td>${escapeHtml(u.id)}</td>
           <td>${escapeHtml(u.name)}</td>
           <td>${escapeHtml(u.role || "user")}</td>
-          <td class="text-end d-flex justify-content-end gap-1">
+          <td class="text-end">
             <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
               <i class="bi bi-download"></i>
-            </button>
-            <button class="btn btn-sm btn-outline-secondary btn-dl-userlabel" data-id="${escapeAttr(u.id)}" title="ラベルDL">
-              <i class="bi bi-printer"></i>
             </button>
           </td>
         </tr>
@@ -695,21 +625,10 @@ function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
       }
 
       tbody.addEventListener("click", async (e) => {
-        const b1 = e.target.closest(".btn-dl-user");
-        const b2 = e.target.closest(".btn-dl-userlabel");
-        if (b1) {
-          const id = b1.getAttribute("data-id");
-          const url = await generateQrDataUrl(`USER|${id}`, 300);
-          const a = document.createElement("a"); a.href = url; a.download = `user_${id}.png`; a.click();
-          return;
-        }
-        if (b2) {
-          const id = b2.getAttribute("data-id");
-          const u = arr.find(x => String(x.id)===String(id)); if(!u) return;
-          const url = await makeUserLabelDataURL(u);
-          const a = document.createElement("a"); a.href = url; a.download = `userlabel_${id}.png`; a.click();
-          return;
-        }
+        const b = e.target.closest(".btn-dl-user"); if (!b) return;
+        const id = b.getAttribute("data-id");
+        const url = await generateQrDataUrl(`USER|${id}`, 300);
+        const a = document.createElement("a"); a.href = url; a.download = `user_${id}.png`; a.click();
       });
 
       const right = $("#print-qr-users-grid");
@@ -731,33 +650,7 @@ function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
           const box = document.getElementById("me-qr");
           if (box) { new QRCode(box, { text: `USER|${who.id}`, width: 120, height: 120 }); }
         } else {
-          // Admin: tampilkan semua label user (preview + tombol Print/DL)
-          right.innerHTML = "";
-          for (const u of arr) {
-            const url = await makeUserLabelDataURL(u);
-            const card = document.createElement("div");
-            card.className = "card p-2";
-            card.innerHTML = `
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <div class="fw-semibold small">${escapeHtml(u.id)} — ${escapeHtml(u.name||"")}</div>
-                <div class="d-flex gap-2">
-                  <button class="btn btn-sm btn-outline-secondary act-print" data-id="${escapeAttr(u.id)}">Print</button>
-                  <a class="btn btn-sm btn-outline-success" download="user_${escapeAttr(u.id)}.png" href="${url}">Download</a>
-                </div>
-              </div>
-              <img src="${url}" alt="label ${escapeAttr(u.id)}"/>
-            `;
-            right.appendChild(card);
-          }
-          // handler Print (sekali pasang)
-          right.addEventListener("click", (e) => {
-            const b = e.target.closest(".act-print"); if(!b) return;
-            const card = b.closest(".card"); const img = card?.querySelector("img"); if(!img) return;
-            const w = window.open("", "_blank", "width=1000,height=800");
-            w.document.write(`<img src="${img.src}" style="max-width:100%">`);
-            const onload = ()=>{ w.focus(); w.print(); };
-            const im = w.document.images[0]; im?.complete ? onload() : im.onload = onload;
-          }, { once:true });
+          right.innerHTML = `<div class="text-muted small">印刷するユーザーQRを左の表から選択してダウンロードしてください。</div>`;
         }
       }
     } catch { toast("ユーザーQRの読み込みに失敗しました。"); }
