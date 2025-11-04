@@ -1,4 +1,4 @@
-  <!doctype html>
+<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8"/>
@@ -10,10 +10,10 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"
         onerror="this.onerror=null;this.href='vendor/bootstrap-icons.css'"/>
 
-  <link href="styles.css?v=20251031b" rel="stylesheet"/>
+  <link href="styles.css?v=20251104a" rel="stylesheet"/>
   <link href="print.css?v=20251030" rel="stylesheet"/>
 
-  <!-- Sedikit styling pelengkap yang aman -->
+  <!-- Styling kecil yang aman & fokus ke keterbacaan -->
   <style>
     header.appbar{position:sticky;top:0;z-index:1020;background:#fff;border-bottom:1px solid #e5e7eb}
     header .brand{display:flex;align-items:center;gap:.6rem}
@@ -24,6 +24,12 @@
     #io-scan-area,#scan-area{width:100%;max-width:420px;margin:0 auto;aspect-ratio:4/3;position:relative;overflow:hidden;background:#0b0b0b10;border-radius:12px}
     #io-scan-area video,#scan-area video{width:100%!important;height:100%!important;object-fit:cover}
     .html5-qrcode-element{display:none!important}
+    /* Hindari label/kolom terpotong */
+    .table thead th, .form-label{white-space:nowrap}
+    .th-code,.th-name,.th-dept,.th-location{white-space:nowrap}
+    .th-name{min-width:220px}
+    .chart-box{height:280px}
+    .badge-soft{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:999px;padding:.15rem .5rem;font-size:.75rem}
   </style>
 </head>
 <body>
@@ -31,7 +37,7 @@
     <div class="container-fluid py-2">
       <div class="d-flex align-items-center justify-content-between">
         <div class="brand">
-          <!-- Burger hanya tombol (sidebar & backdrop dipindah ke bawah) -->
+          <!-- Burger -->
           <button id="burger" class="btn btn-sm btn-burger" data-burger aria-label="Menu">
             <i class="bi bi-list"></i>
           </button>
@@ -47,7 +53,7 @@
   </header>
 
   <div class="layout">
-    <!-- Sidebar: SATU saja, id=sb -->
+    <!-- Sidebar -->
     <aside id="sb" class="sidebar">
       <nav class="d-flex flex-column gap-1">
         <a href="#" data-view="view-dashboard" class="active"><i class="bi bi-speedometer2"></i> ダッシュボード</a>
@@ -111,8 +117,8 @@
         <!-- ========= 入出庫 ========= -->
         <section id="view-io" class="d-none">
           <div class="card p-3 mb-3">
-            <div class="items-toolbar">
-              <div class="left"><div class="fw-semibold">スキャン</div></div>
+            <div class="items-toolbar d-flex justify-content-between align-items-center">
+              <div class="left fw-semibold">スキャン</div>
               <div class="right">
                 <button id="btn-io-scan" class="btn btn-sm btn-primary"><i class="bi bi-camera-video me-1"></i> 開始</button>
                 <button id="btn-io-stop" class="btn btn-sm btn-outline-secondary">停止</button>
@@ -122,8 +128,8 @@
           </div>
 
           <div class="card p-3">
-            <div class="items-toolbar">
-              <div class="left"><div class="fw-semibold">入出庫入力</div></div>
+            <div class="items-toolbar d-flex justify-content-between align-items-center">
+              <div class="left fw-semibold">入出庫入力</div>
               <div class="right">
                 <button id="btn-io-lookup" class="btn btn-sm btn-outline-secondary"><i class="bi bi-search me-1"></i>照会</button>
                 <button id="btn-io-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
@@ -151,8 +157,8 @@
         <!-- ========= 棚卸 ========= -->
         <section id="view-shelf" class="d-none">
           <div class="card p-3 mb-3">
-            <div class="items-toolbar">
-              <div class="left"><div class="fw-semibold">スキャン</div></div>
+            <div class="items-toolbar d-flex justify-content-between align-items-center">
+              <div class="left fw-semibold">スキャン</div>
               <div class="right">
                 <button id="btn-start-scan" class="btn btn-sm btn-primary"><i class="bi bi-camera-video me-1"></i> 開始</button>
                 <button id="btn-stop-scan" class="btn btn-sm btn-outline-secondary">停止</button>
@@ -162,35 +168,23 @@
           </div>
 
           <div class="card p-3">
-            <div class="items-toolbar">
+            <div class="items-toolbar d-flex flex-wrap justify-content-between align-items-center gap-2">
               <div class="left">
-                <div class="fw-semibold">棚卸入力</div>
-                <input id="st-filter" class="form-control search" placeholder="コード/名称で絞り込み…"/>
+                <div class="fw-semibold mb-1">棚卸入力</div>
+                <input id="st-filter" class="form-control search" placeholder="コード/名称で絞り込み…" style="max-width:280px"/>
               </div>
-              <div class="right">
+              <div class="right d-flex align-items-center gap-2 flex-wrap">
                 <button id="st-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
                 <button id="st-export2" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
                 <button id="st-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
                 <input id="input-st-import" type="file" accept=".csv" class="d-none">
-                <button id="st-save" class="btn btn-sm btn-outline-secondary">
-  <i class="bi bi-save me-1"></i> 下書き保存
-</button>
-<button id="st-load" class="btn btn-sm btn-outline-secondary">
-  <i class="bi bi-folder2-open me-1"></i> 読込
-</button>
-<button id="st-clear" class="btn btn-sm btn-outline-secondary">
-  <i class="bi bi-eraser me-1"></i> クリア
-</button>
-
-<label class="ms-2 small d-inline-flex align-items-center">
-  <input id="st-only-diff" type="checkbox" class="form-check-input me-1"/>
-  差異のみ
-</label>
-
-<button id="st-finalize" class="btn btn-sm btn-danger">
-  <i class="bi bi-check2-circle me-1"></i> 確定(在庫更新)
-</button>
-
+                <button id="st-save" class="btn btn-sm btn-outline-secondary"><i class="bi bi-save me-1"></i> 下書き保存</button>
+                <button id="st-load" class="btn btn-sm btn-outline-secondary"><i class="bi bi-folder2-open me-1"></i> 読込</button>
+                <button id="st-clear" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eraser me-1"></i> クリア</button>
+                <label class="ms-2 small d-inline-flex align-items-center">
+                  <input id="st-only-diff" type="checkbox" class="form-check-input me-1"/> 差異のみ
+                </label>
+                <button id="st-finalize" class="btn btn-sm btn-danger"><i class="bi bi-check2-circle me-1"></i> 確定(在庫更新)</button>
               </div>
             </div>
 
@@ -200,30 +194,29 @@
               <div class="col-md-2 d-flex align-items-end"><button id="st-add" class="btn btn-primary w-100">追加</button></div>
             </div>
 
-           <div class="table-responsive">
-  <table class="table table-sm align-middle">
-    <thead>
-      <tr>
-        <th>コード</th>
-        <th>名称</th>
-        <th>部門</th>
-        <th class="text-end">帳簿</th>
-        <th class="text-end">実在</th>
-        <th class="text-end">差異</th>
-        <th class="text-end">操作</th>
-      </tr>
-    </thead>
-    <tbody id="tbl-stocktake"></tbody>
-  </table>
-             <div id="st-summary" class="mt-2 small text-muted"></div>
-
-</div>
-
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>コード</th>
+                    <th>名称</th>
+                    <th>部門</th>
+                    <th class="text-end">帳簿</th>
+                    <th class="text-end">実在</th>
+                    <th class="text-end">差異</th>
+                    <th class="text-end">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="tbl-stocktake"></tbody>
+              </table>
+              <div id="st-summary" class="mt-2 small text-muted"></div>
+            </div>
+          </div>
 
           <!-- Rekap bulanan & tahunan -->
           <div class="card p-3 mt-3">
-            <div class="items-toolbar">
-              <div class="left"><div class="fw-semibold">棚卸まとめ</div></div>
+            <div class="items-toolbar d-flex justify-content-between align-items-center">
+              <div class="left fw-semibold">棚卸まとめ</div>
               <div class="right">
                 <button id="st-recap-export-monthly" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> 月次CSV</button>
                 <button id="st-recap-export-yearly" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> 年次CSV</button>
@@ -254,26 +247,27 @@
 
         <!-- ========= 商品一覧 ========= -->
         <section id="view-items" class="d-none">
-          <div class="items-toolbar card p-3 mb-3">
-            <div class="left gap-6">
+          <div class="items-toolbar card p-3 mb-3 d-flex justify-content-between align-items-center">
+            <div class="left d-flex align-items-center gap-3">
               <div class="fw-semibold">商品一覧</div>
-              <input id="items-search" class="form-control search" placeholder="名称で検索…"/>
+              <input id="items-search" class="form-control search" placeholder="名称で検索…" style="max-width:260px"/>
             </div>
-           <!-- ========= baru ditambah 251102 untuk reload ========= --> <div class="right">
+            <!-- Auto-reload controls -->
+            <div class="right d-flex align-items-center gap-2">
               <div class="btn-group me-2">
-  <button id="btn-items-reload" class="btn btn-sm btn-outline-secondary" title="Reload">
-    <i class="bi bi-arrow-clockwise"></i>
-  </button>
-  <button id="btn-items-auto" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-    Auto
-  </button>
-  <ul class="dropdown-menu dropdown-menu-end">
-    <li><a class="dropdown-item" data-autorefresh="0">Off</a></li>
-    <li><a class="dropdown-item" data-autorefresh="30">30秒</a></li>
-    <li><a class="dropdown-item" data-autorefresh="60">60秒</a></li>
-    <li><a class="dropdown-item" data-autorefresh="120">120秒</a></li>
-  </ul>
-</div>
+                <button id="btn-items-reload" class="btn btn-sm btn-outline-secondary" title="Reload">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+                <button id="btn-items-auto" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                  Auto
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><a class="dropdown-item" data-autorefresh="0">Off</a></li>
+                  <li><a class="dropdown-item" data-autorefresh="30">30秒</a></li>
+                  <li><a class="dropdown-item" data-autorefresh="60">60秒</a></li>
+                  <li><a class="dropdown-item" data-autorefresh="120">120秒</a></li>
+                </ul>
+              </div>
 
               <button id="btn-items-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
               <button id="btn-items-xlsx" class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
@@ -286,14 +280,14 @@
 
           <div class="card p-3">
             <div class="table-responsive">
-             <table class="table table-hover align-middle table-items">
+              <table class="table table-hover align-middle table-items">
                 <thead>
                   <tr>
-                   <th class="th-qr">QR</th>
+                    <th class="th-qr">QR</th>
                     <th class="th-code">コード</th>
                     <th class="th-name">名称</th>
-                   <th class="th-img">画像</th>
-                   <th class="th-price text-end">価格</th>
+                    <th class="th-img">画像</th>
+                    <th class="th-price text-end">価格</th>
                     <th class="th-stock text-end">在庫</th>
                     <th class="th-min text-end">最小</th>
                     <th class="th-dept">部門</th>
@@ -317,9 +311,9 @@
 
         <!-- ========= ユーザー / QR ========= -->
         <section id="view-users" class="d-none">
-          <div class="items-toolbar card p-3 mb-3">
-            <div class="left"><div class="fw-semibold">ユーザー / QR</div></div>
-            <div class="right">
+          <div class="items-toolbar card p-3 mb-3 d-flex justify-content-between align-items-center">
+            <div class="left fw-semibold">ユーザー / QR</div>
+            <div class="right d-flex align-items-center gap-2">
               <button id="btn-users-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
               <button id="btn-users-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
               <input id="input-users-import" type="file" accept=".csv" class="d-none">
@@ -346,9 +340,9 @@
 
         <!-- ========= 履歴 ========= -->
         <section id="view-history" class="d-none">
-          <div class="items-toolbar card p-3 mb-3">
-            <div class="left"><div class="fw-semibold">履歴</div></div>
-            <div class="right">
+          <div class="items-toolbar card p-3 mb-3 d-flex justify-content-between align-items-center">
+            <div class="left fw-semibold">履歴</div>
+            <div class="right d-flex align-items-center gap-2">
               <button id="btn-history-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
               <span class="badge-soft">最新400件を表示</span>
             </div>
@@ -376,7 +370,7 @@
     </main>
   </div>
 
-  <!-- Backdrop: SATU saja, di luar .layout -->
+  <!-- Backdrop -->
   <div id="sb-backdrop"></div>
 
   <!-- Loading -->
@@ -394,7 +388,7 @@
   <script src="./config.js"></script>
   <script src="./app.js"></script>
 
-  <!-- Script kecil: tahun footer saja -->
+  <!-- Tahun footer -->
   <script>document.getElementById('fy').textContent=new Date().getFullYear();</script>
 </body>
 </html>
