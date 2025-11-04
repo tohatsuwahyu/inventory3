@@ -1,4 +1,4 @@
-<!doctype html>
+  <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8"/>
@@ -10,10 +10,10 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"
         onerror="this.onerror=null;this.href='vendor/bootstrap-icons.css'"/>
 
-  <link href="styles.css?v=20251104a" rel="stylesheet"/>
+  <link href="styles.css?v=20251031b" rel="stylesheet"/>
   <link href="print.css?v=20251030" rel="stylesheet"/>
 
-  <!-- Styling kecil yang aman & fokus ke keterbacaan -->
+  <!-- Sedikit styling pelengkap yang aman -->
   <style>
     header.appbar{position:sticky;top:0;z-index:1020;background:#fff;border-bottom:1px solid #e5e7eb}
     header .brand{display:flex;align-items:center;gap:.6rem}
@@ -24,26 +24,6 @@
     #io-scan-area,#scan-area{width:100%;max-width:420px;margin:0 auto;aspect-ratio:4/3;position:relative;overflow:hidden;background:#0b0b0b10;border-radius:12px}
     #io-scan-area video,#scan-area video{width:100%!important;height:100%!important;object-fit:cover}
     .html5-qrcode-element{display:none!important}
-    /* Hindari label/kolom terpotong */
-    .table thead th, .form-label{white-space:nowrap}
-    .th-code,.th-name,.th-dept,.th-location{white-space:nowrap}
-    .th-name{min-width:220px}
-    .chart-box{height:280px}
-    .badge-soft{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:999px;padding:.15rem .5rem;font-size:.75rem}
-    /* (opsional) rapikan tab modal */
-    #helpModal .nav-tabs .nav-link { padding: .25rem .5rem; }
-    #helpModal .modal-body { padding-top: .75rem; }
-
-    /* ===== Ikon 3D & welcome (boleh dipindah ke styles.css) ===== */
-    .ic3d{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:12px;color:#fff;font-size:18px;box-shadow:0 6px 16px rgba(0,0,0,.15),inset 0 1px 0 rgba(255,255,255,.3)}
-    .ic-blue{background:linear-gradient(135deg,#2f80ed,#56ccf2)}
-    .ic-red{background:linear-gradient(135deg,#ef476f,#ff6b6b)}
-    .ic-green{background:linear-gradient(135deg,#06c270,#34d399)}
-    .ic-violet{background:linear-gradient(135deg,#7c3aed,#a78bfa)}
-    .metric-head{display:flex;align-items:center;gap:.5rem;color:#6b7280;font-size:.85rem}
-    .metric-value{font-size:1.9rem;font-weight:700;margin-top:.25rem}
-    .welcome{background:linear-gradient(135deg,#eef2ff,#f5f7ff);border:1px solid #e5e7eb;border-radius:12px;padding:.65rem .9rem;display:flex;align-items:center;gap:.6rem;box-shadow:0 10px 20px rgba(15,23,42,.04) inset}
-    .welcome .avatar{width:34px;height:34px;border-radius:10px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;background:linear-gradient(135deg,#0ea5e9,#22d3ee);box-shadow:0 6px 16px rgba(14,165,233,.25)}
   </style>
 </head>
 <body>
@@ -51,7 +31,7 @@
     <div class="container-fluid py-2">
       <div class="d-flex align-items-center justify-content-between">
         <div class="brand">
-          <!-- Burger -->
+          <!-- Burger hanya tombol (sidebar & backdrop dipindah ke bawah) -->
           <button id="burger" class="btn btn-sm btn-burger" data-burger aria-label="Menu">
             <i class="bi bi-list"></i>
           </button>
@@ -60,9 +40,6 @@
         </div>
         <div class="d-flex align-items-center gap-3">
           <span id="who" class="text-muted small">user</span>
-          <button id="btn-help" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#helpModal">
-            <i class="bi bi-question-circle me-1"></i> ヘルプ
-          </button>
           <button id="btn-logout" class="btn btn-sm btn-outline-secondary">ログアウト</button>
         </div>
       </div>
@@ -70,7 +47,7 @@
   </header>
 
   <div class="layout">
-    <!-- Sidebar -->
+    <!-- Sidebar: SATU saja, id=sb -->
     <aside id="sb" class="sidebar">
       <nav class="d-flex flex-column gap-1">
         <a href="#" data-view="view-dashboard" class="active"><i class="bi bi-speedometer2"></i> ダッシュボード</a>
@@ -84,51 +61,29 @@
 
     <main class="w-100">
       <div class="content container-fluid">
-        <!-- Baris judul -->
-        <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="d-flex align-items-center justify-content-between mb-3">
           <h5 id="page-title" class="section-title m-0">ダッシュボード</h5>
           <button id="btn-menu" class="btn btn-outline-secondary d-lg-none" data-burger>メニュー</button>
-        </div>
-
-        <!-- Welcome banner dipisahkan dari baris judul -->
-        <div id="welcome-banner" class="welcome mb-3 d-none">
-          <div class="avatar"><i class="bi bi-person-check"></i></div>
-          <div>
-            <div class="fw-semibold" id="welcome-line">Sugeng Rawuh！</div>
-            <div class="text-muted small" id="welcome-sub"></div>
-          </div>
         </div>
 
         <!-- ========= Dashboard ========= -->
         <section id="view-dashboard" class="active">
           <div class="row g-3 mb-3">
             <div class="col-md-3"><div class="card p-3">
-              <div class="metric-head">
-                <span class="ic3d ic-blue"><i class="bi bi-boxes"></i></span>
-                <span>アイテム数</span>
-              </div>
-              <div id="metric-total-items" class="metric-value text-primary">0</div>
+              <div class="text-muted small"><i class="bi bi-boxes me-1"></i>アイテム数</div>
+              <div id="metric-total-items" class="fs-3 fw-bold text-primary">0</div>
             </div></div>
             <div class="col-md-3"><div class="card p-3">
-              <div class="metric-head">
-                <span class="ic3d ic-red"><i class="bi bi-graph-down-arrow"></i></span>
-                <span>最小在庫以下</span>
-              </div>
-              <div id="metric-low-stock" class="metric-value text-danger">0</div>
+              <div class="text-muted small"><i class="bi bi-graph-down-arrow me-1"></i>最小在庫以下</div>
+              <div id="metric-low-stock" class="fs-3 fw-bold text-danger">0</div>
             </div></div>
             <div class="col-md-3"><div class="card p-3">
-              <div class="metric-head">
-                <span class="ic3d ic-green"><i class="bi bi-people"></i></span>
-                <span>ユーザー</span>
-              </div>
-              <div id="metric-users" class="metric-value text-success">0</div>
+              <div class="text-muted small"><i class="bi bi-people me-1"></i>ユーザー</div>
+              <div id="metric-users" class="fs-3 fw-bold text-success">0</div>
             </div></div>
             <div class="col-md-3"><div class="card p-3">
-              <div class="metric-head">
-                <span class="ic3d ic-violet"><i class="bi bi-arrow-left-right"></i></span>
-                <span>直近30日の取引</span>
-              </div>
-              <div id="metric-txn" class="metric-value" style="color:#6366f1">0</div>
+              <div class="text-muted small"><i class="bi bi-arrow-left-right me-1"></i>直近30日の取引</div>
+              <div id="metric-txn" class="fs-3 fw-bold text-info">0</div>
             </div></div>
           </div>
 
@@ -156,8 +111,8 @@
         <!-- ========= 入出庫 ========= -->
         <section id="view-io" class="d-none">
           <div class="card p-3 mb-3">
-            <div class="items-toolbar d-flex justify-content-between align-items-center">
-              <div class="left fw-semibold">スキャン</div>
+            <div class="items-toolbar">
+              <div class="left"><div class="fw-semibold">スキャン</div></div>
               <div class="right">
                 <button id="btn-io-scan" class="btn btn-sm btn-primary"><i class="bi bi-camera-video me-1"></i> 開始</button>
                 <button id="btn-io-stop" class="btn btn-sm btn-outline-secondary">停止</button>
@@ -167,8 +122,8 @@
           </div>
 
           <div class="card p-3">
-            <div class="items-toolbar d-flex justify-content-between align-items-center">
-              <div class="left fw-semibold">入出庫入力</div>
+            <div class="items-toolbar">
+              <div class="left"><div class="fw-semibold">入出庫入力</div></div>
               <div class="right">
                 <button id="btn-io-lookup" class="btn btn-sm btn-outline-secondary"><i class="bi bi-search me-1"></i>照会</button>
                 <button id="btn-io-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
@@ -196,8 +151,8 @@
         <!-- ========= 棚卸 ========= -->
         <section id="view-shelf" class="d-none">
           <div class="card p-3 mb-3">
-            <div class="items-toolbar d-flex justify-content-between align-items-center">
-              <div class="left fw-semibold">スキャン</div>
+            <div class="items-toolbar">
+              <div class="left"><div class="fw-semibold">スキャン</div></div>
               <div class="right">
                 <button id="btn-start-scan" class="btn btn-sm btn-primary"><i class="bi bi-camera-video me-1"></i> 開始</button>
                 <button id="btn-stop-scan" class="btn btn-sm btn-outline-secondary">停止</button>
@@ -207,23 +162,16 @@
           </div>
 
           <div class="card p-3">
-            <div class="items-toolbar d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="items-toolbar">
               <div class="left">
-                <div class="fw-semibold mb-1">棚卸入力</div>
-                <input id="st-filter" class="form-control search" placeholder="コード/名称で絞り込み…" style="max-width:280px"/>
+                <div class="fw-semibold">棚卸入力</div>
+                <input id="st-filter" class="form-control search" placeholder="コード/名称で絞り込み…"/>
               </div>
-              <div class="right d-flex align-items-center gap-2 flex-wrap">
+              <div class="right">
                 <button id="st-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
                 <button id="st-export2" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
                 <button id="st-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
                 <input id="input-st-import" type="file" accept=".csv" class="d-none">
-                <button id="st-save" class="btn btn-sm btn-outline-secondary"><i class="bi bi-save me-1"></i> 下書き保存</button>
-                <button id="st-load" class="btn btn-sm btn-outline-secondary"><i class="bi bi-folder2-open me-1"></i> 読込</button>
-                <button id="st-clear" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eraser me-1"></i> クリア</button>
-                <label class="ms-2 small d-inline-flex align-items-center">
-                  <input id="st-only-diff" type="checkbox" class="form-check-input me-1"/> 差異のみ
-                </label>
-                <button id="st-finalize" class="btn btn-sm btn-danger"><i class="bi bi-check2-circle me-1"></i> 確定(在庫更新)</button>
               </div>
             </div>
 
@@ -233,29 +181,28 @@
               <div class="col-md-2 d-flex align-items-end"><button id="st-add" class="btn btn-primary w-100">追加</button></div>
             </div>
 
-            <div class="table-responsive">
-              <table class="table table-sm align-middle">
-                <thead>
-                  <tr>
-                    <th>コード</th>
-                    <th>名称</th>
-                    <th>部門</th>
-                    <th class="text-end">帳簿</th>
-                    <th class="text-end">実在</th>
-                    <th class="text-end">差異</th>
-                    <th class="text-end">操作</th>
-                  </tr>
-                </thead>
-                <tbody id="tbl-stocktake"></tbody>
-              </table>
-              <div id="st-summary" class="mt-2 small text-muted"></div>
-            </div>
-          </div>
+           <div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>コード</th>
+        <th>名称</th>
+        <th>部門</th>
+        <th class="text-end">帳簿</th>
+        <th class="text-end">実在</th>
+        <th class="text-end">差異</th>
+        <th class="text-end">操作</th>
+      </tr>
+    </thead>
+    <tbody id="tbl-stocktake"></tbody>
+  </table>
+</div>
+
 
           <!-- Rekap bulanan & tahunan -->
           <div class="card p-3 mt-3">
-            <div class="items-toolbar d-flex justify-content-between align-items-center">
-              <div class="left fw-semibold">棚卸まとめ</div>
+            <div class="items-toolbar">
+              <div class="left"><div class="fw-semibold">棚卸まとめ</div></div>
               <div class="right">
                 <button id="st-recap-export-monthly" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> 月次CSV</button>
                 <button id="st-recap-export-yearly" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> 年次CSV</button>
@@ -286,27 +233,26 @@
 
         <!-- ========= 商品一覧 ========= -->
         <section id="view-items" class="d-none">
-          <div class="items-toolbar card p-3 mb-3 d-flex justify-content-between align-items-center">
-            <div class="left d-flex align-items-center gap-3">
+          <div class="items-toolbar card p-3 mb-3">
+            <div class="left gap-6">
               <div class="fw-semibold">商品一覧</div>
-              <input id="items-search" class="form-control search" placeholder="名称で検索…" style="max-width:260px"/>
+              <input id="items-search" class="form-control search" placeholder="名称で検索…"/>
             </div>
-            <!-- Auto-reload controls -->
-            <div class="right d-flex align-items-center gap-2">
+           <!-- ========= baru ditambah 251102 untuk reload ========= --> <div class="right">
               <div class="btn-group me-2">
-                <button id="btn-items-reload" class="btn btn-sm btn-outline-secondary" title="Reload">
-                  <i class="bi bi-arrow-clockwise"></i>
-                </button>
-                <button id="btn-items-auto" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                  Auto
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end">
-                  <li><a class="dropdown-item" data-autorefresh="0">Off</a></li>
-                  <li><a class="dropdown-item" data-autorefresh="30">30秒</a></li>
-                  <li><a class="dropdown-item" data-autorefresh="60">60秒</a></li>
-                  <li><a class="dropdown-item" data-autorefresh="120">120秒</a></li>
-                </ul>
-              </div>
+  <button id="btn-items-reload" class="btn btn-sm btn-outline-secondary" title="Reload">
+    <i class="bi bi-arrow-clockwise"></i>
+  </button>
+  <button id="btn-items-auto" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+    Auto
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><a class="dropdown-item" data-autorefresh="0">Off</a></li>
+    <li><a class="dropdown-item" data-autorefresh="30">30秒</a></li>
+    <li><a class="dropdown-item" data-autorefresh="60">60秒</a></li>
+    <li><a class="dropdown-item" data-autorefresh="120">120秒</a></li>
+  </ul>
+</div>
 
               <button id="btn-items-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
               <button id="btn-items-xlsx" class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
@@ -319,14 +265,14 @@
 
           <div class="card p-3">
             <div class="table-responsive">
-              <table class="table table-hover align-middle table-items">
+             <table class="table table-hover align-middle table-items">
                 <thead>
                   <tr>
-                    <th class="th-qr">QR</th>
+                   <th class="th-qr">QR</th>
                     <th class="th-code">コード</th>
                     <th class="th-name">名称</th>
-                    <th class="th-img">画像</th>
-                    <th class="th-price text-end">価格</th>
+                   <th class="th-img">画像</th>
+                   <th class="th-price text-end">価格</th>
                     <th class="th-stock text-end">在庫</th>
                     <th class="th-min text-end">最小</th>
                     <th class="th-dept">部門</th>
@@ -350,9 +296,9 @@
 
         <!-- ========= ユーザー / QR ========= -->
         <section id="view-users" class="d-none">
-          <div class="items-toolbar card p-3 mb-3 d-flex justify-content-between align-items-center">
-            <div class="left fw-semibold">ユーザー / QR</div>
-            <div class="right d-flex align-items-center gap-2">
+          <div class="items-toolbar card p-3 mb-3">
+            <div class="left"><div class="fw-semibold">ユーザー / QR</div></div>
+            <div class="right">
               <button id="btn-users-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
               <button id="btn-users-import" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i> インポート</button>
               <input id="input-users-import" type="file" accept=".csv" class="d-none">
@@ -379,9 +325,9 @@
 
         <!-- ========= 履歴 ========= -->
         <section id="view-history" class="d-none">
-          <div class="items-toolbar card p-3 mb-3 d-flex justify-content-between align-items-center">
-            <div class="left fw-semibold">履歴</div>
-            <div class="right d-flex align-items-center gap-2">
+          <div class="items-toolbar card p-3 mb-3">
+            <div class="left"><div class="fw-semibold">履歴</div></div>
+            <div class="right">
               <button id="btn-history-export" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i> エクスポート</button>
               <span class="badge-soft">最新400件を表示</span>
             </div>
@@ -409,7 +355,7 @@
     </main>
   </div>
 
-  <!-- Backdrop -->
+  <!-- Backdrop: SATU saja, di luar .layout -->
   <div id="sb-backdrop"></div>
 
   <!-- Loading -->
@@ -417,149 +363,17 @@
     <div class="box"><div class="spinner"></div><div id="loading-text" class="text">読み込み中…</div></div>
   </div>
 
- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
-<script src="./config.js?v=20251104a"></script>
-<script src="./qrlib.js?v=20251104a"></script>  <!-- ← WAJIB: tambahkan baris ini -->
-<script src="./app.js?v=20251104a"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
 
-
- 
-
-  <!-- Tahun footer -->
+  <!-- Script kecil: tahun footer saja -->
   <script>document.getElementById('fy').textContent=new Date().getFullYear();</script>
-
-  <!-- ヘルプ Modal -->
-  <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 id="helpModalLabel" class="modal-title">取扱説明（クイックガイド）</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
-        </div>
-        <div class="modal-body">
-          <!-- クイックタブ -->
-          <ul class="nav nav-tabs small" id="helpTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#help-overview" type="button" role="tab">概要</button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#help-io" type="button" role="tab">入出庫</button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#help-stocktake" type="button" role="tab">棚卸</button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#help-csv" type="button" role="tab">CSV</button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#help-trouble" type="button" role="tab">トラブル</button>
-            </li>
-          </ul>
-
-          <div class="tab-content pt-3 small">
-            <!-- 概要 -->
-            <div class="tab-pane fade show active" id="help-overview" role="tabpanel">
-              <p class="mb-2"><b>目的：</b>スマホ/PC で QR スキャンと手入力により在庫を正確・効率的に管理します。</p>
-              <ul class="mb-2">
-                <li>機能：ダッシュボード、入出庫、棚卸、商品一覧、ユーザー/QR、履歴、CSV/Excel</li>
-                <li>権限：<code>admin</code>（編集/確定/削除/インポート可）、<code>user</code>（入力/スキャン中心）</li>
-                <li>カメラ：使用時は権限を許可。背面カメラ推奨。</li>
-              </ul>
-              <div class="alert alert-info py-2">
-                詳細版マニュアル：
-                <a href="取扱説明書_在庫管理システム_JP.pdf" target="_blank" class="link-primary">PDFを開く</a>
-                ／
-                <a href="取扱説明書_在庫管理システム_JP.md" target="_blank" class="link-primary">Markdownを開く</a>
-                <span class="text-muted d-block mt-1">※ これらのファイルをプロジェクト直下に配置するとリンクが有効になります。</span>
-              </div>
-            </div>
-
-            <!-- 入出庫 -->
-            <div class="tab-pane fade" id="help-io" role="tabpanel">
-              <ol class="mb-2">
-                <li>サイドバー「入出庫」→ <b>開始</b> を押してカメラ許可。</li>
-                <li>QR（<code>ITEM|&lt;code&gt;</code>）を読み取るとコードが自動入力。</li>
-                <li>数量/単位/種別（IN/OUT）を設定 → <b>登録</b>。</li>
-              </ol>
-              <ul class="mb-0">
-                <li><b>照会</b>で品名・価格・在庫を再取得。</li>
-                <li><b>エクスポート/インポート</b>：履歴の一括出力/登録。</li>
-              </ul>
-            </div>
-
-            <!-- 棚卸 -->
-            <div class="tab-pane fade" id="help-stocktake" role="tabpanel">
-              <ol class="mb-2">
-                <li>「棚卸」→ スキャン<b>開始</b> または、コード/実在数量を手入力して<b>追加</b>。</li>
-                <li>表の「実在」は直接編集可。差異は自動計算。</li>
-                <li>チェック<b>差異のみ</b>：差異≠0 の行だけ表示。</li>
-              </ol>
-              <ul class="mb-2">
-                <li><b>下書き保存 / 読込 / クリア</b>：棚卸途中の保全に利用。</li>
-                <li><b>Adjust</b>（admin）：その行だけ即時上書き。/ <b>Edit</b>：商品編集。</li>
-              </ul>
-              <div class="alert alert-warning py-2">
-                <b>確定(在庫更新)</b>（admin）：全明細の実在数量で在庫を一括更新し、差分を <code>ADJUST</code> として履歴登録します。実行前に CSV を保存してください。
-              </div>
-              <div class="text-muted">表下部のサマリ：明細件数 / 差異あり件数 / 差異合計 / 絶対差異 を表示。</div>
-            </div>
-
-            <!-- CSV -->
-            <div class="tab-pane fade" id="help-csv" role="tabpanel">
-              <p class="mb-1"><b>Items</b>：<code>code,name,price,stock,min,location,department,img</code></p>
-              <p class="mb-1"><b>Users</b>：<code>id,name,role</code></p>
-              <p class="mb-2"><b>History</b>：<code>timestamp,userId,userName,code,itemName,qty,unit,type,note</code></p>
-              <p class="mb-1"><b>Stocktake Import</b>：<code>code,qty</code></p>
-              <p class="mb-1"><b>IO Import</b>：<code>userId,code,qty,unit,type,note</code></p>
-              <div class="text-muted small">文字化け対策：UTF-8 / 区切り「,」で保存。</div>
-            </div>
-
-            <!-- トラブル -->
-            <div class="tab-pane fade" id="help-trouble" role="tabpanel">
-              <ul class="mb-0">
-                <li>カメラが起動しない：ブラウザ許可 / HTTPS / カメラ占有を確認。</li>
-                <li>QR が遅い：明るさ・距離・ピント、背面カメラを使用。</li>
-                <li>API エラー：<code>config.js</code> の <code>BASE_URL</code> / <code>API_KEY</code> と GAS デプロイ設定。</li>
-                <li>権限：admin ログインかを確認。</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <a href="取扱説明書_在庫管理システム_JP.pdf" target="_blank" class="btn btn-outline-secondary">
-            <i class="bi bi-filetype-pdf me-1"></i> PDF を開く
-          </a>
-          <a href="取扱説明書_在庫管理システム_JP.md" target="_blank" class="btn btn-outline-secondary">
-            <i class="bi bi-markdown me-1"></i> Markdown を開く
-          </a>
-          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">閉じる</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Script kecil: tampilkan nama/role di welcome banner -->
-  <script>
-  (function(){
-    try{
-      const u = JSON.parse(localStorage.getItem('currentUser')||'null');
-      if(!u) return;
-      const box=document.getElementById('welcome-banner');
-      box.classList.remove('d-none');
-      const name=u.name||u.id||'user';
-      const role=(u.role||'user').toUpperCase();
-      document.getElementById('welcome-line').innerHTML=`Sugeng Rawuh、<b>${name}</b> さん`;
-      document.getElementById('welcome-sub').textContent=`ログイン：${u.id} ／ 権限：${role}`;
-    }catch(e){}
-  })();
-  </script>
-
 </body>
 </html>
