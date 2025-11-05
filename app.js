@@ -71,6 +71,37 @@
     for (const u of cdns) { try { await loadScriptOnce(u); if (window.Html5Qrcode) return; } catch { } }
     throw new Error("html5-qrcode tidak tersedia");
   }
+  // === Barcode (1D) support for case/lot ===
+  async function ensureJsBarcode(){
+    if (window.JsBarcode) return;
+    const locals = ["./JsBarcode.all.min.js","./vendor/JsBarcode.all.min.js"];
+    for (const p of locals){ try{ await loadScriptOnce(p); if(window.JsBarcode) return; }catch{} }
+    const cdns = [
+      "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js",
+      "https://unpkg.com/jsbarcode@3.11.6/dist/JsBarcode.all.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"
+    ];
+    for (const u of cdns){ try{ await loadScriptOnce(u); if(window.JsBarcode) return; }catch{} }
+    throw new Error("JsBarcode tidak tersedia");
+  }
+
+  async function makeCaseBarcodePNG(text, {format="CODE128", width=2, height=64, margin=6, displayValue=true, fontSize=14}={}){
+    await ensureJsBarcode();
+    const svg = document.createElement("svg");
+    window.JsBarcode(svg, text, { format, width, height, margin, displayValue, fontSize });
+    const xml = new XMLSerializer().serializeToString(svg);
+    const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+    const im = new Image(); im.src = url; await new Promise(r=>{ im.onload=r; im.onerror=r; });
+    const c = document.createElement("canvas");
+    c.width  = Math.max(320, im.width);
+    c.height = im.height + 24;
+    const g = c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height);
+    g.drawImage(im, (c.width - im.width)/2, 8);
+    g.fillStyle="#111"; g.font="12px system-ui"; g.textAlign="center";
+    g.fillText(text, c.width/2, c.height-8);
+    return c.toDataURL("image/png");
+  }
+
 
   function getCurrentUser() { try { return JSON.parse(localStorage.getItem("currentUser") || "null"); } catch { return null; } }
   function setCurrentUser(u) { localStorage.setItem("currentUser", JSON.stringify(u || null)); }
@@ -200,6 +231,8 @@
           <button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>
           <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ダウンロード"><i class="bi bi-download"></i></button>
           <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>
+        
+          <button class="btn btn-sm btn-outline-dark btn-box" data-code="${escapeAttr(it.code)}" title="箱バーコード"><i class="bi bi-upc-scan"></i></button>
         </div>
       </td>
     </tr>`;
@@ -245,7 +278,54 @@
           const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
           showItemDetail(it);
         });
-      });
+      
+        } else if (btn.classList.contains("btn-box")) {
+          const it = _ITEMS_CACHE.find(x => String(x.code) === String(code)); if(!it) return;
+          const wrap = document.createElement("div");
+          wrap.className = "modal fade";
+          wrap.innerHTML = `
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">箱バーコード生成</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="mb-2"><b>コード：</b>${escapeHtml(it.code)}</div>
+      <div class="mb-2"><b>名称：</b>${escapeHtml(it.name)}</div>
+      <div class="row g-3">
+        <div class="col-md-5"><label class="form-label">QTY / 箱</label>
+          <input id="bx-pack" type="number" class="form-control" value="10" min="1"></div>
+        <div class="col-md-7"><label class="form-label">LOT ID</label>
+          <input id="bx-lot" class="form-control" placeholder="LOT-2025-001"></div>
+      </div>
+      <div class="small text-muted mt-2">エンコード形式：<code>BOX|${escapeHtml(it.code)}|&lt;QTY&gt;|&lt;LOT&gt;</code>（CODE128）</div>
+      <div id="bx-preview" class="mt-3"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-secondary" data-bs-dismiss="modal">閉じる</button>
+      <button class="btn btn-outline-primary" id="bx-show">プレビュー</button>
+      <button class="btn btn-primary" id="bx-dl">生成 & ダウンロード</button>
+    </div>
+  </div>
+</div>`;
+          document.body.appendChild(wrap);
+          const modal = new bootstrap.Modal(wrap); modal.show();
+          async function renderPrev(){
+            const packQty = Math.max(1, Number($("#bx-pack", wrap).value||1));
+            const lotId = ($("#bx-lot", wrap).value||"").trim() || "LOT";
+            const payload = `BOX|${it.code}|${packQty}|${lotId}`;
+            try{
+              const png = await makeCaseBarcodePNG(payload, {});
+              $("#bx-preview", wrap).innerHTML = `<img src="${png}" style="max-width:100%;border:1px solid #e5e7eb;border-radius:10px;padding:8px;background:#fff">`;
+              return { png, payload };
+            }catch(e){ toast(e?.message||e); return null; }
+          }
+          $("#bx-show", wrap)?.addEventListener("click", async ()=>{ await renderPrev(); });
+          $("#bx-dl", wrap)?.addEventListener("click", async ()=>{
+            const res = await renderPrev(); if(!res) return;
+            const a = document.createElement("a"); a.href = res.png; a.download = `box_${it.code}.png`; a.click();
+          });
+          wrap.addEventListener("hidden.bs.modal", ()=>wrap.remove(), {once:true});
+});
 
       $("#items-search")?.addEventListener("input", (e) => {
         const q = (e.target.value || "").toLowerCase();
@@ -756,7 +836,7 @@ async function makeItemLabelDataURL(item) {
 
           await new Promise(r => setTimeout(r, 500));
 
-          const detector = new BarcodeDetector({ formats: ["qr_code"] });
+          const detector = new BarcodeDetector({ formats: ["qr_code","ean_13","ean_8","code_128","code_39","upc_a","upc_e"] });
           let raf = 0, stopped = false;
           const loop = async () => {
             if (stopped) return;
@@ -778,8 +858,15 @@ async function makeItemLabelDataURL(item) {
     }
 
     await ensureHtml5Qrcode();
-    const formatsOpt = (window.Html5QrcodeSupportedFormats && Html5QrcodeSupportedFormats.QR_CODE)
-      ? { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] }
+    const formatsOpt = (window.Html5QrcodeSupportedFormats)
+      ? { formatsToSupport: [
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E] }
       : {};
     const cfg = {
       fps: 30,
@@ -821,9 +908,30 @@ async function makeItemLabelDataURL(item) {
     btnStart.addEventListener("click", async () => {
       try {
         area.textContent = "カメラ起動中…";
-        IO_SCANNER = await startBackCameraScan("io-scan-area", (text) => {
-          const code = (String(text || "").split("|")[1] || "").trim();
-          if (code) { $("#io-code").value = code; findItemIntoIO(code); }
+        IO_SCANNER = await startBackCameraScan("io-scan-area", async (text) => {
+          const parsed = parseScanAny(String(text||""));
+          if(!parsed) return;
+          if(!confirm("この商品を追加してもよろしいですか？")) return;
+
+          if(parsed.kind === "item"){
+            $("#io-code").value = parsed.code;
+            await findItemIntoIO(parsed.code);
+          }else if(parsed.kind === "box"){
+            $("#io-code").value = parsed.code;
+            await findItemIntoIO(parsed.code);
+            $("#io-lotId").value  = parsed.lotId || "";
+            $("#io-packQty").value= parsed.packQty || "";
+            const cur = Number($("#io-qty").value||0);
+            $("#io-qty").value = cur + Number(parsed.packQty||0);
+            try{
+              const who = getCurrentUser(); if(who){
+                const payload = { userId: who.id, code: parsed.code, qty: parsed.packQty, unit: $("#io-unit").value||"pcs", type: "IN",
+                  lotId: parsed.lotId, packQty: parsed.packQty, mode: "LOT", source: "IO-SCAN" };
+                const r = await api("logLot", { method:"POST", body: payload, silent:true }).catch(()=>null);
+                if(!r || r.ok===false){ await api("log", { method:"POST", body: payload, silent:true }).catch(()=>{}); }
+              }
+            }catch(_){}
+          }
         });
       } catch (e) { toast(e?.message || String(e)); }
     });
@@ -837,17 +945,35 @@ async function makeItemLabelDataURL(item) {
       if (code) findItemIntoIO(code);
     });
 
-    $("#form-io")?.addEventListener("submit", async (e) => {
+    
+
+    if($("#form-io") && !$("#io-lotId")){
+      const hidLot = document.createElement("input"); hidLot.type="hidden"; hidLot.id="io-lotId";
+      const hidPack= document.createElement("input"); hidPack.type="hidden"; hidPack.id="io-packQty";
+      $("#form-io").appendChild(hidLot); $("#form-io").appendChild(hidPack);
+    }
+
+$("#form-io")?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const who = getCurrentUser(); if (!who) return toast("ログイン情報がありません。");
       const code = $("#io-code").value, qty = Number($("#io-qty").value || 0);
       const unit = $("#io-unit").value, type = $("#io-type").value;
+      const lotId  = $("#io-lotId")?.value || "";
+      const packQty= Number($("#io-packQty")?.value||0);
       try {
-        const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
-        if (r?.ok) { toast("登録しました"); $("#io-qty").value = ""; await findItemIntoIO(code); renderDashboard(); }
+        let r;
+        if(lotId){
+          const bodyLot  = { userId: who.id, code, qty, unit, type, lotId, packQty, mode:"LOT", source:"IO-FORM" };
+          r = await api("logLot", { method: "POST", body: bodyLot }).catch(()=>null);
+          if(!r || r.ok===false){ r = await api("log", { method: "POST", body: bodyLot }); }
+        }else{
+          r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
+        }
+        if (r?.ok) { toast("登録しました"); $("#io-qty").value = ""; $("#io-lotId").value=""; $("#io-packQty").value=""; await findItemIntoIO(code); renderDashboard(); }
         else toast(r?.error || "登録失敗");
       } catch (e2) { toast("登録失敗: " + (e2?.message || e2)); }
     });
+);
   })();
 
   async function findItemIntoIO(code) {
@@ -868,7 +994,30 @@ async function makeItemLabelDataURL(item) {
   const ST = { rows: new Map() }; // code => {code,name,book,qty,diff}
   window.ST = ST;
 
-  function parseScanText(txt) {
+  
+  function parseScanAny(txt){
+    const s = String(txt||"").trim();
+    if(/^BOX\|/i.test(s)){
+      const [,code,pack,lot] = s.split("|");
+      const packQty = Math.max(1, Number(pack||1));
+      const lotId   = (lot||"").trim() || "LOT";
+      return { kind:"box", code: String(code||"").trim(), packQty, lotId };
+    }
+    if(/^ITEM\|/i.test(s)){
+      return { kind:"item", code: (s.split("|")[1]||"").trim() };
+    }
+    try{
+      const o = JSON.parse(s);
+      if((o.t==="box"||o.type==="box") && o.code && o.packQty){
+        return { kind:"box", code:String(o.code), packQty: Number(o.packQty)||1, lotId: String(o.lotId||"LOT") };
+      }
+      if((o.t==="item"||o.type==="item") && o.code){
+        return { kind:"item", code:String(o.code) };
+      }
+    }catch(_){}
+    return null;
+  }
+function parseScanText(txt) {
     if (/^ITEM\|/i.test(txt)) return (txt.split("|")[1] || "").trim();
     try { const o = JSON.parse(txt); if ((o.t === "item" || o.type === "item") && o.code) return String(o.code); } catch { }
     return "";
