@@ -10,10 +10,9 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"
         onerror="this.onerror=null;this.href='vendor/bootstrap-icons.css'"/>
 
-  <link href="styles.css?v=20251104a" rel="stylesheet"/>
+  <link href="styles.css?v=20251105" rel="stylesheet"/>
   <link href="print.css?v=20251030" rel="stylesheet"/>
 
-  <!-- Styling kecil yang aman & fokus ke keterbacaan -->
   <style>
     header.appbar{position:sticky;top:0;z-index:1020;background:#fff;border-bottom:1px solid #e5e7eb}
     .app-view{min-height:60vh}
@@ -48,6 +47,11 @@
     <div class="card p-3">
       <h5 class="mb-3">ダッシュボード</h5>
       <div id="home-content">ようこそ</div>
+      <div>
+        <button id="btn-open-new-item" class="btn btn-sm btn-outline-primary admin-only d-none">
+          <i class="bi bi-plus-lg me-1"></i> 新規アイテム
+        </button>
+      </div>
     </div>
   </section>
 
@@ -147,8 +151,6 @@
         <div id="st-summary" class="mt-2 small text-muted"></div>
       </div>
     </div>
-
-    <!-- Rekap block lain tetap seperti semula (jika ada) -->
   </section>
 
   <!-- ========= レポート ========= -->
@@ -210,8 +212,53 @@
   </div>
 </div>
 
+<!-- Modal: 新規アイテム作成 -->
+<div class="modal fade" id="newItemModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="newItemForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">新規アイテム</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">コード*</label>
+            <input id="ni-code" class="form-control" required>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">名称*</label>
+            <input id="ni-name" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">部門</label>
+            <input id="ni-dept" class="form-control">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">最低在庫</label>
+            <input id="ni-min" type="number" class="form-control" value="0" min="0">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">単位</label>
+            <input id="ni-unit" class="form-control" value="個">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">単価</label>
+            <input id="ni-price" type="number" class="form-control" value="0" min="0">
+          </div>
+        </div>
+        <div class="small text-muted mt-2">* 必須項目</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i> 作成</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">閉じる</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="qrlib.js"></script>
-<script src="app.js?v=20251105"></script>
+<script src="app.js?v=20251105b"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         onerror="this.onerror=null;"></script>
 </body>
