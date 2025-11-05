@@ -33,23 +33,31 @@
   }
 
   /* -------------------- API -------------------- */
-  async function api(action, { method='GET', body=null, silent=false } = {}) {
-    if (!window.CONFIG || !CONFIG.BASE_URL) { throw new Error('config.js BASE_URL belum di-set'); }
-    const apikey = encodeURIComponent(CONFIG.API_KEY || "");
-    const url = `${CONFIG.BASE_URL}?action=${encodeURIComponent(action)}&key=${apikey}`;
-    const opt = { method, headers: { 'Content-Type': 'application/json' }, mode: 'cors' };
-    if (body) opt.body = JSON.stringify(body);
+ async function api(action, { method = 'GET', body = null, silent = false } = {}) {
+  if (!window.CONFIG || !CONFIG.BASE_URL) throw new Error('config.js BASE_URL belum di-set');
 
-    try {
-      if (!silent) setLoading(true, '読み込み中…');
-      const res = await fetch(url, opt);
-      const json = await res.json();
-      if (!res.ok || json?.error) { throw new Error(json?.error || res.statusText); }
-      return json;
-    } finally {
-      if (!silent) setLoading(false);
-    }
+  const apikey = encodeURIComponent(CONFIG.API_KEY || "");
+  const url = `${CONFIG.BASE_URL}?action=${encodeURIComponent(action)}&key=${apikey}`;
+
+  // === kunci anti-preflight ===
+  const opt = { method };
+  if (body != null) {
+    // simple request: TIDAK memicu preflight
+    opt.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
+    opt.body = JSON.stringify(body);   // kirim sebagai teks biasa
   }
+  // jangan set headers utk GET! (biarkan kosong)
+
+  try {
+    if (!silent) setLoading(true, '読み込み中…');
+    const res = await fetch(url, opt);       // mode default 'cors' sudah cukup
+    const json = await res.json();
+    if (!res.ok || json?.error) throw new Error(json?.error || res.statusText);
+    return json;
+  } finally {
+    if (!silent) setLoading(false);
+  }
+}
 
   /* -------------------- Auth stub -------------------- */
   function getCurrentUser(){
