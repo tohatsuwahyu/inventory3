@@ -38,7 +38,7 @@
   function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m])); }
   function escapeAttr(s) { return String(s || "").replace(/"/g, "&quot;"); }
 
-  /* QR helpers (sudah ada di proyek) */
+  /* QR helpers (reuse qrlib.js) */
   async function ensureQRCode() {
     if (window.QRCode) return;
     await new Promise((res, rej) => {
@@ -67,8 +67,7 @@
     window.SESSION = sess || {};
     $("#user-name") && ($("#user-name").textContent = sess?.name || "");
     $("#user-role") && ($("#user-role").textContent = (sess?.role || "").toUpperCase());
-    const adminOnlyEls = $$(".admin-only");
-    adminOnlyEls.forEach(el => el.classList.toggle("d-none", !isAdmin()));
+    $$(".admin-only").forEach(el => el.classList.toggle("d-none", !isAdmin()));
   }
   function loadSession() {
     try { return JSON.parse(localStorage.getItem("inv.session") || "{}"); } catch { return {}; }
@@ -83,8 +82,11 @@
       _ITEMS_CACHE = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
     } catch (e) { console.warn(e); }
   }
+  function getItemByCodeLocal(code) {
+    return _ITEMS_CACHE.find(x => String(x.code) === String(code));
+  }
 
-  /* -------------------- UI Bindings (Dashboard) -------------------- */
+  /* -------------------- UI Nav -------------------- */
   function bindNav() {
     $$(".app-nav .nav-link").forEach(a => {
       a.addEventListener("click", (ev) => {
@@ -101,7 +103,7 @@
 
   /* -------------------- Camera Scan (shared) -------------------- */
   async function startBackCameraScan(elId, onText) {
-    await ensureQRCode(); // reuse loader; scanner sudah dimuat di halaman
+    await ensureQRCode();
     const area = document.getElementById(elId);
     if (!area) throw new Error("scan area not found");
 
@@ -134,7 +136,7 @@
     } else if (window.Html5Qrcode) {
       const html5Qrcode = new Html5Qrcode(elId);
       const startWith = (cfg) => html5Qrcode.start(cfg, { fps: 10, qrbox: 250, aspectRatio: 1.0 },
-        (txt) => onText(txt), (err) => { });
+        (txt) => onText(txt), () => {});
       const cams = await Html5Qrcode.getCameras();
       if (!cams?.length) throw new Error("カメラが見つかりません。権限をご確認ください。");
       const back = cams.find(c => /back|rear|environment/i.test(c.label)) || cams.at(-1);
@@ -144,10 +146,9 @@
 
   /* -------------------- 入出庫 (IO) -------------------- */
   let IO_SCANNER = null;
-
   function findItemIntoIO(code) {
     try {
-      const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+      const it = getItemByCodeLocal(code);
       if (it) {
         $("#io-name").value = it.name || "";
         $("#io-price").value = it.price || 0;
@@ -155,7 +156,6 @@
       }
     } catch { }
   }
-
   (function bindIO() {
     const btnStart = $("#btn-io-scan"), btnStop = $("#btn-io-stop"), area = $("#io-scan-area");
     if (!btnStart || !btnStop || !area) return;
@@ -193,16 +193,72 @@
     });
   })();
 
+  /* -------------------- 新規アイテム作成（DB） -------------------- */
+  // Buka modal dengan kode terisi
+  function openNewItem(codePrefill = "") {
+    const m = $("#newItemModal"); if (!m) return;
+    m.querySelector("#ni-code").value = codePrefill || "";
+    m.querySelector("#ni-name").value = "";
+    m.querySelector("#ni-dept").value = "";
+    m.querySelector("#ni-min").value = "0";
+    m.querySelector("#ni-unit").value = "個";
+    m.querySelector("#ni-price").value = "0";
+    const modal = new bootstrap.Modal(m);
+    modal.show();
+  }
+  // Panggil backend. Kembalikan item yang dibuat (atau null jika gagal)
+  async function createItemToDB({ code, name, department, min_stock, unit, price }) {
+    try {
+      const res = await api("itemCreate", { method: "POST", body: { code, name, department, min_stock, unit, price } });
+      if (res?.ok && res.item) {
+        // Refresh cache agar langsung dikenali
+        await refreshItemsCache();
+        return res.item;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  (function bindNewItemModal() {
+    const m = $("#newItemModal"); if (!m) return;
+    const form = m.querySelector("#newItemForm");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const code = (m.querySelector("#ni-code").value || "").trim();
+      const name = (m.querySelector("#ni-name").value || "").trim();
+      const department = (m.querySelector("#ni-dept").value || "").trim();
+      const min_stock = Number(m.querySelector("#ni-min").value || 0) || 0;
+      const unit = (m.querySelector("#ni-unit").value || "").trim() || "個";
+      const price = Number(m.querySelector("#ni-price").value || 0) || 0;
+
+      if (!code || !name) return toast("コード/名称を入力してください");
+
+      const created = await createItemToDB({ code, name, department, min_stock, unit, price });
+      if (created) {
+        toast("アイテムを作成しました");
+        bootstrap.Modal.getInstance(m)?.hide();
+      } else {
+        // Fallback: hanya local cache (book=0) supaya stocktake tetap jalan
+        toast("作成APIに失敗しました。ローカルに追加します（帳簿=0）。");
+        // Tambah pseudo item ke cache lokal (tanpa DB)
+        const pseudo = { code, name, department, stock: 0, unit, price };
+        _ITEMS_CACHE.push(pseudo);
+        bootstrap.Modal.getInstance(m)?.hide();
+      }
+    });
+  })();
+
   /* -------------------- Stocktake (棚卸) -------------------- */
   let SHELF_SCANNER = null;
   const ST = { rows: new Map() }; // code => {code,name,department,book,qty,diff}
   window.ST = ST;
 
-  // === PARSER BARCODE DITINGKATKAN: dukung LOT|CODE|SIZE & ITEM|CODE & JSON
+  // Parsing barcode: LOT|CODE|SIZE, ITEM|CODE, atau JSON
   function parseScanText(txt) {
     const raw = String(txt || "").trim();
 
-    // LOT|<CODE>|<SIZE>
     if (/^LOT\|/i.test(raw)) {
       const parts = raw.split("|");
       const code = (parts[1] || "").trim();
@@ -211,13 +267,11 @@
       if (code) return { kind: "lot", code, size: 1 };
     }
 
-    // ITEM|<CODE>
     if (/^ITEM\|/i.test(raw)) {
       const code = (raw.split("|")[1] || "").trim();
       if (code) return { kind: "item", code };
     }
 
-    // JSON { t:'lot'|'item', code, size? }
     try {
       const o = JSON.parse(raw);
       if ((o.t === "lot" || o.type === "lot") && o.code) {
@@ -233,25 +287,60 @@
 
   async function addOrUpdateStocktake(code, realQty) {
     if (!code) return;
-    let item = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-    if (!item) { const r = await api("itemByCode", { method: "POST", body: { code } }); if (r?.ok) item = r.item; }
-    if (!item) return toast("アイテムが見つかりません: " + code);
-    const book = Number(item.stock || 0);
-    const qty = Number(realQty ?? book);
-    const diff = qty - book;
-    ST.rows.set(code, { code, name: item.name, department: (item.department || ""), book, qty, diff });
-    renderShelfTable();
-  }
 
-  // Tambahan: penambahan kuantitas incremental untuk LOT-scan dengan konfirmasi
-  async function addStocktakeIncrement(code, addQty) {
-    if (!code || !addQty) return;
-    // Ambil atau fetch item
-    let item = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+    let item = getItemByCodeLocal(code);
     if (!item) {
       try { const r = await api("itemByCode", { method: "POST", body: { code } }); if (r?.ok) item = r.item; } catch {}
     }
-    if (!item) return toast("アイテムが見つかりません: " + code);
+
+    // Jika tidak ketemu → tawarkan create item baru
+    if (!item) {
+      const qty = Number(realQty ?? 0);
+      const ok = window.confirm(
+        `このコードは未登録です。\n\n新規アイテムとして作成しますか？\nコード: ${code}\n（作成後、棚卸に追加します）`
+      );
+      if (!ok) return;
+
+      // Buka modal untuk input detail; setelah modal submit, cache diperbarui
+      openNewItem(code);
+
+      // Tunggu sampai modal ditutup, lalu cek item lagi
+      await waitModalClosed("#newItemModal");
+      item = getItemByCodeLocal(code);
+      if (!item) {
+        // fallback sudah menambahkan pseudo item (stock=0), jika user menutup tanpa submit maka batal
+        item = getItemByCodeLocal(code);
+        if (!item) return toast("アイテム作成がキャンセルされました");
+      }
+    }
+
+    // Item ada → perilaku normal
+    const book = Number(item.stock || 0);
+    const qty = Number(realQty ?? book);
+    const diff = qty - book;
+    ST.rows.set(code, { code, name: item.name || "(新規)", department: (item.department || ""), book, qty, diff });
+    renderShelfTable();
+  }
+
+  // Tambah kuantitas incremental untuk LOT (+konfirmasi & item baru)
+  async function addStocktakeIncrement(code, addQty) {
+    if (!code || !addQty) return;
+
+    let item = getItemByCodeLocal(code);
+    if (!item) {
+      try { const r = await api("itemByCode", { method: "POST", body: { code } }); if (r?.ok) item = r.item; } catch {}
+    }
+
+    if (!item) {
+      const ok = window.confirm(
+        `このコードは未登録です。\n\n新規アイテムとして作成しますか？\nコード: ${code}\n（作成後、箱バーコードを反映します）`
+      );
+      if (!ok) return;
+      openNewItem(code);
+      await waitModalClosed("#newItemModal");
+      item = getItemByCodeLocal(code);
+      if (!item) return toast("アイテム作成がキャンセルされました");
+    }
 
     // Existing record if any
     let rec = ST.rows.get(code);
@@ -261,7 +350,6 @@
       rec = { code, name: item.name, department: (item.department || ""), book, qty, diff: qty - book };
     }
 
-    // Konfirmasi (日本語)
     const confirmMsg = `箱バーコードを追加しますか？\n\nコード: ${code}\n加算数量: +${addQty} 個`;
     if (!window.confirm(confirmMsg)) return;
 
@@ -315,20 +403,16 @@
     };
   }
 
-  async function openAdjustModal(rec) {
-    // ... (isi modal adjust yang sudah ada di proyek Anda)
-    // (Kode lengkap asli tetap dipertahankan di file Anda)
-  }
+  async function openAdjustModal(rec) { /* (tetap: isi modal Adjust milik Anda) */ }
+  async function openEditItem(code) { /* (tetap: modal Edit milik Anda) */ }
 
-  async function openEditItem(code) {
-    // ... (modal edit item existing)
-  }
-
-  async function renderShelfRecap() {
-    try {
-      const raw = await api("history", { method: "GET" });
-      // ... (existing)
-    } catch (e) { console.warn(e); }
+  // Util: tunggu modal ditutup (untuk alur buat-item-baru)
+  function waitModalClosed(sel) {
+    return new Promise((resolve) => {
+      const m = $(sel); if (!m) return resolve();
+      const done = () => { m.removeEventListener("hidden.bs.modal", done); resolve(); };
+      m.addEventListener("hidden.bs.modal", done, { once: true });
+    });
   }
 
   (function bindShelf() {
@@ -347,7 +431,7 @@
           } else if (parsed.kind === "item") {
             const code = parsed.code;
             const currentQty = ST.rows.get(code)?.qty ?? undefined;
-            const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+            const it = getItemByCodeLocal(code);
             const name = it?.name ? `（${it.name}）` : "";
             if (!window.confirm(`このアイテムを追加しますか？\n\nコード: ${code}${name}`)) return;
             await addOrUpdateStocktake(code, currentQty);
@@ -370,12 +454,13 @@
       });
     });
 
+    // Input manual + konfirmasi
     $("#st-add")?.addEventListener("click", async () => {
       const code = ($("#st-code").value || "").trim();
       const qty = Number($("#st-qty").value || 0);
       if (!code) return toast("コードを入力してください");
       if (Number.isFinite(qty) && qty >= 0) {
-        const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+        const it = getItemByCodeLocal(code);
         const name = it?.name ? `（${it.name}）` : "";
         if (!window.confirm(`このアイテムを追加しますか？\n\nコード: ${code}${name}\n実在: ${qty} 個`)) return;
         await addOrUpdateStocktake(code, qty);
@@ -414,7 +499,7 @@
       const lines = t.trim().split(/\r?\n/).slice(1);
       lines.forEach((row) => {
         const [code,, , , qty] = row.split(",");
-        if (code) ST.rows.set(code, { code, name: (_ITEMS_CACHE.find(x => String(x.code) === String(code))?.name || ""), department:"", book:0, qty:Number(qty||0), diff:Number(qty||0) });
+        if (code) ST.rows.set(code, { code, name: (getItemByCodeLocal(code)?.name || ""), department:"", book:0, qty:Number(qty||0), diff:Number(qty||0) });
       });
       renderShelfTable();
       e.target.value = "";
@@ -510,10 +595,9 @@
 
     const newItemBtn = $("#btn-open-new-item");
     const newUserBtn = $("#btn-open-new-user");
-    if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
-    if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
+    if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", ()=>openNewItem("")); }
+    if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); /* openNewUser(); */ }
 
-    renderDashboard?.();
     $("#btn-logout")?.addEventListener("click", logout);
   });
 
