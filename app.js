@@ -18,7 +18,7 @@
   function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
   function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-  // qrlib.js harus menyediakan fungsi ini
+  // qrlib.js harus menyediakan QRCode
   async function generateQrDataUrl(text, size=256){
     if(!window.QRCode) throw new Error('qrlib.js (QRCode) belum dimuat');
     return await new Promise((resolve)=>{
@@ -33,37 +33,37 @@
   }
 
   /* -------------------- API -------------------- */
-  async function api(action, { method='GET', body=null, silent=false }={}){
-    if(!window.CONFIG || !CONFIG.BASE_URL){ throw new Error('config.js BASE_URL belum di-set'); }
-    const apikey = encodeURIComponent(CONFIG.API_KEY||"");
+  async function api(action, { method='GET', body=null, silent=false } = {}) {
+    if (!window.CONFIG || !CONFIG.BASE_URL) { throw new Error('config.js BASE_URL belum di-set'); }
+    const apikey = encodeURIComponent(CONFIG.API_KEY || "");
     const url = `${CONFIG.BASE_URL}?action=${encodeURIComponent(action)}&key=${apikey}`;
-    const opt = { method, headers: { 'Content-Type':'application/json' } };
-    if(body) opt.body = JSON.stringify(body);
-    try{
-      if(!silent) setLoading(true, '読み込み中…');
+    const opt = { method, headers: { 'Content-Type': 'application/json' }, mode: 'cors' };
+    if (body) opt.body = JSON.stringify(body);
+
+    try {
+      if (!silent) setLoading(true, '読み込み中…');
       const res = await fetch(url, opt);
       const json = await res.json();
-      if(!res.ok || json?.error){ throw new Error(json?.error || res.statusText); }
+      if (!res.ok || json?.error) { throw new Error(json?.error || res.statusText); }
       return json;
-    } finally { if(!silent) setLoading(false); }
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }
 
-  /* -------------------- Auth/User (placeholder, gunakan yang sudah ada di proyek) -------------------- */
+  /* -------------------- Auth stub -------------------- */
   function getCurrentUser(){
-    // Ambil user dari sesi Anda; di proyek Anda biasanya sudah ada.
-    try{
-      return JSON.parse(localStorage.getItem('AUTH_USER')||"") || null;
-    }catch{ return null; }
+    try { return JSON.parse(localStorage.getItem('AUTH_USER')||"") || null; }
+    catch { return null; }
   }
 
-  /* -------------------- State cache -------------------- */
-  let _ITEMS_CACHE = [];     // daftar item untuk 商品一覧
-  const ST = { rows: new Map() }; // stok opname map: code -> {book, qty}
+  /* -------------------- State -------------------- */
+  let _ITEMS_CACHE = [];
+  const ST = { rows: new Map() }; // code -> { book, qty }
 
   /* =====================================================
-   * 商品一覧 — RENDER (dengan tombol "箱バーコード")
+   * 商品一覧 — RENDER (tambah tombol "箱バーコード")
    * ===================================================*/
-  // ★ PATCH: gantikan renderer baris agar ada tombol "箱バーコード"
   function tplItemRow(it){
     const qrid = `qr-${it.code}`;
     return `<tr data-code="${escapeAttr(it.code)}">
@@ -90,38 +90,35 @@
     </tr>`;
   }
 
-  // render tabel 商品一覧
   async function renderItems(list){
     const tbody = $('#tbl-items tbody'); if(!tbody) return;
     tbody.innerHTML = list.map(tplItemRow).join("");
-    // render QR item existing (item-qr yang lama tidak berubah)
+
+    // render QR item (satuan)
     for(const it of list){
       const el = document.getElementById(`qr-${it.code}`);
       if(el){
-        // ITEM|<code> untuk satuan (tidak diubah)
         const url = await generateQrDataUrl(`ITEM|${it.code}`, 96);
         el.innerHTML = `<img src="${url}" alt="qr" width="96" height="96">`;
       }
     }
 
-    // delegasi klik untuk action di setiap baris
+    // click delegation
     tbody.onclick = async (ev)=>{
       const btn = ev.target.closest('button'); if(!btn) return;
       const code = btn.dataset.code;
-      if(btn.classList.contains('btn-edit'))       { openEdit(code); }
-      else if(btn.classList.contains('btn-del'))   { delItem(code); }
-      else if(btn.classList.contains('btn-dl'))    { downloadItem(code); }
-      else if(btn.classList.contains('btn-preview')){ openPreview(code); }
-      // ★ PATCH: tombol baru
-      else if(btn.classList.contains('btn-boxcode')){
+      if     (btn.classList.contains('btn-edit'))     openEdit(code);
+      else if(btn.classList.contains('btn-del'))      delItem(code);
+      else if(btn.classList.contains('btn-dl'))       downloadItem(code);
+      else if(btn.classList.contains('btn-preview'))  openPreview(code);
+      else if(btn.classList.contains('btn-boxcode')) {
         const it = _ITEMS_CACHE.find(x=> String(x.code)===String(code));
-        if(!it) return;
-        openBoxBarcodeModal(it);
+        if(!it) return; openBoxBarcodeModal(it);
       }
     };
   }
 
-  // placeholder fungsi existing di proyek Anda
+  // Placeholder sesuai proyek Anda (agar tidak error)
   function openEdit(code){ console.log('openEdit', code); }
   function delItem(code){ console.log('delItem', code); }
   function downloadItem(code){ console.log('downloadItem', code); }
@@ -130,13 +127,11 @@
   /* =====================================================
    * 箱バーコード — modal & generator
    * ===================================================*/
-  // ★ PATCH: helper buat QR BOX
   async function makeBoxBarcodeDataURL(code, pcsPerBox, size=300){
     const text = `BOX|${code}|${pcsPerBox}`;
     return await generateQrDataUrl(text, size);
   }
 
-  // ★ PATCH: modal pembuat BOX barcode
   function openBoxBarcodeModal(item){
     const wrap = document.createElement("div");
     wrap.className = "modal fade";
@@ -200,9 +195,8 @@
   }
 
   /* =====================================================
-   * スキャン処理 — parse & LOT adder
+   * スキャン処理 — parser & LOT adder
    * ===================================================*/
-  // ★ PATCH: parser scan text mendukung BOX
   function parseScanText(txt) {
     const s = String(txt||"").trim();
     if (/^ITEM\|/i.test(s)) return { kind:"item", code:(s.split("|")[1]||"").trim() };
@@ -215,19 +209,16 @@
     return { kind:"", code:"" };
   }
 
-  // ★ PATCH: tambah qty sesuai LOT + konfirmasi JP + log backend
   async function addLotScan(code, lot){
     if (!code || !lot || lot<=0) return;
     if (!confirm("この商品を追加してもよろしいですか？")) return;
 
-    // Ambil qty existing di map ST (kalau belum ada, pakai book atau 0)
     const curr = ST.rows.get(code);
     const base = (curr && (typeof curr.qty==='number' ? curr.qty : curr.book)) || 0;
     const newQty = Number(base) + Number(lot);
 
     await addOrUpdateStocktake(code, newQty);
 
-    // Log histori ke backend
     try{
       const who = getCurrentUser();
       await api("log", { method:"POST", body:{
@@ -238,43 +229,95 @@
     }catch(e){ console.warn("log LOT gagal:", e); }
   }
 
-  /* -------------------- Stocktake helpers (placeholder) -------------------- */
-  // Proyek Anda pasti sudah punya ini; pastikan tanda tangan sesuai
+  /* -------------------- Stocktake helpers (stub aman) -------------------- */
   async function addOrUpdateStocktake(code, qty){
-    // Implementasi sebenarnya milik proyek Anda:
-    // - update ST.rows.set(code, {book, qty})
-    // - re-render baris di tabel 棚卸
     const cur = ST.rows.get(code) || { book:0, qty:0 };
     const next = { book: cur.book||0, qty: (typeof qty==='number' ? qty : cur.qty||0) };
     ST.rows.set(code, next);
     console.log('Stocktake set', code, next);
-    // TODO: panggil re-render Anda di sini
+    // TODO: panggil re-render tabel 棚卸 milik Anda kalau ada.
   }
 
   /* =====================================================
-   * Kamera scan binder (棚卸で使用)
+   * Pemindai kamera (BarcodeDetector)
    * ===================================================*/
-  // Proyek Anda biasanya punya util ini. Di sini kita panggil dan gunakan parseScanText + addLotScan.
-  async function startBackCameraScan(areaId, onRead){
-    // Placeholder pemindai (pakai lib Anda yang sudah ada). Pastikan di proyek asli tetap gunakan implementasi lama.
-    // Di versi ini, saya hanya mock untuk mencegah error jika dipanggil.
-    console.warn('startBackCameraScan: gunakan implementasi asli milik Anda.');
+  async function startBackCameraScan(areaId, onRead) {
+    const area = document.getElementById(areaId);
+    if (!area) throw new Error('scan area not found');
+
+    area.innerHTML = '';
+    const video = document.createElement('video');
+    video.playsInline = true;
+    video.autoplay = true;
+    video.muted = true;
+    video.style.width = '100%';
+    video.style.borderRadius = '12px';
+    area.appendChild(video);
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false
+    });
+    video.srcObject = stream;
+
+    let detector = null;
+    if ('BarcodeDetector' in window) {
+      const formats = ['qr_code', 'code_128', 'ean_13', 'ean_8', 'code_39', 'upc_a', 'upc_e'];
+      detector = new window.BarcodeDetector({ formats });
+    } else {
+      console.warn('BarcodeDetector tidak tersedia; gunakan Chrome/Edge/Android terbaru.');
+    }
+
+    let last = 0, lock = false, rafId = 0;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    async function loop() {
+      rafId = requestAnimationFrame(loop);
+      if (!detector || lock) return;
+      if (video.readyState < 2) return;
+
+      const now = Date.now();
+      if (now - last < 250) return;
+      last = now;
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      try {
+        const bitmap = await createImageBitmap(canvas);
+        const codes = await detector.detect(bitmap);
+        if (codes && codes.length) {
+          lock = true;
+          const raw = (codes[0].rawValue || '').trim();
+          await onRead(raw);
+          setTimeout(()=>{ lock = false; }, 800);
+        }
+      } catch (e) {}
+    }
+    rafId = requestAnimationFrame(loop);
+
     return {
-      stop(){ /* no-op */ }
+      stop() {
+        cancelAnimationFrame(rafId);
+        stream.getTracks().forEach(t => t.stop());
+        area.innerHTML = '';
+      }
     };
   }
 
-  // ★ PATCH: contoh binding — di proyek Anda, panggilan ini ada di menu 棚卸
+  /* =====================================================
+   * Bind untuk menu 棚卸 (jika ada #scan-area di halaman)
+   * ===================================================*/
   async function bindShelfScan(){
     try{
       const scanner = await startBackCameraScan("scan-area", async (text)=>{
         const p = parseScanText(String(text||""));
         if(!p || !p.kind) return;
         if(p.kind === "item"){
-          // scan item satuan (per QR item)
           await addOrUpdateStocktake(p.code, ST.rows.get(p.code)?.qty ?? undefined);
         }else if(p.kind === "box"){
-          // scan BOX (tambah lot)
           await addLotScan(p.code, p.lot||0);
         }
       });
@@ -288,7 +331,7 @@
    * Boot
    * ===================================================*/
   async function boot(){
-    // Ambil item (gunakan API Anda yang sudah ada)
+    // Load items
     try{
       const data = await api('items', { method:'GET' });
       _ITEMS_CACHE = Array.isArray(data?.items) ? data.items : [];
@@ -296,9 +339,10 @@
       console.warn('Gagal load items, gunakan cache kosong:', e);
       _ITEMS_CACHE = [];
     }
+    // Render daftar items (untuk halaman 商品一覧)
     renderItems(_ITEMS_CACHE);
 
-    // Jika halaman ini memuat menu 棚卸 dan punya area scan, aktifkan binder
+    // Aktifkan scanner jika halaman memiliki #scan-area (menu 棚卸)
     if(document.getElementById('scan-area')){ bindShelfScan(); }
   }
 
