@@ -23,17 +23,13 @@
     if (!silent) setLoading(true);
     try {
       if (method === "GET") {
-        const r = await fetch(url, { mode: "cors", cache: "no-cache" });
+        const r = await fetch(url, { cache: "no-cache" });
         if (!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
-        return await r.json();
+        const data = await r.json();if (data && data.ok === false) throw new Error(data.error || "API error");return data;
       } else {
-        const r = await fetch(url, {
-          method: "POST", mode: "cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ ...(body || {}), apikey: CONFIG.API_KEY })
-        });
+        const r = await fetch(url, {method: "POST",headers: { "Content-Type": "application/json" },body: JSON.stringify({ ...(body || {}), apikey: CONFIG.API_KEY })});
         if (!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
-        return await r.json();
+        const data = await r.json();if (data && data.ok === false) throw new Error(data.error || "API error");return data;
       }
     } finally { if (!silent) setLoading(false); }
   }
@@ -128,11 +124,7 @@
     if (who) $("#who").textContent = `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`;
 
     try {
-      const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([
-        api("items", { method: "GET" }).catch(() => []),
-        api("users", { method: "GET" }).catch(() => []),
-        api("statsMonthlySeries", { method: "GET" }).catch(() => [])
-      ]);
+      const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([api("items", { method: "GET" }),api("users", { method: "GET" }),api("statsMonthlySeries", { method: "GET" })]);
 
       const items = Array.isArray(itemsRaw) ? itemsRaw : [];
       const users = Array.isArray(usersRaw) ? usersRaw : [];
@@ -1518,5 +1510,14 @@
     renderDashboard();
     $("#btn-logout")?.addEventListener("click", logout);
   });
-
+window.addEventListener("DOMContentLoaded", async () => {
+  // ...
+  try {
+    const ping = await api("items", { method: "GET", silent: true });
+    if (!Array.isArray(ping)) throw new Error("Items bukan array. Cek API key / URL.");
+  } catch (e) {
+    toast("バックエンド接続エラー: " + e.message);
+    console.error("API check failed:", e);
+  }
+});
 })();
