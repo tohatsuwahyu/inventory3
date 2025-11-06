@@ -177,7 +177,7 @@
 
   /* -------------------- Items -------------------- */
   let _ITEMS_CACHE = [];
-  function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", "&gt;": "&gt;", "\"": "&quot;", "'": "&#39;" }[m])); }
+  function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
   function escapeAttr(s) { return escapeHtml(s); }
 
   function tplItemRow(it) {
@@ -343,7 +343,7 @@ else if (btn.classList.contains("btn-lotqr")) {
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="nw-img" class="form-control"></div>
         <div class="col-md-4"><label class="form-label">置場</label><input id="nw-location" class="form-control text-uppercase" placeholder="A-01-03"></div>
         <div class="col-md-4"><label class="form-label">部門</label>
-  <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
+  <input id="md-department" class="form-control" placeholder="製造/品質/倉庫など">
 </div>
       </div>
     </div>
