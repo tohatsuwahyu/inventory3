@@ -411,7 +411,7 @@
         </div>
         <div class="mt-3 d-flex align-items-center gap-3">
           <div id="lotqr-box"></div>
-          <div class="small text-muted">内容：<code id="lot-hint"></code><br>または JSON <code id="lot-json-hint"></code></div>
+          <div class="small text-muted" id="lot-caption"></div>
         </div>
       </div>
       <div class="modal-footer">
@@ -435,10 +435,9 @@
       const codeNorm = normalizeCodeDash(item.code);
       const text = lot ? `LOT|${codeNorm}|${qty}|${lot}` : `LOT|${codeNorm}|${qty}`;
 
-      const hint  = $("#lot-hint", wrap);
-      const jhint = $("#lot-json-hint", wrap);
-      if (hint)  hint.innerText  = text;
-      if (jhint) jhint.innerText = JSON.stringify({ t:"lot", code: codeNorm, qty, ...(lot ? { lot } : {}) });
+      // Caption rapi (tanpa string debug)
+      const cap = $("#lot-caption", wrap);
+      if (cap) cap.textContent = `コード: ${codeNorm} / 数量: ${qty}` + (lot ? ` / ロット: ${lot}` : "");
 
       new QRCode(box, { text, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
     }
@@ -855,6 +854,85 @@
 
   /* -------------------- IO Scanner -------------------- */
   let IO_SCANNER = null;
+
+  // >>> DEFERRED BINDING: dipanggil setelah DOM siap
+  function bindIO() {
+    const btnStart = $("#btn-io-scan"), btnStop = $("#btn-io-stop"), area = $("#io-scan-area");
+    if (!btnStart || !btnStop || !area) return;
+
+    btnStart.addEventListener("click", async () => {
+      try {
+        area.textContent = "カメラ起動中…";
+        IO_SCANNER = await startBackCameraScan("io-scan-area", async (text) => {
+          const parsed = parseScanText(String(text || ""));
+          if (!parsed) return;
+
+          if (parsed.kind === "item") {
+            const code = parsed.code;
+            $("#io-code").value = code;
+            await findItemIntoIO(code);
+            if (confirm("この商品を追加してもよろしいですか？")) {
+              // user isi qty lalu submit manual
+            }
+            return;
+          }
+
+          if (parsed.kind === "lot") {
+            const { code, qty, lot } = parsed;
+            $("#io-code").value = code;
+            await findItemIntoIO(code);
+
+            const unit = $("#io-unit").value || "pcs";
+            const type = $("#io-type").value || "IN";
+            const who  = getCurrentUser();
+            if (!who) return toast("ログイン情報がありません。");
+
+            if (confirm("この商品を追加してもよろしいですか？")) {
+              try {
+                const r = await api("log", { method: "POST", body: {
+                  userId: who.id, code, qty: Number(qty || 0), unit, type,
+                  note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
+                }});
+                if (r?.ok) {
+                  toast("登録しました");
+                  $("#io-qty").value = "";
+                  await findItemIntoIO(code);
+                  renderDashboard();
+                } else {
+                  toast(r?.error || "登録失敗");
+                }
+              } catch(e){ toast("登録失敗: " + (e?.message || e)); }
+            }
+            return;
+          }
+        });
+      } catch (e) { toast(e?.message || String(e)); }
+    });
+
+    btnStop.addEventListener("click", async () => {
+      try { await IO_SCANNER?.stop?.(); IO_SCANNER?.clear?.(); } catch { }
+      area.innerHTML = "カメラ待機中…";
+    });
+
+    $("#btn-io-lookup")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      const code = ($("#io-code").value || "").trim();
+      if (code) findItemIntoIO(code);
+    });
+
+    $("#form-io")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const who = getCurrentUser(); if (!who) return toast("ログイン情報がありません。");
+      const code = $("#io-code").value, qty = Number($("#io-qty").value || 0);
+      const unit = $("#io-unit").value, type = $("#io-type").value;
+      try {
+        const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
+        if (r?.ok) { toast("登録しました"); $("#io-qty").value = ""; await findItemIntoIO(code); renderDashboard(); }
+        else toast(r?.error || "登録失敗");
+      } catch (e2) { toast("登録失敗: " + (e2?.message || e2)); }
+    });
+  }
+
   async function startBackCameraScan(mountId, onScan, boxSize) {
     const isPhone = isMobile();
     const qrboxSize = boxSize ?? (isPhone ? 220 : 240);
@@ -970,96 +1048,6 @@
       }
     } catch {}
     return null;
-  }
-
-  (function bindIO() {
-    const btnStart = $("#btn-io-scan"), btnStop = $("#btn-io-stop"), area = $("#io-scan-area");
-    if (!btnStart || !btnStop || !area) return;
-
-    btnStart.addEventListener("click", async () => {
-      try {
-        area.textContent = "カメラ起動中…";
-        IO_SCANNER = await startBackCameraScan("io-scan-area", async (text) => {
-          const parsed = parseScanText(String(text || ""));
-          if (!parsed) return;
-
-          if (parsed.kind === "item") {
-            const code = parsed.code;
-            $("#io-code").value = code;
-            await findItemIntoIO(code);
-            if (confirm("この商品を追加してもよろしいですか？")) {
-              // user isi qty lalu submit manual
-            }
-            return;
-          }
-
-          if (parsed.kind === "lot") {
-            const { code, qty, lot } = parsed;
-            $("#io-code").value = code;
-            await findItemIntoIO(code);
-
-            const unit = $("#io-unit").value || "pcs";
-            const type = $("#io-type").value || "IN";
-            const who  = getCurrentUser();
-            if (!who) return toast("ログイン情報がありません。");
-
-            if (confirm("この商品を追加してもよろしいですか？")) {
-              try {
-                const r = await api("log", { method: "POST", body: {
-                  userId: who.id, code, qty: Number(qty || 0), unit, type,
-                  note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
-                }});
-                if (r?.ok) {
-                  toast("登録しました");
-                  $("#io-qty").value = "";
-                  await findItemIntoIO(code);
-                  renderDashboard();
-                } else {
-                  toast(r?.error || "登録失敗");
-                }
-              } catch(e){ toast("登録失敗: " + (e?.message || e)); }
-            }
-            return;
-          }
-        });
-      } catch (e) { toast(e?.message || String(e)); }
-    });
-
-    btnStop.addEventListener("click", async () => {
-      try { await IO_SCANNER?.stop?.(); IO_SCANNER?.clear?.(); } catch { }
-      area.innerHTML = "カメラ待機中…";
-    });
-
-    $("#btn-io-lookup")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      const code = ($("#io-code").value || "").trim();
-      if (code) findItemIntoIO(code);
-    });
-
-    $("#form-io")?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const who = getCurrentUser(); if (!who) return toast("ログイン情報がありません。");
-      const code = $("#io-code").value, qty = Number($("#io-qty").value || 0);
-      const unit = $("#io-unit").value, type = $("#io-type").value;
-      try {
-        const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
-        if (r?.ok) { toast("登録しました"); $("#io-qty").value = ""; await findItemIntoIO(code); renderDashboard(); }
-        else toast(r?.error || "登録失敗");
-      } catch (e2) { toast("登録失敗: " + (e2?.message || e2)); }
-    });
-  })();
-
-  async function findItemIntoIO(code) {
-    try {
-      let it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-      if (!it) {
-        const r = await api("itemByCode", { method: "POST", body: { code } }); it = r && r.ok ? r.item : null;
-      }
-      if (!it) return;
-      $("#io-name").value = it.name || "";
-      $("#io-price").value = it.price || 0;
-      $("#io-stock").value = it.stock || 0;
-    } catch (e) { console.warn(e); }
   }
 
   /* -------------------- Stocktake (棚卸) -------------------- */
@@ -1214,7 +1202,8 @@
     wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
   }
 
-  (function bindShelf() {
+  // >>> DEFERRED BINDING: dipanggil setelah DOM siap
+  function bindShelf() {
     const btnStart = $("#btn-start-scan"), btnStop = $("#btn-stop-scan"), area = $("#scan-area");
     if (!btnStart || !btnStop || !area) return;
 
@@ -1265,7 +1254,7 @@
       await addOrUpdateStocktake(code, qty || undefined);
       $("#st-code").value = ""; $("#st-qty").value = "";
     });
-  })();
+  }
 
   /* -------------------- Export / Import wiring -------------------- */
 
@@ -1552,6 +1541,10 @@
     const newUserBtn = $("#btn-open-new-user");
     if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
     if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
+
+    // Penting: pasang handler setelah DOM siap
+    bindIO();
+    bindShelf();
 
     renderDashboard();
     $("#btn-logout")?.addEventListener("click", logout);
