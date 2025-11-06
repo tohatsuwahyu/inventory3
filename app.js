@@ -177,8 +177,11 @@
 
   /* -------------------- Items -------------------- */
   let _ITEMS_CACHE = [];
-  function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
+  function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }[m])); }
   function escapeAttr(s) { return escapeHtml(s); }
+  // === LOT QR: sanitize filename ===
+  function sanitizeFilename(name){ return String(name||"").replace(/[\\/:*?"<>|]/g, "_"); }
+
 
   function tplItemRow(it) {
     const qrid = `qr-${it.code}`;
@@ -343,7 +346,7 @@ else if (btn.classList.contains("btn-lotqr")) {
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="nw-img" class="form-control"></div>
         <div class="col-md-4"><label class="form-label">置場</label><input id="nw-location" class="form-control text-uppercase" placeholder="A-01-03"></div>
         <div class="col-md-4"><label class="form-label">部門</label>
-  <input id="md-department" class="form-control" placeholder="製造/品質/倉庫など">
+  <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
 </div>
       </div>
     </div>
@@ -396,7 +399,7 @@ function openLotQRModal(item) {
         </div>
         <div class="mt-3 d-flex align-items-center gap-3">
           <div id="lotqr-box"></div>
-          <div class="small text-muted">内容：<code>LOT|${escapeHtml(item.code)}|&lt;qty&gt;|&lt;lotId?&gt;</code><br>または JSON <code>{"t":"lot","code","qty","lot"}</code></div>
+          <div class="small text-muted">内容：<code id="lot-hint"></code><br>または JSON <code id="lot-json-hint"></code></div>
         </div>
       </div>
       <div class="modal-footer">
@@ -418,6 +421,14 @@ function openLotQRModal(item) {
     const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
     const lot = ($("#lot-id", wrap).value || "").trim();
     const text = lot ? `LOT|${item.code}|${qty}|${lot}` : `LOT|${item.code}|${qty}`;
+    // set example hints safely
+    const hint = $("#lot-hint", wrap);
+    const jhint = $("#lot-json-hint", wrap);
+    if (hint)  hint.innerText  = `LOT|${item.code}|<qty>|<lotId?>`;
+    if (jhint) jhint.innerText = `{"t":"lot","code":"${item.code}","qty":<qty>,"lot":"<lotId?>"}`;
+    new QRCode(box, { text, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
+    lastUrl = await generateQrDataUrl(text, 300);
+  }|${qty}|${lot}` : `LOT|${item.code}|${qty}`;
     new QRCode(box, { text, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
     // simpan dataURL untuk DL
     lastUrl = await generateQrDataUrl(text, 300);
@@ -438,8 +449,8 @@ function openLotQRModal(item) {
     const lot = ($("#lot-id", wrap).value || "").trim();
     const url = await makeLotLabelDataURL(item, qty, lot);
     const a = document.createElement("a");
-    const lotSafe = lot ? `_${lot}` : "";
-    a.href = url; a.download = `LOT_${item.code}${lotSafe}_${qty}.png`; a.click();
+    const lotSafe = lot ? `_${sanitizeFilename(lot)}` : "";
+    a.href = url; a.download = `LOT_${sanitizeFilename(item.code)}${lotSafe}_${qty}.png`; a.click();
   });
 
   wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
