@@ -176,11 +176,25 @@
   }
 
   /* -------------------- Items -------------------- */
-  let _ITEMS_CACHE = [];
-  function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }[m])); }
-  function escapeAttr(s) { return escapeHtml(s); }
-  // === LOT QR: sanitize filename ===
-  function sanitizeFilename(name){ return String(name||"").replace(/[\\/:*?"<>|]/g, "_"); }
+ let _ITEMS_CACHE = [];
+
+// --- Escape helpers (fixed) ---
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  })[m]);
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+// === LOT QR: sanitize filename ===
+function sanitizeFilename(name) {
+  return String(name || "").replace(/[\\/:*?"<>|]/g, "_");
+}
+
 
 
   function tplItemRow(it) {
