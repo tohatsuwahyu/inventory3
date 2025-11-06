@@ -856,7 +856,6 @@
   let IO_SCANNER = null;
 
   // >>> DEFERRED BINDING: dipanggil setelah DOM siap
-  // >>> DEFERRED BINDING: dipanggil setelah DOM siap
 function bindIO() {
   // 1) Variabel tombol/area (inisialisasi)
   const btnStart = $("#btn-io-scan"),
@@ -864,7 +863,7 @@ function bindIO() {
         area     = $("#io-scan-area");
   if (!btnStart || !btnStop || !area) return;
 
-  // 2) ⬇️ Tambahan: AUTO-LOOKUP saat mengetik di コード
+  // 2) AUTO-LOOKUP saat mengetik di コード
   const ioCode = document.getElementById("io-code");
   if (ioCode) {
     let timer = null;
@@ -874,7 +873,6 @@ function bindIO() {
       const v = (e.target.value || "").trim();
 
       if (!v) {
-        // kosongkan kolom info jika kode kosong
         const n = document.getElementById("io-name");
         const p = document.getElementById("io-price");
         const s = document.getElementById("io-stock");
@@ -883,11 +881,9 @@ function bindIO() {
         if (s) s.value = "";
         return;
       }
-      // debounce supaya tidak spam API saat user mengetik
       timer = setTimeout(() => findItemIntoIO(v), 220);
     });
 
-    // juga jalankan lookup saat keluar dari field / tekan Enter
     ioCode.addEventListener("blur", () => {
       const v = (ioCode.value || "").trim();
       if (v) findItemIntoIO(v);
@@ -899,7 +895,6 @@ function bindIO() {
       }
     });
   }
-  // 2) ⬆️— selesai blok tambahan
 
   // 3) Handler existing (tetap seperti semula)
   btnStart.addEventListener("click", async () => {
@@ -956,6 +951,7 @@ function bindIO() {
     area.innerHTML = "カメラ待機中…";
   });
 
+  // <<<<<<<< 照会 tombol: memicu lookup manual
   $("#btn-io-lookup")?.addEventListener("click", (e) => {
     e.preventDefault();
     const code = ($("#io-code").value || "").trim();
@@ -974,7 +970,6 @@ function bindIO() {
     } catch (e2) { toast("登録失敗: " + (e2?.message || e2)); }
   });
 }
-
 
   async function startBackCameraScan(mountId, onScan, boxSize) {
     const isPhone = isMobile();
@@ -1092,45 +1087,43 @@ function bindIO() {
     } catch {}
     return null;
   }
-// === IO: lookup item by code lalu isi Nama/Harga/Stok di form ===
-async function findItemIntoIO(codeRaw) {
-  const code = normalizeCodeDash(String(codeRaw || "")).trim();
-  const nameEl  = document.getElementById("io-name");
-  const priceEl = document.getElementById("io-price");
-  const stockEl = document.getElementById("io-stock");
-  if (!nameEl || !priceEl || !stockEl) return; // jika id berbeda, sesuaikan di HTML
 
-  // fallback tampilan saat loading
-  nameEl.value  = "";
-  priceEl.value = "";
-  stockEl.value = "";
+  // === IO: lookup item by code lalu isi Nama/Harga/Stok di form ===
+  async function findItemIntoIO(codeRaw) {
+    const code = normalizeCodeDash(String(codeRaw || "")).trim();
+    const nameEl  = document.getElementById("io-name");
+    const priceEl = document.getElementById("io-price");
+    const stockEl = document.getElementById("io-stock");
+    if (!nameEl || !priceEl || !stockEl) return;
 
-  // cari di cache dulu, kalau belum ada baru panggil API
-  let item = _ITEMS_CACHE.find(x => String(x.code) === code);
-  if (!item) {
-    try {
-      const r = await api("itemByCode", { method: "POST", body: { code }, silent: true });
-      if (r?.ok && r.item) item = r.item;
-    } catch {}
-  }
-
-  if (item) {
-    nameEl.value  = item.name || "";
-    priceEl.value = Number(item.price || 0);
-    stockEl.value = Number(item.stock || 0);
-  } else {
-    // Tidak ketemu → kosongkan saja
     nameEl.value  = "";
     priceEl.value = "";
     stockEl.value = "";
-  }
 
-  return item;
-}
+    let item = _ITEMS_CACHE.find(x => String(x.code) === code);
+    if (!item) {
+      try {
+        const r = await api("itemByCode", { method: "POST", body: { code }, silent: true });
+        if (r?.ok && r.item) item = r.item;
+      } catch {}
+    }
+
+    if (item) {
+      nameEl.value  = item.name || "";
+      priceEl.value = Number(item.price || 0);
+      stockEl.value = Number(item.stock || 0);
+    } else {
+      nameEl.value  = "";
+      priceEl.value = "";
+      stockEl.value = "";
+    }
+
+    return item;
+  }
 
   /* -------------------- Stocktake (棚卸) -------------------- */
   let SHELF_SCANNER = null;
-  const ST = { rows: new Map() }; // code => {code,name,book,qty,diff}
+  const ST = { rows: new Map() };
   window.ST = ST;
 
   async function addOrUpdateStocktake(code, realQty) {
@@ -1396,7 +1389,7 @@ async function findItemIntoIO(codeRaw) {
     } catch { alert("エクスポート失敗"); }
   });
 
-  // Items export (Excel) + department (hanya SATU handler)
+  // Items export (Excel)
   $("#btn-items-xlsx")?.addEventListener("click", async (e) => {
     e.preventDefault();
     try {
@@ -1419,7 +1412,7 @@ async function findItemIntoIO(codeRaw) {
     } catch { alert("エクスポート失敗"); }
   });
 
-  // --- Print all item labels (grid, banyak per lembar) ---
+  // --- Print all item labels (grid) ---
   document.getElementById("btn-items-print-all")?.addEventListener("click", async () => {
     try {
       setLoading(true, "ラベルを生成中…");
