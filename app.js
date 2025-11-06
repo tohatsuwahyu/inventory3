@@ -677,40 +677,75 @@
   }
 
   // === LOT QR: label dataURL (mirip item, ada info lot & qty/box) ===
-  async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
-    const base = await makeItemLabelDataURL(item);
-    const im = new Image(); im.src = base; await new Promise(r=>{im.onload=r; im.onerror=r;});
-    const W = im.width, H = im.height;
-    const c = document.createElement("canvas"); c.width=W; c.height=H;
-    const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
-    g.drawImage(im, 0, 0);
+  // === LOT QR: label dataURL (dengan caption "箱あたり" & "ロット" DI BAWAH QR) ===
+async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
+  // 1) Render label item standar (sudah memuat: 画像欄, QR item, コード, 商品名, 部門／置場)
+  const base = await makeItemLabelDataURL(item);
+  const im = new Image(); im.src = base;
+  await new Promise(r => { im.onload = r; im.onerror = r; });
 
-    // Tulisan tambahan
-    g.fillStyle = "#111";
-    g.font = '700 18px "Noto Sans JP", system-ui';
-    const line1 = `箱あたり：${qtyPerBox} pcs`;
-    const line2 = lotId ? `ロット：${lotId}` : "";
-    g.fillText(line1, W - 260, 36);
-    if (line2) g.fillText(line2, W - 260, 62);
+  const W = im.width, H = im.height;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
 
-    // QR LOT
-    try {
-      const codeNorm = normalizeCodeDash(item.code);
-      const du = await generateQrDataUrl(
-        lotId ? `LOT|${codeNorm}|${qtyPerBox}|${lotId}` : `LOT|${codeNorm}|${qtyPerBox}`,
-        136
-      );
-      const qr = new Image(); qr.src = du; await new Promise(r=>{qr.onload=r; qr.onerror=r;});
-      const pad = 18, imgW = 200, gap = 16, QUIET = 16, qrSize = 136, gapQR = 14;
-      const colStart = pad + imgW + gap;
-      const qy = pad + ((H - 2 * pad) - qrSize) / 2;
-      const qx = colStart + gapQR + QUIET;
-      g.fillStyle = "#fff"; g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2*QUIET, qrSize + 2*QUIET);
-      g.drawImage(qr, qx, qy, qrSize, qrSize);
-    } catch {}
+  // tempel label dasar
+  g.drawImage(im, 0, 0);
 
-    return c.toDataURL("image/png");
+  // 2) Hitung ulang posisi kolom supaya kita tahu letak QR item
+  const pad = 18, imgW = 200, gap = 16;
+  const QUIET = 16, qrSize = 136, gapQR = 14;
+
+  // posisi QR (sama seperti di makeItemLabelDataURL)
+  const colStart = pad + imgW + gap;
+  const qy = pad + ((H - 2 * pad) - qrSize) / 2;
+  const qx = colStart + gapQR + QUIET;
+
+  // 3) Gambar ulang QR **LOT** di posisi QR (agar kontennya LOT…)
+  try {
+    const codeNorm = normalizeCodeDash(item.code);
+    const txt = lotId
+      ? `LOT|${codeNorm}|${qtyPerBox}|${lotId}`
+      : `LOT|${codeNorm}|${qtyPerBox}`;
+    const du = await generateQrDataUrl(txt, qrSize);
+    const qr = new Image(); qr.src = du;
+    await new Promise(r => { qr.onload = r; qr.onerror = r; });
+
+    // kotak putih + QR LOT
+    g.fillStyle = "#fff";
+    g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
+    g.drawImage(qr, qx, qy, qrSize, qrSize);
+  } catch {}
+
+  // 4) Caption di BAWAH barcode/QR (bukan di “コード”)
+  const capW = qrSize + 2 * QUIET;         // lebar sama dengan area QR
+  const capH = 40;                          // tinggi kecil, dua baris muat
+  const capX = colStart + gapQR;            // sejajar kotak putih QR
+  const capY = qy + qrSize + 6;             // tepat di bawah QR
+
+  // panel kecil
+  g.fillStyle = "#ffffff";
+  g.fillRect(capX, capY, capW, capH);
+  g.strokeStyle = "#d1d5db";
+  g.lineWidth = 1;
+  g.strokeRect(capX + 0.5, capY + 0.5, capW - 1, capH - 1);
+
+  // teks "箱あたり" dan (opsional) "ロット"
+  g.fillStyle = "#111";
+  g.textAlign = "center";
+  g.textBaseline = "top";
+  g.font = '700 14px "Noto Sans JP", system-ui';
+  g.fillText(`箱あたり：${Number(qtyPerBox || 0)} pcs`, capX + capW / 2, capY + 6);
+
+  if ((lotId || "").trim()) {
+    g.font = '600 12px "Noto Sans JP", system-ui';
+    g.fillStyle = "#374151";
+    g.fillText(`ロット：${String(lotId)}`, capX + capW / 2, capY + 22);
   }
+
+  // Selesai
+  return c.toDataURL("image/png");
+}
+
 
   /* -------------------- Users -------------------- */
   async function renderUsers() {
