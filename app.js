@@ -4,38 +4,30 @@
 (function () {
   "use strict";
 
-(function () {
+  // Helpers (satu kali saja)
   const $  = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
 
-  function ensure(x, msg) {
-    if (!x) throw new Error(msg || "Assertion failed");
-    return x;
-  }
+  function ensure(x, msg) { if (!x) throw new Error(msg || "Assertion failed"); return x; }
 
+  // cache item (satu kali saja)
   let _ITEMS_CACHE = [];
 
-  // --- Escape helpers (fixed) ---
-  function escapeHtml(s) {
+  // Escape helpers (fixed)
+  function escapeHtml(s){
     return String(s || "").replace(/[&<>"']/g, (m) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      "\"": "&quot;",
-      "'": "&#39;"
+      "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;"
     })[m]);
   }
-  function escapeAttr(s) { return escapeHtml(s); }
+  function escapeAttr(s){ return escapeHtml(s); }
 
-  // === LOT QR: sanitize filename ===
-  function sanitizeFilename(name) {
-    return String(name || "").replace(/[\\/:*?"<>|]/g, "_");
-  }
+  // Sanitize filename (satu kali saja)
+  function sanitizeFilename(name){ return String(name || "").replace(/[\\/:*?"<>|]/g, "_"); }
+
 
 
   /* -------------------- Helpers -------------------- */
-  const $ = (sel, el = document) => el.querySelector(sel);
-  const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
+  
   const fmt = (n) => new Intl.NumberFormat("ja-JP").format(Number(n || 0));
   const isMobile = () => /Android|iPhone|iPad/i.test(navigator.userAgent);
   function toast(msg) { alert(msg); }
@@ -205,28 +197,7 @@
   }
 
   /* -------------------- Items -------------------- */
- let _ITEMS_CACHE = [];
-
-// --- Escape helpers (fixed) ---
-function escapeHtml(s) {
-  return String(s || "").replace(/[&<>"']/g, (m) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;"
-  })[m]);
-}
-function escapeAttr(s) { return escapeHtml(s); }
-
-// === LOT QR: sanitize filename ===
-function sanitizeFilename(name) {
-  return String(name || "").replace(/[\\/:*?"<>|]/g, "_");
-}
-
-
-
-  function tplItemRow(it) {
+   function tplItemRow(it) {
     const qrid = `qr-${it.code}`;
     return `<tr>
       <td style="width:110px">
@@ -330,7 +301,7 @@ else if (btn.classList.contains("btn-lotqr")) {
         <div class="col-md-4"><label class="form-label">最小</label><input id="md-min" type="number" class="form-control" value="${Number(it.min || 0)}"></div>
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="md-img" class="form-control" value="${escapeAttr(it.img || "")}"></div>
         <div class="col-md-4"><label class="form-label">置場</label>
-          <input id="md-location" class="form-control text-uppercase" value="${escapeAttr(it.location || "")}" placeholder="A-01-03">
+          <input id="md-location" class="form-control text-uppercase" value="${escapeAttr(it.location || "")}" placeholder="A-01-03"></div>
           <div class="col-md-4"><label class="form-label">部門</label>
           <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など"></div>
         </div>
@@ -464,16 +435,14 @@ function openLotQRModal(item) {
     const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
     const lot = ($("#lot-id", wrap).value || "").trim();
     const text = lot ? `LOT|${item.code}|${qty}|${lot}` : `LOT|${item.code}|${qty}`;
-    // set example hints safely
+
+    // tampilkan contoh aman (innerText)
     const hint = $("#lot-hint", wrap);
     const jhint = $("#lot-json-hint", wrap);
     if (hint)  hint.innerText  = `LOT|${item.code}|<qty>|<lotId?>`;
     if (jhint) jhint.innerText = `{"t":"lot","code":"${item.code}","qty":<qty>,"lot":"<lotId?>"}`;
+
     new QRCode(box, { text, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
-    lastUrl = await generateQrDataUrl(text, 300);
-  }|${qty}|${lot}` : `LOT|${item.code}|${qty}`;
-    new QRCode(box, { text, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
-    // simpan dataURL untuk DL
     lastUrl = await generateQrDataUrl(text, 300);
   }
 
@@ -487,13 +456,15 @@ function openLotQRModal(item) {
     const url = await makeLotLabelDataURL(item, qty, lot);
     openPreview(url);
   });
+
   $("#lot-dl", wrap)?.addEventListener("click", async ()=>{
     const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
     const lot = ($("#lot-id", wrap).value || "").trim();
     const url = await makeLotLabelDataURL(item, qty, lot);
+    const lotSafe  = lot ? `_${sanitizeFilename(lot)}` : "";
+    const codeSafe = sanitizeFilename(item.code);
     const a = document.createElement("a");
-    const lotSafe = lot ? `_${sanitizeFilename(lot)}` : "";
-    a.href = url; a.download = `LOT_${sanitizeFilename(item.code)}${lotSafe}_${qty}.png`; a.click();
+    a.href = url; a.download = `LOT_${codeSafe}${lotSafe}_${qty}.png`; a.click();
   });
 
   wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
@@ -655,7 +626,7 @@ async function makeItemLabelDataURL(item) {
     return lines;
   }
 
-  function drawWrapBoxVCenter(ctx, text, x, yTop, maxW, maxH, opt={}){
+   function drawWrapBoxVCenter(ctx, text, x, yTop, maxW, maxH, opt={}){
     const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
     const fam  = '"Noto Sans JP", system-ui';
     const weight = opt.weight || "normal";
@@ -667,7 +638,6 @@ async function makeItemLabelDataURL(item) {
       if (totalH <= maxH || size <= min) break;
       size -= 1;
     }
-    // vertikal tengah
     const totalH = lines.length * size + (lines.length - 1) * gap;
     let y = yTop + (maxH - totalH) / 2;
     ctx.textBaseline = "top"; ctx.textAlign = "left"; ctx.fillStyle = "#000";
@@ -677,7 +647,8 @@ async function makeItemLabelDataURL(item) {
       if (y - yTop > maxH) break;
     }
   }
-}
+} // ← ini MENUTUP makeItemLabelDataURL (jangan ada '}' lagi setelah ini)
+
 
 
 
@@ -1344,28 +1315,7 @@ async function addOrIncStocktake(code, delta) {
   });
 
   // Items export (CSV & Excel) — (dibiarkan ganda jika memang sudah ada tombol gandanya)
-  $("#btn-items-export")?.addEventListener("click", async () => {
-    try {
-      const list = await api("items", { method: "GET" });
-      const arr = Array.isArray(list) ? list : (list?.data || []);
-      const csv = ["code,name,price,stock,min,location,img"]
-        .concat(arr.map(i => [
-          i.code,
-          String(i.name || "").replace(/,/g, " "),
-          Number(i.price || 0),
-          Number(i.stock || 0),
-          Number(i.min || 0),
-          String(i.location || "").toUpperCase(),
-          i.img || ""
-        ].join(",")))
-        .join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "items.csv"; a.click();
-      URL.revokeObjectURL(url);
-    } catch { alert("エクスポート失敗"); }
-  });
+  
 
   $("#btn-items-xlsx")?.addEventListener("click", async () => {
     try {
