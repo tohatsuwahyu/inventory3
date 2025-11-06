@@ -7,7 +7,6 @@
   // Helpers (satu kali saja)
   const $  = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
-
   function ensure(x, msg) { if (!x) throw new Error(msg || "Assertion failed"); return x; }
 
   // cache item (satu kali saja)
@@ -21,13 +20,14 @@
   }
   function escapeAttr(s){ return escapeHtml(s); }
 
-  // Sanitize filename (satu kali saja)
+  // Filename & code normalizer
   function sanitizeFilename(name){ return String(name || "").replace(/[\\/:*?"<>|]/g, "_"); }
-
-
+  // Samakan semua dash Unicode ke '-' ASCII agar konsisten di QR & parser
+  function normalizeCodeDash(s){
+    return String(s || "").replace(/[\u2212\u2010-\u2015\uFF0D]/g, "-").trim();
+  }
 
   /* -------------------- Helpers -------------------- */
-  
   const fmt = (n) => new Intl.NumberFormat("ja-JP").format(Number(n || 0));
   const isMobile = () => /Android|iPhone|iPad/i.test(navigator.userAgent);
   function toast(msg) { alert(msg); }
@@ -197,7 +197,7 @@
   }
 
   /* -------------------- Items -------------------- */
-   function tplItemRow(it) {
+  function tplItemRow(it) {
     const qrid = `qr-${it.code}`;
     return `<tr>
       <td style="width:110px">
@@ -234,7 +234,7 @@
       for (const it of _ITEMS_CACHE) {
         const holder = document.getElementById(`qr-${it.code}`);
         if (!holder) continue; holder.innerHTML = "";
-        new QRCode(holder, { text: `ITEM|${it.code}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
+        new QRCode(holder, { text: `ITEM|${normalizeCodeDash(it.code)}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
       }
 
       tbody.onclick = async (e) => {
@@ -253,12 +253,10 @@
         } else if (btn.classList.contains("btn-preview")) {
           const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
           const url = await makeItemLabelDataURL(it); openPreview(url);
-        }// === LOT QR: open modal buat QR per lot/kotak ===
-else if (btn.classList.contains("btn-lotqr")) {
-  const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-  openLotQRModal(it);
-}
-
+        } else if (btn.classList.contains("btn-lotqr")) {
+          const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+          openLotQRModal(it);
+        }
       };
 
       $$("#tbl-items .link-item").forEach(a => {
@@ -302,9 +300,8 @@ else if (btn.classList.contains("btn-lotqr")) {
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="md-img" class="form-control" value="${escapeAttr(it.img || "")}"></div>
         <div class="col-md-4"><label class="form-label">置場</label>
           <input id="md-location" class="form-control text-uppercase" value="${escapeAttr(it.location || "")}" placeholder="A-01-03"></div>
-          <div class="col-md-4"><label class="form-label">部門</label>
+        <div class="col-md-4"><label class="form-label">部門</label>
           <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など"></div>
-        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -360,8 +357,8 @@ else if (btn.classList.contains("btn-lotqr")) {
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="nw-img" class="form-control"></div>
         <div class="col-md-4"><label class="form-label">置場</label><input id="nw-location" class="form-control text-uppercase" placeholder="A-01-03"></div>
         <div class="col-md-4"><label class="form-label">部門</label>
-  <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
-</div>
+          <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -394,12 +391,13 @@ else if (btn.classList.contains("btn-lotqr")) {
     });
     wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
   }
-// === LOT QR: modal pembuat QR per lot/kotak ===
-function openLotQRModal(item) {
-  if (!item) return;
-  const wrap = document.createElement("div");
-  wrap.className = "modal fade";
-  wrap.innerHTML = `
+
+  // === LOT QR: modal pembuat QR per lot/kotak ===
+  function openLotQRModal(item) {
+    if (!item) return;
+    const wrap = document.createElement("div");
+    wrap.className = "modal fade";
+    wrap.innerHTML = `
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header"><h5 class="modal-title">Lot/箱 QR ラベル</h5>
@@ -423,52 +421,51 @@ function openLotQRModal(item) {
       </div>
     </div>
   </div>`;
-  document.body.appendChild(wrap);
-  const modal = new bootstrap.Modal(wrap); modal.show();
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap); modal.show();
 
-  const box = $("#lotqr-box", wrap);
-  let lastUrl = "";
+    const box = $("#lotqr-box", wrap);
 
-  async function renderQR() {
-    await ensureQRCode();
-    box.innerHTML = "";
-    const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
-    const lot = ($("#lot-id", wrap).value || "").trim();
-    const text = lot ? `LOT|${item.code}|${qty}|${lot}` : `LOT|${item.code}|${qty}`;
+    async function renderQR() {
+      await ensureQRCode();
+      box.innerHTML = "";
 
-    // tampilkan contoh aman (innerText)
-    const hint = $("#lot-hint", wrap);
-    const jhint = $("#lot-json-hint", wrap);
-    if (hint)  hint.innerText  = `LOT|${item.code}|<qty>|<lotId?>`;
-    if (jhint) jhint.innerText = `{"t":"lot","code":"${item.code}","qty":<qty>,"lot":"<lotId?>"}`;
+      const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
+      const lot = ($("#lot-id", wrap).value || "").trim();
+      const codeNorm = normalizeCodeDash(item.code);
+      const text = lot ? `LOT|${codeNorm}|${qty}|${lot}` : `LOT|${codeNorm}|${qty}`;
 
-    new QRCode(box, { text, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
-    lastUrl = await generateQrDataUrl(text, 300);
+      const hint  = $("#lot-hint", wrap);
+      const jhint = $("#lot-json-hint", wrap);
+      if (hint)  hint.innerText  = text;
+      if (jhint) jhint.innerText = JSON.stringify({ t:"lot", code: codeNorm, qty, ...(lot ? { lot } : {}) });
+
+      new QRCode(box, { text, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
+    }
+
+    $("#lot-qty", wrap)?.addEventListener("input", renderQR);
+    $("#lot-id", wrap)?.addEventListener("input", renderQR);
+    renderQR();
+
+    $("#lot-preview", wrap)?.addEventListener("click", async ()=> {
+      const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
+      const lot = ($("#lot-id", wrap).value || "").trim();
+      const url = await makeLotLabelDataURL(item, qty, lot);
+      openPreview(url);
+    });
+
+    $("#lot-dl", wrap)?.addEventListener("click", async ()=>{
+      const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
+      const lot = ($("#lot-id", wrap).value || "").trim();
+      const url = await makeLotLabelDataURL(item, qty, lot);
+      const lotSafe  = lot ? `_${sanitizeFilename(lot)}` : "";
+      const codeSafe = sanitizeFilename(item.code);
+      const a = document.createElement("a");
+      a.href = url; a.download = `LOT_${codeSafe}${lotSafe}_${qty}.png`; a.click();
+    });
+
+    wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
   }
-
-  $("#lot-qty", wrap)?.addEventListener("input", renderQR);
-  $("#lot-id", wrap)?.addEventListener("input", renderQR);
-  renderQR();
-
-  $("#lot-preview", wrap)?.addEventListener("click", async ()=> {
-    const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
-    const lot = ($("#lot-id", wrap).value || "").trim();
-    const url = await makeLotLabelDataURL(item, qty, lot);
-    openPreview(url);
-  });
-
-  $("#lot-dl", wrap)?.addEventListener("click", async ()=>{
-    const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
-    const lot = ($("#lot-id", wrap).value || "").trim();
-    const url = await makeLotLabelDataURL(item, qty, lot);
-    const lotSafe  = lot ? `_${sanitizeFilename(lot)}` : "";
-    const codeSafe = sanitizeFilename(item.code);
-    const a = document.createElement("a");
-    a.href = url; a.download = `LOT_${codeSafe}${lotSafe}_${qty}.png`; a.click();
-  });
-
-  wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
-}
 
   function showItemDetail(it) {
     const card = $("#card-item-detail"); if (!card) return;
@@ -499,158 +496,155 @@ function openLotQRModal(item) {
   }
 
   // ---------- LABEL CANVAS (wrap teks & grid cetak) ----------
-async function makeItemLabelDataURL(item) {
-  const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
-  const QUIET = 16, qrSize = 136, gapQR = 14;
-  const c = document.createElement("canvas"); c.width = W; c.height = H;
-  const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
+  async function makeItemLabelDataURL(item) {
+    const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
+    const QUIET = 16, qrSize = 136, gapQR = 14;
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
 
-  // --- border luar (garis tajam 0.5px align) ---
-  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
-  g.strokeStyle = "#000"; g.lineWidth = 1;
-  g.strokeRect(0.5, 0.5, W - 1, H - 1);
+    // border
+    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+    g.strokeStyle = "#000"; g.lineWidth = 1;
+    g.strokeRect(0.5, 0.5, W - 1, H - 1);
 
-  // --- kolom kiri (gambar) ---
-  const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
-  roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
-  await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
+    // kolom kiri (gambar)
+    const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
+    roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
+    await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
 
-  // --- QR ---
-  const colStart = pad + imgW + gap;
-  const qy = pad + ((H - 2 * pad) - qrSize) / 2;
-  const qx = colStart + gapQR + QUIET;
-  g.fillStyle = "#fff";
-  g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
-  try {
-    const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
-    const im = new Image(); im.src = du; await imgLoaded(im);
-    g.drawImage(im, qx, qy, qrSize, qrSize);
-  } catch {}
-
-  // --- grid kanan ---
-  const colQRW = qrSize + 2 * QUIET;
-  const gridX  = colStart + gapQR + colQRW + gapQR;
-  const cellH  = (H - 2 * pad) / 3;
-  g.strokeStyle = "#000"; g.lineWidth = 1;
-  g.strokeRect(gridX + 0.5, pad + 0.5, W - gridX - pad - 1, H - 2 * pad - 1);
-  for (let i = 1; i <= 2; i++) {
-    const y = pad + cellH * i;
-    g.beginPath(); g.moveTo(gridX + 0.5, y + 0.5); g.lineTo(W - pad - 0.5, y + 0.5); g.stroke();
-  }
-
-  // --- label & nilai (rapi & tengah) ---
-  const labelWidth = 96;             // ruang label (kolom kiri di grid)
-  const labelX = gridX + 10;
-  const valX   = gridX + 10 + labelWidth;   // mulai nilai setelah label
-  const valMaxW = W - pad - valX - 10;
-
-  const LBL_FONT = '600 14px "Noto Sans JP", system-ui';
-  const VAL_WEIGHT = "700";
-
-  const cells = [
-    { title: "コード：",     value: String(item.code || ""),            base: 20, min: 11 },
-    { title: "商品名：",     value: String(item.name || ""),            base: 22, min: 11 },
-    { title: "部門／置場：", value: [item.department||"", item.location? "／"+String(item.location).toUpperCase():""].join(""), base: 18, min: 11 }
-  ];
-
-  cells.forEach((cell, i) => {
-    const yTop = pad + i * cellH;
-    // label (vertikal center)
-    g.font = LBL_FONT; g.fillStyle = "#000";
-    const labelH = 14; // dari font di atas
-    const ly = yTop + (cellH - labelH) / 2;
-    g.textBaseline = "top"; g.textAlign = "left";
-    g.fillText(cell.title, labelX, Math.round(ly));
-
-    // nilai (wrap & center vertikal)
-    drawWrapBoxVCenter(
-      g, cell.value, valX, yTop + 4, valMaxW, cellH - 8,
-      { base: cell.base, min: cell.min, lineGap: 3, weight: VAL_WEIGHT }
-    );
-  });
-
-  return c.toDataURL("image/png");
-
-  // ===== helpers =====
-  function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
-    ctx.save(); ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-    if (fill)   { ctx.fillStyle = fillColor || "#eef"; ctx.fill(); }
-    if (stroke) { ctx.strokeStyle = border || "#000"; ctx.stroke(); }
-    ctx.restore();
-  }
-  function imgLoaded(im){ return new Promise(res => { im.onload = res; im.onerror = res; }); }
-  async function drawImageIfAny(ctx, url, x, y, w, h, rr){
-    if (!url){
-      ctx.save(); ctx.fillStyle="#3B82F6"; ctx.font='bold 28px "Noto Sans JP", system-ui';
-      ctx.textAlign="center"; ctx.textBaseline="middle";
-      ctx.fillText("画像", x + w/2, y + h/2);
-      ctx.restore(); return;
-    }
-    try{
-      const im = new Image(); im.crossOrigin="anonymous"; im.src=url; await imgLoaded(im);
-      const s = Math.min(w/im.width, h/im.height), iw = im.width*s, ih = im.height*s;
-      const ix = x + (w - iw)/2, iy = y + (h - ih)/2;
-      ctx.save(); ctx.beginPath();
-      ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr);
-      ctx.arcTo(x + w, y + h, x, y + h, rr); ctx.arcTo(x, y + h, x, y, rr);
-      ctx.arcTo(x, y, x + w, y, rr); ctx.closePath(); ctx.clip();
-      ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
+    // QR
+    const colStart = pad + imgW + gap;
+    const qy = pad + ((H - 2 * pad) - qrSize) / 2;
+    const qx = colStart + gapQR + QUIET;
+    g.fillStyle = "#fff";
+    g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
+    try {
+      const codeNorm = normalizeCodeDash(item.code);
+      const du = await generateQrDataUrl(`ITEM|${codeNorm}`, qrSize);
+      const im = new Image(); im.src = du; await imgLoaded(im);
+      g.drawImage(im, qx, qy, qrSize, qrSize);
     } catch {}
-  }
 
-  // token-aware + pecah per karakter bila perlu (CJK)
-  function measureLines(ctx, text, maxW){
-    const tokens = String(text ?? "").split(/(\s+)/);
-    const lines = []; let line = "";
-    const push = (tok) => {
-      if (ctx.measureText(tok).width <= maxW) {
-        const t = line + tok;
-        if (!line || ctx.measureText(t).width <= maxW) line = t;
-        else { lines.push(line.trim()); line = tok.trimStart(); }
-      } else {
-        for (const ch of Array.from(tok)) {
-          const t = line + ch;
-          if (!line || ctx.measureText(t).width <= maxW) line = t;
-          else { lines.push(line.trim()); line = ch; }
-        }
+    // grid kanan
+    const colQRW = qrSize + 2 * QUIET;
+    const gridX  = colStart + gapQR + colQRW + gapQR;
+    const cellH  = (H - 2 * pad) / 3;
+    g.strokeStyle = "#000"; g.lineWidth = 1;
+    g.strokeRect(gridX + 0.5, pad + 0.5, W - gridX - pad - 1, H - 2 * pad - 1);
+    for (let i = 1; i <= 2; i++) {
+      const y = pad + cellH * i;
+      g.beginPath(); g.moveTo(gridX + 0.5, y + 0.5); g.lineTo(W - pad - 0.5, y + 0.5); g.stroke();
+    }
+
+    // label & nilai
+    const labelWidth = 96;
+    const labelX = gridX + 10;
+    const valX   = gridX + 10 + labelWidth;
+    const valMaxW = W - pad - valX - 10;
+
+    const LBL_FONT = '600 14px "Noto Sans JP", system-ui';
+    const VAL_WEIGHT = "700";
+
+    const cells = [
+      { title: "コード：",     value: String(item.code || ""),            base: 20, min: 11 },
+      { title: "商品名：",     value: String(item.name || ""),            base: 22, min: 11 },
+      { title: "部門／置場：", value: [item.department||"", item.location? "／"+String(item.location).toUpperCase():""].join(""), base: 18, min: 11 }
+    ];
+
+    cells.forEach((cell, i) => {
+      const yTop = pad + i * cellH;
+      // label
+      g.font = LBL_FONT; g.fillStyle = "#000";
+      const labelH = 14;
+      const ly = yTop + (cellH - labelH) / 2;
+      g.textBaseline = "top"; g.textAlign = "left";
+      g.fillText(cell.title, labelX, Math.round(ly));
+
+      // nilai
+      drawWrapBoxVCenter(
+        g, cell.value, valX, yTop + 4, valMaxW, cellH - 8,
+        { base: cell.base, min: cell.min, lineGap: 3, weight: VAL_WEIGHT }
+      );
+    });
+
+    return c.toDataURL("image/png");
+
+    // helpers
+    function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
+      ctx.save(); ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+      if (fill)   { ctx.fillStyle = fillColor || "#eef"; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = border || "#000"; ctx.stroke(); }
+      ctx.restore();
+    }
+    function imgLoaded(im){ return new Promise(res => { im.onload = res; im.onerror = res; }); }
+    async function drawImageIfAny(ctx, url, x, y, w, h, rr){
+      if (!url){
+        ctx.save(); ctx.fillStyle="#3B82F6"; ctx.font='bold 28px "Noto Sans JP", system-ui';
+        ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText("画像", x + w/2, y + h/2);
+        ctx.restore(); return;
       }
-    };
-    tokens.forEach(push);
-    if (line) lines.push(line.trim());
-    return lines;
-  }
+      try{
+        const im = new Image(); im.crossOrigin="anonymous"; im.src=url; await imgLoaded(im);
+        const s = Math.min(w/im.width, h/im.height), iw = im.width*s, ih = im.height*s;
+        const ix = x + (w - iw)/2, iy = y + (h - ih)/2;
+        ctx.save(); ctx.beginPath();
+        ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr); ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr); ctx.closePath(); ctx.clip();
+        ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
+      } catch {}
+    }
 
-   function drawWrapBoxVCenter(ctx, text, x, yTop, maxW, maxH, opt={}){
-    const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
-    const fam  = '"Noto Sans JP", system-ui';
-    const weight = opt.weight || "normal";
-    let size = base, lines;
-    while (true){
-      ctx.font = `${weight} ${size}px ${fam}`;
-      lines = measureLines(ctx, text, maxW);
+    function measureLines(ctx, text, maxW){
+      const tokens = String(text ?? "").split(/(\s+)/);
+      const lines = []; let line = "";
+      const push = (tok) => {
+        if (ctx.measureText(tok).width <= maxW) {
+          const t = line + tok;
+          if (!line || ctx.measureText(t).width <= maxW) line = t;
+          else { lines.push(line.trim()); line = tok.trimStart(); }
+        } else {
+          for (const ch of Array.from(tok)) {
+            const t = line + ch;
+            if (!line || ctx.measureText(t).width <= maxW) line = t;
+            else { lines.push(line.trim()); line = ch; }
+          }
+        }
+      };
+      tokens.forEach(push);
+      if (line) lines.push(line.trim());
+      return lines;
+    }
+
+    function drawWrapBoxVCenter(ctx, text, x, yTop, maxW, maxH, opt={}){
+      const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
+      const fam  = '"Noto Sans JP", system-ui';
+      const weight = opt.weight || "normal";
+      let size = base, lines;
+      while (true){
+        ctx.font = `${weight} ${size}px ${fam}`;
+        lines = measureLines(ctx, text, maxW);
+        const totalH = lines.length * size + (lines.length - 1) * gap;
+        if (totalH <= maxH || size <= min) break;
+        size -= 1;
+      }
       const totalH = lines.length * size + (lines.length - 1) * gap;
-      if (totalH <= maxH || size <= min) break;
-      size -= 1;
+      let y = yTop + (maxH - totalH) / 2;
+      ctx.textBaseline = "top"; ctx.textAlign = "left"; ctx.fillStyle = "#000";
+      for (const ln of lines){
+        ctx.fillText(ln, x, Math.round(y));
+        y += size + gap;
+        if (y - yTop > maxH) break;
+      }
     }
-    const totalH = lines.length * size + (lines.length - 1) * gap;
-    let y = yTop + (maxH - totalH) / 2;
-    ctx.textBaseline = "top"; ctx.textAlign = "left"; ctx.fillStyle = "#000";
-    for (const ln of lines){
-      ctx.fillText(ln, x, Math.round(y));
-      y += size + gap;
-      if (y - yTop > maxH) break;
-    }
-  }
-} // ← ini MENUTUP makeItemLabelDataURL (jangan ada '}' lagi setelah ini)
-
-
-
+  } // end makeItemLabelDataURL
 
   async function generateQrDataUrl(text, size) {
     await ensureQRCode();
@@ -682,42 +676,42 @@ async function makeItemLabelDataURL(item) {
       })();
     });
   }
-// === LOT QR: label dataURL (mirip item, ada info lot & qty/box) ===
-async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
-  // pakai kanvas item sebagai base, lalu tulis keterangan tambahan
-  const base = await makeItemLabelDataURL(item);
-  const im = new Image(); im.src = base; await new Promise(r=>{im.onload=r; im.onerror=r;});
-  const W = im.width, H = im.height;
-  const c = document.createElement("canvas"); c.width=W; c.height=H;
-  const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
-  g.drawImage(im, 0, 0);
 
-  // Tulisan tambahan di area kanan atas (ringkas & jelas)
-  g.fillStyle = "#111";
-  g.font = '700 18px "Noto Sans JP", system-ui';
-  const line1 = `箱あたり：${qtyPerBox} pcs`;
-  const line2 = lotId ? `ロット：${lotId}` : "";
-  g.fillText(line1, W - 260, 36);
-  if (line2) g.fillText(line2, W - 260, 62);
+  // === LOT QR: label dataURL (mirip item, ada info lot & qty/box) ===
+  async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
+    const base = await makeItemLabelDataURL(item);
+    const im = new Image(); im.src = base; await new Promise(r=>{im.onload=r; im.onerror=r;});
+    const W = im.width, H = im.height;
+    const c = document.createElement("canvas"); c.width=W; c.height=H;
+    const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
+    g.drawImage(im, 0, 0);
 
-  // QR berbeda: LOT|
-  try {
-    const du = await generateQrDataUrl(
-      lotId ? `LOT|${item.code}|${qtyPerBox}|${lotId}` : `LOT|${item.code}|${qtyPerBox}`,
-      136
-    );
-    const qr = new Image(); qr.src = du; await new Promise(r=>{qr.onload=r; qr.onerror=r;});
-    // timpa QR default (posisi sama seperti makeItemLabelDataURL)
-    const pad = 18, imgW = 200, gap = 16, QUIET = 16, qrSize = 136, gapQR = 14;
-    const colStart = pad + imgW + gap;
-    const qy = pad + ((H - 2 * pad) - qrSize) / 2;
-    const qx = colStart + gapQR + QUIET;
-    g.fillStyle = "#fff"; g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2*QUIET, qrSize + 2*QUIET);
-    g.drawImage(qr, qx, qy, qrSize, qrSize);
-  } catch {}
+    // Tulisan tambahan
+    g.fillStyle = "#111";
+    g.font = '700 18px "Noto Sans JP", system-ui';
+    const line1 = `箱あたり：${qtyPerBox} pcs`;
+    const line2 = lotId ? `ロット：${lotId}` : "";
+    g.fillText(line1, W - 260, 36);
+    if (line2) g.fillText(line2, W - 260, 62);
 
-  return c.toDataURL("image/png");
-}
+    // QR LOT
+    try {
+      const codeNorm = normalizeCodeDash(item.code);
+      const du = await generateQrDataUrl(
+        lotId ? `LOT|${codeNorm}|${qtyPerBox}|${lotId}` : `LOT|${codeNorm}|${qtyPerBox}`,
+        136
+      );
+      const qr = new Image(); qr.src = du; await new Promise(r=>{qr.onload=r; qr.onerror=r;});
+      const pad = 18, imgW = 200, gap = 16, QUIET = 16, qrSize = 136, gapQR = 14;
+      const colStart = pad + imgW + gap;
+      const qy = pad + ((H - 2 * pad) - qrSize) / 2;
+      const qx = colStart + gapQR + QUIET;
+      g.fillStyle = "#fff"; g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2*QUIET, qrSize + 2*QUIET);
+      g.drawImage(qr, qx, qy, qrSize, qrSize);
+    } catch {}
+
+    return c.toDataURL("image/png");
+  }
 
   /* -------------------- Users -------------------- */
   async function renderUsers() {
@@ -948,6 +942,36 @@ async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
     }
   }
 
+  // === LOT & ITEM parser (satu tempat) ===
+  function parseScanText(txt) {
+    const s = String(txt || "").trim();
+
+    // ITEM|CODE
+    if (/^ITEM\|/i.test(s)) {
+      const code = normalizeCodeDash((s.split("|")[1] || "").trim());
+      return { kind: "item", code };
+    }
+    // LOT|CODE|QTY|LOT?
+    if (/^LOT\|/i.test(s)) {
+      const [, codeRaw, qtyRaw, lotRaw] = s.split("|");
+      const code = normalizeCodeDash(codeRaw || "");
+      const qty  = Number(qtyRaw || 0) || 0;
+      const lot  = (lotRaw || "").trim();
+      if (code && qty > 0) return { kind: "lot", code, qty, lot };
+    }
+    // JSON
+    try {
+      const o = JSON.parse(s);
+      if ((o.t === "item" || o.type === "item") && o.code) {
+        return { kind: "item", code: normalizeCodeDash(String(o.code)) };
+      }
+      if ((o.t === "lot" || o.type === "lot") && o.code && Number(o.qty || 0) > 0) {
+        return { kind: "lot", code: normalizeCodeDash(String(o.code)), qty: Number(o.qty), lot: String(o.lot || "") };
+      }
+    } catch {}
+    return null;
+  }
+
   (function bindIO() {
     const btnStart = $("#btn-io-scan"), btnStop = $("#btn-io-stop"), area = $("#io-scan-area");
     if (!btnStart || !btnStop || !area) return;
@@ -956,60 +980,58 @@ async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
       try {
         area.textContent = "カメラ起動中…";
         IO_SCANNER = await startBackCameraScan("io-scan-area", async (text) => {
-  const parsed = parseScanText(String(text || ""));
-  if (!parsed) return;
+          const parsed = parseScanText(String(text || ""));
+          if (!parsed) return;
 
-  if (parsed.kind === "item") {
-    const code = parsed.code;
-    $("#io-code").value = code;
-    await findItemIntoIO(code);
-    // Konfirmasi & biarkan user tentukan qty secara manual (item satuan)
-    if (confirm("この商品を追加してもよろしいですか？")) {
-      // Tidak auto-submit untuk item satuan (tetap sesuai flow lama)
-      // (User bisa langsung tekan 登録)
-    }
-    return;
-  }
+          if (parsed.kind === "item") {
+            const code = parsed.code;
+            $("#io-code").value = code;
+            await findItemIntoIO(code);
+            if (confirm("この商品を追加してもよろしいですか？")) {
+              // user isi qty lalu submit manual
+            }
+            return;
+          }
 
-  if (parsed.kind === "lot") {
-    const { code, qty, lot } = parsed;
-    $("#io-code").value = code;
-    await findItemIntoIO(code);
+          if (parsed.kind === "lot") {
+            const { code, qty, lot } = parsed;
+            $("#io-code").value = code;
+            await findItemIntoIO(code);
 
-    // Set jenis, unit, qty sesuai preferensi form saat itu
-    const unit = $("#io-unit").value || "pcs";
-    const type = $("#io-type").value || "IN";
-    const who  = getCurrentUser();
-    if (!who) return toast("ログイン情報がありません。");
+            const unit = $("#io-unit").value || "pcs";
+            const type = $("#io-type").value || "IN";
+            const who  = getCurrentUser();
+            if (!who) return toast("ログイン情報がありません。");
 
-    if (confirm("この商品を追加してもよろしいですか？")) {
-      try {
-        const r = await api("log", { method: "POST", body: {
-          userId: who.id, code, qty: Number(qty || 0), unit, type,
-          note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
-        }});
-        if (r?.ok) {
-          toast("登録しました");
-          $("#io-qty").value = "";                // bersihkan qty input
-          await findItemIntoIO(code);             // refresh harga/stock
-          renderDashboard();
-        } else {
-          toast(r?.error || "登録失敗");
-        }
-      } catch(e){ toast("登録失敗: " + (e?.message || e)); }
-    }
-    return;
-  }
-});
-
+            if (confirm("この商品を追加してもよろしいですか？")) {
+              try {
+                const r = await api("log", { method: "POST", body: {
+                  userId: who.id, code, qty: Number(qty || 0), unit, type,
+                  note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
+                }});
+                if (r?.ok) {
+                  toast("登録しました");
+                  $("#io-qty").value = "";
+                  await findItemIntoIO(code);
+                  renderDashboard();
+                } else {
+                  toast(r?.error || "登録失敗");
+                }
+              } catch(e){ toast("登録失敗: " + (e?.message || e)); }
+            }
+            return;
+          }
+        });
       } catch (e) { toast(e?.message || String(e)); }
     });
+
     btnStop.addEventListener("click", async () => {
       try { await IO_SCANNER?.stop?.(); IO_SCANNER?.clear?.(); } catch { }
       area.innerHTML = "カメラ待機中…";
     });
 
-    $("#btn-io-lookup")?.addEventListener("click", () => {
+    $("#btn-io-lookup")?.addEventListener("click", (e) => {
+      e.preventDefault();
       const code = ($("#io-code").value || "").trim();
       if (code) findItemIntoIO(code);
     });
@@ -1045,36 +1067,6 @@ async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
   const ST = { rows: new Map() }; // code => {code,name,book,qty,diff}
   window.ST = ST;
 
- // === LOT QR: parser baru untuk ITEM/LOT ===
-function parseScanText(txt) {
-  const s = String(txt || "");
-  // Format ringkas: ITEM|CODE
-  if (/^ITEM\|/i.test(s)) {
-    const code = (s.split("|")[1] || "").trim();
-    return { kind: "item", code };
-  }
-  // Format ringkas: LOT|CODE|QTY|LOTID(opsional)
-  if (/^LOT\|/i.test(s)) {
-    const [, codeRaw, qtyRaw, lotRaw] = s.split("|");
-    const code = String(codeRaw || "").trim();
-    const qty  = Number(qtyRaw || 0) || 0;
-    const lot  = (lotRaw || "").trim();
-    if (code && qty > 0) return { kind: "lot", code, qty, lot };
-  }
-  // Format JSON
-  try {
-    const o = JSON.parse(s);
-    if ((o.t === "item" || o.type === "item") && o.code) {
-      return { kind: "item", code: String(o.code) };
-    }
-    if ((o.t === "lot" || o.type === "lot") && o.code && Number(o.qty || 0) > 0) {
-      return { kind: "lot", code: String(o.code), qty: Number(o.qty), lot: String(o.lot || "") };
-    }
-  } catch {}
-  return null;
-}
-
-
   async function addOrUpdateStocktake(code, realQty) {
     if (!code) return;
     let item = _ITEMS_CACHE.find(x => String(x.code) === String(code));
@@ -1086,20 +1078,19 @@ function parseScanText(txt) {
     ST.rows.set(code, { code, name: item.name, department: (item.department || ""), book, qty, diff });
     renderShelfTable();
   }
-// === LOT QR: helper increment qty di stocktake saat scan lot ===
-async function addOrIncStocktake(code, delta) {
-  if (!code || !delta) return;
-  let item = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-  if (!item) { const r = await api("itemByCode", { method: "POST", body: { code } }); if (r?.ok) item = r.item; }
-  if (!item) return toast("アイテムが見つかりません: " + code);
+  async function addOrIncStocktake(code, delta) {
+    if (!code || !delta) return;
+    let item = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+    if (!item) { const r = await api("itemByCode", { method: "POST", body: { code } }); if (r?.ok) item = r.item; }
+    if (!item) return toast("アイテムが見つかりません: " + code);
 
-  const row = ST.rows.get(code);
-  const book = Number(item.stock || 0);
-  const currentQty = row ? Number(row.qty || 0) : book;
-  const newQty = currentQty + Number(delta);
-  ST.rows.set(code, { code, name: item.name, department: (item.department || ""), book, qty: newQty, diff: newQty - book });
-  renderShelfTable();
-}
+    const row = ST.rows.get(code);
+    const book = Number(item.stock || 0);
+    const currentQty = row ? Number(row.qty || 0) : book;
+    const newQty = currentQty + Number(delta);
+    ST.rows.set(code, { code, name: item.name, department: (item.department || ""), book, qty: newQty, diff: newQty - book });
+    renderShelfTable();
+  }
 
   function renderShelfTable() {
     const tbody = $("#tbl-stocktake"); if (!tbody) return;
@@ -1231,25 +1222,23 @@ async function addOrIncStocktake(code, delta) {
       try {
         area.textContent = "カメラ起動中…";
         SHELF_SCANNER = await startBackCameraScan("scan-area", async (text) => {
-  const p = parseScanText(String(text || ""));
-  if (!p) return;
+          const p = parseScanText(String(text || ""));
+          if (!p) return;
 
-  if (p.kind === "item") {
-    // Item: tetap seperti sebelumnya (set ke buku/qty eksisting), konfirmasi dahulu
-    if (confirm("この商品を追加してもよろしいですか？")) {
-      await addOrUpdateStocktake(p.code, ST.rows.get(p.code)?.qty ?? undefined);
-    }
-    return;
-  }
+          if (p.kind === "item") {
+            if (confirm("この商品を追加してもよろしいですか？")) {
+              await addOrUpdateStocktake(p.code, ST.rows.get(p.code)?.qty ?? undefined);
+            }
+            return;
+          }
 
-  if (p.kind === "lot") {
-    // Lot: increment +qtyPerBox per scan
-    if (confirm("この商品を追加してもよろしいですか？")) {
-      await addOrIncStocktake(p.code, Number(p.qty || 0));
-    }
-    return;
-  }
-});
+          if (p.kind === "lot") {
+            if (confirm("この商品を追加してもよろしいですか？")) {
+              await addOrIncStocktake(p.code, Number(p.qty || 0));
+            }
+            return;
+          }
+        });
 
       } catch (e) { toast(e?.message || String(e)); }
     });
@@ -1314,31 +1303,9 @@ async function addOrIncStocktake(code, delta) {
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderUsers();
   });
 
-  // Items export (CSV & Excel) — (dibiarkan ganda jika memang sudah ada tombol gandanya)
-  
-
-  $("#btn-items-xlsx")?.addEventListener("click", async () => {
-    try {
-      const list = await api("items", { method: "GET" });
-      const arr = Array.isArray(list) ? list : (list?.data || []);
-      const rows = arr.map(i => ({
-        code: i.code,
-        name: i.name || "",
-        price: Number(i.price || 0),
-        stock: Number(i.stock || 0),
-        min: Number(i.min || 0),
-        location: String(i.location || "").toUpperCase(),
-        img: i.img || ""
-      }));
-      const ws = XLSX.utils.json_to_sheet(rows, { header: ["code","name","price","stock","min","location","img"] });
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "items");
-      XLSX.writeFile(wb, "items.xlsx");
-    } catch { alert("エクスポート失敗"); }
-  });
-
   // Items export (CSV) + department
-  $("#btn-items-export")?.addEventListener("click", async () => {
+  $("#btn-items-export")?.addEventListener("click", async (e) => {
+    e.preventDefault();
     try {
       const list = await api("items", { method: "GET" });
       const arr = Array.isArray(list) ? list : (list?.data || []);
@@ -1362,8 +1329,9 @@ async function addOrIncStocktake(code, delta) {
     } catch { alert("エクスポート失敗"); }
   });
 
-  // Items export (Excel) + department
-  $("#btn-items-xlsx")?.addEventListener("click", async () => {
+  // Items export (Excel) + department (hanya SATU handler)
+  $("#btn-items-xlsx")?.addEventListener("click", async (e) => {
+    e.preventDefault();
     try {
       const list = await api("items", { method: "GET" });
       const arr = Array.isArray(list) ? list : (list?.data || []);
@@ -1439,7 +1407,6 @@ async function addOrIncStocktake(code, delta) {
   // ---------- Items Reload & Auto-refresh ----------
   (function(){
     let itemsAutoTimer = null;
-    let itemsAutoSec   = 0;
 
     function isItemsViewActive(){
       const v = document.getElementById("view-items");
@@ -1471,7 +1438,6 @@ async function addOrIncStocktake(code, delta) {
     document.querySelectorAll('[data-autorefresh]').forEach(el=>{
       el.addEventListener("click", ()=>{
         const sec = Number(el.getAttribute("data-autorefresh") || "0");
-        itemsAutoSec = sec;
         if (itemsAutoTimer) { clearInterval(itemsAutoTimer); itemsAutoTimer = null; }
         const btn = document.getElementById("btn-items-auto");
         if (btn) btn.textContent = sec ? `Auto ${sec}s` : "Auto";
@@ -1510,7 +1476,8 @@ async function addOrIncStocktake(code, delta) {
   });
 
   // IO export/import
-  $("#btn-io-export")?.addEventListener("click", async () => {
+  $("#btn-io-export")?.addEventListener("click", async (e) => {
+    e.preventDefault();
     try {
       const raw = await api("history", { method: "GET" });
       const list = Array.isArray(raw) ? raw : (raw?.history || raw?.data || []);
@@ -1523,7 +1490,10 @@ async function addOrIncStocktake(code, delta) {
       const a = document.createElement("a"); a.href = url; a.download = "io_history.csv"; a.click(); URL.revokeObjectURL(url);
     } catch { alert("エクスポート失敗"); }
   });
-  $("#btn-io-import")?.addEventListener("click", () => $("#input-io-import")?.click());
+  $("#btn-io-import")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    $("#input-io-import")?.click();
+  });
   $("#input-io-import")?.addEventListener("change", async (e) => {
     const f = e.target.files?.[0]; if (!f) return;
     const text = await f.text(); const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
