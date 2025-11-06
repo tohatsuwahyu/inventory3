@@ -16,6 +16,7 @@
     else el.classList.add("d-none");
   }
 
+  // --- API helper (perbaikan error handling) ---
   async function api(action, { method = "GET", body = null, silent = false } = {}) {
     if (!window.CONFIG || !CONFIG.BASE_URL) { throw new Error("config.js BASE_URL belum di-set"); }
     const apikey = encodeURIComponent(CONFIG.API_KEY || "");
@@ -25,11 +26,19 @@
       if (method === "GET") {
         const r = await fetch(url, { cache: "no-cache" });
         if (!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
-        const data = await r.json();if (data && data.ok === false) throw new Error(data.error || "API error");return data;
+        const data = await r.json();
+        if (data && data.ok === false) throw new Error(data.error || "API error");
+        return data;
       } else {
-        const r = await fetch(url, {method: "POST",headers: { "Content-Type": "application/json" },body: JSON.stringify({ ...(body || {}), apikey: CONFIG.API_KEY })});
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...(body || {}), apikey: CONFIG.API_KEY })
+        });
         if (!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
-        const data = await r.json();if (data && data.ok === false) throw new Error(data.error || "API error");return data;
+        const data = await r.json();
+        if (data && data.ok === false) throw new Error(data.error || "API error");
+        return data;
       }
     } finally { if (!silent) setLoading(false); }
   }
@@ -67,7 +76,6 @@
     for (const u of cdns) { try { await loadScriptOnce(u); if (window.Html5Qrcode) return; } catch { } }
     throw new Error("html5-qrcode tidak tersedia");
   }
-
   async function confirmJPAdd() {
     return window.confirm("この商品を追加してもよろしいですか？");
   }
@@ -123,57 +131,57 @@
     const who = getCurrentUser();
     if (who) $("#who").textContent = `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`;
 
-    try {
-      const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([api("items", { method: "GET" }),api("users", { method: "GET" }),api("statsMonthlySeries", { method: "GET" })]);
+    const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([
+      api("items", { method: "GET" }),
+      api("users", { method: "GET" }),
+      api("statsMonthlySeries", { method: "GET" })
+    ]);
 
-      const items = Array.isArray(itemsRaw) ? itemsRaw : [];
-      const users = Array.isArray(usersRaw) ? usersRaw : [];
-      const series = Array.isArray(seriesRaw) ? seriesRaw : [];
+    const items = Array.isArray(itemsRaw) ? itemsRaw : [];
+    const users = Array.isArray(usersRaw) ? usersRaw : [];
+    const series = Array.isArray(seriesRaw) ? seriesRaw : [];
 
-      $("#metric-total-items").textContent = items.length;
-      const low = items.filter(it => Number(it.stock || 0) <= Number(it.min || 0)).length;
-      $("#metric-low-stock").textContent = low;
-      $("#metric-users").textContent = users.length;
+    $("#metric-total-items").textContent = items.length;
+    const low = items.filter(it => Number(it.stock || 0) <= Number(it.min || 0)).length;
+    $("#metric-low-stock").textContent = low;
+    $("#metric-users").textContent = users.length;
 
-      const ctx1 = $("#chart-monthly");
-      if (ctx1 && window.Chart) {
-        chartLine?.destroy();
-        chartLine = new Chart(ctx1, {
-          type: "line",
-          data: {
-            labels: series.map(s => s.month || ""),
-            datasets: [
-              { label: "IN", data: series.map(s => Number(s.in || 0)), borderWidth: 2 },
-              { label: "OUT", data: series.map(s => Number(s.out || 0)), borderWidth: 2 }
-            ]
-          },
-          options: { responsive: true, maintainAspectRatio: false }
-        });
-      }
-      const ctx2 = $("#chart-pie");
-      if (ctx2 && window.Chart) {
-        chartPie?.destroy();
-        const last = series.length ? series[series.length - 1] : { in: 0, out: 0 };
-        chartPie = new Chart(ctx2, {
-          type: "pie",
-          data: { labels: ["IN", "OUT"], datasets: [{ data: [Number(last.in || 0), Number(last.out || 0)] }] },
-          options: { responsive: true, maintainAspectRatio: false }
-        });
-      }
-
-      $("#btn-export-mov")?.addEventListener("click", () => {
-        const csv = ["month,in,out"].concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(","))).join("\n");
-        const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = "monthly.csv"; a.click(); URL.revokeObjectURL(url);
-      }, { once: true });
-    } catch {
-      toast("ダッシュボードの読み込みに失敗しました。");
+    const ctx1 = $("#chart-monthly");
+    if (ctx1) {
+      chartLine?.destroy();
+      chartLine = new Chart(ctx1, {
+        type: "line",
+        data: {
+          labels: series.map(s => s.month || ""),
+          datasets: [
+            { label: "IN", data: series.map(s => Number(s.in || 0)), borderWidth: 2 },
+            { label: "OUT", data: series.map(s => Number(s.out || 0)), borderWidth: 2 }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
     }
+    const ctx2 = $("#chart-pie");
+    if (ctx2) {
+      chartPie?.destroy();
+      const last = series.length ? series[series.length - 1] : { in: 0, out: 0 };
+      chartPie = new Chart(ctx2, {
+        type: "pie",
+        data: { labels: ["IN", "OUT"], datasets: [{ data: [Number(last.in || 0), Number(last.out || 0)] }] },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    $("#btn-export-mov")?.addEventListener("click", () => {
+      const csv = ["month,in,out"].concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(","))).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = "monthly.csv"; a.click(); URL.revokeObjectURL(url);
+    }, { once: true });
   }
 
   /* -------------------- Items -------------------- */
   let _ITEMS_CACHE = [];
-  function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[m])); }
+  function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", "&gt;": "&gt;", "\"": "&quot;", "'": "&#39;" }[m])); }
   function escapeAttr(s) { return escapeHtml(s); }
 
   function tplItemRow(it) {
@@ -203,63 +211,59 @@
   }
 
   async function renderItems() {
-    try {
-      const list = await api("items", { method: "GET" });
-      _ITEMS_CACHE = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
-      const tbody = $("#tbl-items");
-      if (!tbody) return;
-      tbody.innerHTML = _ITEMS_CACHE.map(tplItemRow).join("");
+    const list = await api("items", { method: "GET" });
+    _ITEMS_CACHE = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
+    const tbody = $("#tbl-items");
+    if (!tbody) return;
+    tbody.innerHTML = _ITEMS_CACHE.map(tplItemRow).join("");
 
-      await ensureQRCode();
-      for (const it of _ITEMS_CACHE) {
-        const holder = document.getElementById(`qr-${it.code}`);
-        if (!holder) continue; holder.innerHTML = "";
-        new QRCode(holder, { text: `ITEM|${it.code}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
+    await ensureQRCode();
+    for (const it of _ITEMS_CACHE) {
+      const holder = document.getElementById(`qr-${it.code}`);
+      if (!holder) continue; holder.innerHTML = "";
+      new QRCode(holder, { text: `ITEM|${it.code}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
+    }
+
+    tbody.onclick = async (e) => {
+      const btn = e.target.closest("button"); if (!btn) return;
+      const code = btn.getAttribute("data-code");
+      if (btn.classList.contains("btn-edit")) openEditItem(code);
+      else if (btn.classList.contains("btn-del")) {
+        if (!isAdmin()) return toast("Akses ditolak (admin only)");
+        if (!confirm("削除しますか？")) return;
+        const r = await api("deleteItem", { method: "POST", body: { code } });
+        r?.ok ? renderItems() : toast(r?.error || "削除失敗");
+      } else if (btn.classList.contains("btn-dl")) {
+        const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+        const url = await makeItemLabelDataURL(it);
+        const a = document.createElement("a"); a.href = url; a.download = `label_${it.code}.png`; a.click();
+      } else if (btn.classList.contains("btn-preview")) {
+        const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+        const url = await makeItemLabelDataURL(it); openPreview(url);
+      } else if (btn.classList.contains("btn-lotqr")) {
+        const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+        openLotQRModal(it);
       }
+    };
 
-      tbody.onclick = async (e) => {
-        const btn = e.target.closest("button"); if (!btn) return;
-        const code = btn.getAttribute("data-code");
-        if (btn.classList.contains("btn-edit")) openEditItem(code);
-        else if (btn.classList.contains("btn-del")) {
-          if (!isAdmin()) return toast("Akses ditolak (admin only)");
-          if (!confirm("削除しますか？")) return;
-          const r = await api("deleteItem", { method: "POST", body: { code } });
-          r?.ok ? renderItems() : toast(r?.error || "削除失敗");
-        } else if (btn.classList.contains("btn-dl")) {
-          const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-          const url = await makeItemLabelDataURL(it);
-          const a = document.createElement("a"); a.href = url; a.download = `label_${it.code}.png`; a.click();
-        } else if (btn.classList.contains("btn-preview")) {
-          const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-          const url = await makeItemLabelDataURL(it); openPreview(url);
-        } else if (btn.classList.contains("btn-lotqr")) {
-          const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-          openLotQRModal(it);
-        }
-      };
-
-      $$("#tbl-items .link-item").forEach(a => {
-        a.addEventListener("click", (ev) => {
-          ev.preventDefault();
-          const code = a.getAttribute("data-code");
-          const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-          showItemDetail(it);
-        });
+    $$("#tbl-items .link-item").forEach(a => {
+      a.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const code = a.getAttribute("data-code");
+        const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+        showItemDetail(it);
       });
+    });
 
-      $("#items-search")?.addEventListener("input", (e) => {
-        const q = (e.target.value || "").toLowerCase();
-        $$("#tbl-items tr").forEach(tr => {
-          const name = (tr.children[2]?.textContent || "").toLowerCase();
-          const code = (tr.children[1]?.textContent || "").toLowerCase();
-          tr.style.display = (name.includes(q) || code.includes(q)) ? "" : "none";
-        });
+    $("#items-search")?.addEventListener("input", (e) => {
+      const q = (e.target.value || "").toLowerCase();
+      $$("#tbl-items tr").forEach(tr => {
+        const name = (tr.children[2]?.textContent || "").toLowerCase();
+        const code = (tr.children[1]?.textContent || "").toLowerCase();
+        tr.style.display = (name.includes(q) || code.includes(q)) ? "" : "none";
       });
-
-    } catch { toast("商品一覧の読み込みに失敗しました。"); }
+    });
   }
-  window.renderItems = renderItems;
 
   function openEditItem(code) {
     if (!isAdmin()) return toast("Akses ditolak (admin only)");
@@ -281,9 +285,8 @@
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="md-img" class="form-control" value="${escapeAttr(it.img || "")}"></div>
         <div class="col-md-4"><label class="form-label">置場</label>
           <input id="md-location" class="form-control text-uppercase" value="${escapeAttr(it.location || "")}" placeholder="A-01-03">
-        </div>
-        <div class="col-md-4"><label class="form-label">部門</label>
-          <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など">
+          <div class="col-md-4"><label class="form-label">部門</label>
+          <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など"></div>
         </div>
       </div>
     </div>
@@ -340,8 +343,8 @@
         <div class="col-md-8"><label class="form-label">画像URL</label><input id="nw-img" class="form-control"></div>
         <div class="col-md-4"><label class="form-label">置場</label><input id="nw-location" class="form-control text-uppercase" placeholder="A-01-03"></div>
         <div class="col-md-4"><label class="form-label">部門</label>
-          <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
-        </div>
+  <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
+</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -403,6 +406,7 @@
     w.document.write(`<img src="${url}" style="max-width:100%">`);
   }
 
+  // ----- Modal QR lot/kotak -----
   function openLotQRModal(item){
     const wrap = document.createElement("div");
     wrap.className = "modal fade";
@@ -449,7 +453,6 @@
       const url = await doRender();
       const a = document.createElement("a"); a.href = url; a.download = `lot_${item.code}.png`; a.click();
     });
-
     wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once:true });
   }
 
@@ -460,27 +463,25 @@
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
 
-    // border
     g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
-    g.strokeStyle = "#000"; g.lineWidth = 1; g.strokeRect(0.5, 0.5, W - 1, H - 1);
+    g.strokeStyle = "#000"; g.lineWidth = 1;
+    g.strokeRect(0.5, 0.5, W - 1, H - 1);
 
-    // kiri gambar
     const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
     roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
     await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
 
-    // QR
     const colStart = pad + imgW + gap;
     const qy = pad + ((H - 2 * pad) - qrSize) / 2;
     const qx = colStart + gapQR + QUIET;
-    g.fillStyle = "#fff"; g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
+    g.fillStyle = "#fff";
+    g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
     try {
       const du = await generateQrDataUrl(`ITEM|${item.code}`, qrSize);
       const im = new Image(); im.src = du; await imgLoaded(im);
       g.drawImage(im, qx, qy, qrSize, qrSize);
     } catch {}
 
-    // grid kanan
     const colQRW = qrSize + 2 * QUIET;
     const gridX  = colStart + gapQR + colQRW + gapQR;
     const cellH  = (H - 2 * pad) / 3;
@@ -491,7 +492,6 @@
       g.beginPath(); g.moveTo(gridX + 0.5, y + 0.5); g.lineTo(W - pad - 0.5, y + 0.5); g.stroke();
     }
 
-    // label & nilai
     const labelWidth = 96;
     const labelX = gridX + 10;
     const valX   = gridX + 10 + labelWidth;
@@ -499,6 +499,7 @@
 
     const LBL_FONT = '600 14px "Noto Sans JP", system-ui';
     const VAL_WEIGHT = "700";
+
     const cells = [
       { title: "コード：",     value: String(item.code || ""),            base: 20, min: 11 },
       { title: "商品名：",     value: String(item.name || ""),            base: 22, min: 11 },
@@ -512,12 +513,15 @@
       const ly = yTop + (cellH - labelH) / 2;
       g.textBaseline = "top"; g.textAlign = "left";
       g.fillText(cell.title, labelX, Math.round(ly));
-      drawWrapBoxVCenter(g, cell.value, valX, yTop + 4, valMaxW, cellH - 8, { base: cell.base, min: cell.min, lineGap: 3, weight: VAL_WEIGHT });
+      drawWrapBoxVCenter(
+        g, cell.value, valX, yTop + 4, valMaxW, cellH - 8,
+        { base: cell.base, min: cell.min, lineGap: 3, weight: VAL_WEIGHT }
+      );
     });
 
     return c.toDataURL("image/png");
 
-    // helpers
+    // ===== helpers =====
     function roundRect(ctx, x, y, w, h, r, fill, stroke, fillColor, border) {
       ctx.save(); ctx.beginPath();
       ctx.moveTo(x + r, y);
@@ -596,15 +600,20 @@
     await ensureQRCode();
     return await new Promise((resolve) => {
       const tmp = document.createElement("div");
-      Object.assign(tmp.style, { position: "fixed", left: "-9999px", top: "0", width: size + "px", height: size + "px" });
+      Object.assign(tmp.style, {
+        position: "fixed", left: "-9999px", top: "0", width: size + "px", height: size + "px"
+      });
       document.body.appendChild(tmp);
+
       new QRCode(tmp, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+
       const grab = () => {
         const node = tmp.querySelector("img,canvas");
         if (!node) return "";
         try { return node.tagName === "IMG" ? node.src : node.toDataURL("image/png"); }
         catch { return ""; }
       };
+
       let tries = 0;
       (function waitRender() {
         const url = grab();
@@ -659,7 +668,6 @@
     }catch{}
 
     const gridX = colStart + QUIET + qrSize + QUIET + gap;
-    const L1 = 80;
     g.font='600 18px "Noto Sans JP", system-ui'; g.fillStyle="#111827";
     g.fillText("ロット／箱", gridX, pad + 8);
     g.font='700 22px "Noto Sans JP", system-ui';
@@ -679,7 +687,7 @@
     g.font='600 18px "Noto Sans JP", system-ui';
     g.fillText("1箱あたり", gridX, H - pad - 44);
     g.font='700 24px "Noto Sans JP", system-ui';
-    g.fillText(`${qtyPerBox} pcs`, gridX + L1, H - pad - 44);
+    g.fillText(`${qtyPerBox} pcs`, gridX + 80, H - pad - 44);
 
     return c.toDataURL("image/png");
   }
@@ -703,21 +711,20 @@
       }
 
       const tbody = $("#tbl-userqr");
-      if (tbody) {
-        tbody.innerHTML = arr.map(u => `
-          <tr>
-            <td style="width:170px"><div id="uqr-${escapeAttr(u.id)}"></div></td>
-            <td>${escapeHtml(u.id)}</td>
-            <td>${escapeHtml(u.name)}</td>
-            <td>${escapeHtml(u.role || "user")}</td>
-            <td class="text-end">
-              <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
-                <i class="bi bi-download"></i>
-              </button>
-            </td>
-          </tr>
-        `).join("");
-      }
+      if (!tbody) return;
+      tbody.innerHTML = arr.map(u => `
+        <tr>
+          <td style="width:170px"><div id="uqr-${escapeAttr(u.id)}"></div></td>
+          <td>${escapeHtml(u.id)}</td>
+          <td>${escapeHtml(u.name)}</td>
+          <td>${escapeHtml(u.role || "user")}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
+              <i class="bi bi-download"></i>
+            </button>
+          </td>
+        </tr>
+      `).join("");
 
       await ensureQRCode();
       for (const u of arr) {
@@ -725,7 +732,7 @@
         el.innerHTML = ""; new QRCode(el, { text: `USER|${u.id}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
       }
 
-      tbody?.addEventListener("click", async (e) => {
+      tbody.addEventListener("click", async (e) => {
         const b = e.target.closest(".btn-dl-user"); if (!b) return;
         const id = b.getAttribute("data-id");
         const url = await generateQrDataUrl(`USER|${id}`, 300);
@@ -754,7 +761,7 @@
           right.innerHTML = `<div class="text-muted small">印刷するユーザーQRを左の表から選択してダウンロードしてください。</div>`;
         }
       }
-    } catch { toast("ユーザーQRの読み込みに失敗しました。"); }
+    } catch (e) { toast("ユーザーQRの読み込みに失敗しました: " + e.message); }
   }
 
   // New User (admin only)
@@ -824,7 +831,7 @@
           <td></td>
         </tr>
       `).join("");
-    } catch { toast("履歴の読み込みに失敗しました。"); }
+    } catch (e) { toast("履歴の読み込みに失敗しました: " + e.message); }
   }
 
   /* -------------------- IO Scanner -------------------- */
@@ -927,18 +934,14 @@
           try {
             const qr = parseScanText(String(text || ""));
             if (!qr?.code) return;
-
-            // isi kolom item berdasarkan code
             await findItemIntoIO(qr.code);
 
-            // LOT → tambahkan qty per box (akumulatif)
             if (qr.type === "lot" && qr.qtyPerBox > 0) {
               const ok = await confirmJPAdd();
               if (!ok) return;
               const cur = Number($("#io-qty").value || 0);
               $("#io-qty").value = String(cur + qr.qtyPerBox);
 
-              // log audit lot scan
               const who = getCurrentUser();
               if (who?.id) {
                 try {
@@ -951,8 +954,7 @@
           }
         });
       } catch (e) {
-        console.error(e);
-        toast("カメラ起動に失敗しました。権限をご確認ください。");
+        toast("カメラの起動に失敗しました: " + e.message);
       }
     });
 
@@ -989,13 +991,12 @@
       $("#io-name").value = it.name || "";
       $("#io-price").value = it.price || 0;
       $("#io-stock").value = it.stock || 0;
-      $("#io-code").value = it.code || "";
     } catch (e) { console.warn(e); }
   }
 
   /* -------------------- Stocktake (棚卸) -------------------- */
   let SHELF_SCANNER = null;
-  const ST = { rows: new Map() }; // code => {code,name,book,qty,diff}
+  const ST = { rows: new Map() };
   window.ST = ST;
 
   function parseScanText(txt) {
@@ -1195,8 +1196,7 @@
           }
         });
       } catch (e) {
-        console.error(e);
-        toast("カメラ起動に失敗しました。権限をご確認ください。");
+        toast("カメラの起動に失敗しました: " + e.message);
       }
     });
 
@@ -1224,12 +1224,9 @@
     });
   })();
 
-  /* -------------------- Export / Import wiring -------------------- */
-
-  // Users print
+  /* -------------------- Export / Import wiring (dipertahankan) -------------------- */
   $("#btn-print-qr-users")?.addEventListener("click", () => window.print());
 
-  // Users export/import
   $("#btn-users-export")?.addEventListener("click", async () => {
     try {
       const list = await api("users", { method: "GET" });
@@ -1260,7 +1257,7 @@
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderUsers();
   });
 
-  // Items export (CSV) + department (hanya satu binding, tidak duplikat)
+ // Items export (CSV) + department (hanya satu binding, tidak duplikat)
   $("#btn-items-export")?.addEventListener("click", async () => {
     try {
       const list = await api("items", { method: "GET" });
@@ -1498,7 +1495,7 @@
   });
 
   /* -------------------- Boot -------------------- */
-  window.addEventListener("DOMContentLoaded", () => {
+  window.addEventListener("DOMContentLoaded", async () => {
     const logo = document.getElementById("brand-logo");
     if (logo && window.CONFIG && CONFIG.LOGO_URL) { logo.src = CONFIG.LOGO_URL; logo.alt = "logo"; logo.onerror = () => { logo.style.display = "none"; }; }
 
@@ -1507,17 +1504,22 @@
     if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
     if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
 
-    renderDashboard();
+    // Cek koneksi API sekali saat boot
+    try {
+      await api("items", { method: "GET", silent: true });
+    } catch (e) {
+      toast("バックエンド接続エラー: " + e.message);
+      console.error("API check failed:", e);
+    }
+
+    try {
+      await renderDashboard();
+    } catch (e) {
+      toast("ダッシュボードの読み込みに失敗しました: " + e.message);
+      console.error(e);
+    }
+
     $("#btn-logout")?.addEventListener("click", logout);
   });
-window.addEventListener("DOMContentLoaded", async () => {
-  // ...
-  try {
-    const ping = await api("items", { method: "GET", silent: true });
-    if (!Array.isArray(ping)) throw new Error("Items bukan array. Cek API key / URL.");
-  } catch (e) {
-    toast("バックエンド接続エラー: " + e.message);
-    console.error("API check failed:", e);
-  }
-});
+
 })();
