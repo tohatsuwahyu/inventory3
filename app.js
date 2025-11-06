@@ -4,6 +4,35 @@
 (function () {
   "use strict";
 
+(function () {
+  const $  = (sel, root) => (root || document).querySelector(sel);
+  const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+
+  function ensure(x, msg) {
+    if (!x) throw new Error(msg || "Assertion failed");
+    return x;
+  }
+
+  let _ITEMS_CACHE = [];
+
+  // --- Escape helpers (fixed) ---
+  function escapeHtml(s) {
+    return String(s || "").replace(/[&<>"']/g, (m) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;"
+    })[m]);
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
+  // === LOT QR: sanitize filename ===
+  function sanitizeFilename(name) {
+    return String(name || "").replace(/[\\/:*?"<>|]/g, "_");
+  }
+
+
   /* -------------------- Helpers -------------------- */
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
