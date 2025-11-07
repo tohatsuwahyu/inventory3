@@ -507,6 +507,66 @@
     }catch(e){}
   })();
   </script>
+<!-- Floating Quick IO -->
+<button id="fab-quick-io" class="btn btn-primary"
+        style="position:fixed; right:16px; bottom:18px; width:56px; height:56px; border-radius:50%;
+               box-shadow:0 8px 24px rgba(2,6,23,.2); z-index:1050;">
+  <i class="bi bi-plus-lg" style="font-size:20px;"></i>
+</button>
+
+<!-- Modal Quick IO -->
+<div class="modal fade" id="modal-quick-io" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">クイック入出庫</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="form-quick-io">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">コード</label>
+              <div class="input-group">
+                <input id="qio-code" class="form-control" placeholder="SKU-001 / スキャン可">
+                <button id="qio-scan" class="btn btn-outline-secondary" type="button">
+                  <i class="bi bi-qr-code-scan"></i>
+                </button>
+              </div>
+              <div id="qio-scan-area" class="mt-2 small text-muted"></div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">数量</label>
+              <input id="qio-qty" type="number" class="form-control" value="1" min="1">
+            </div>
+            <div class="col-6">
+              <label class="form-label">単位</label>
+              <input id="qio-unit" class="form-control" value="pcs">
+            </div>
+            <div class="col-12">
+              <label class="form-label">種別</label>
+              <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="qio-type" id="qio-in" value="IN" checked>
+                <label class="btn btn-outline-success" for="qio-in">IN</label>
+                <input type="radio" class="btn-check" name="qio-type" id="qio-out" value="OUT">
+                <label class="btn btn-outline-danger" for="qio-out">OUT</label>
+                <input type="radio" class="btn-check" name="qio-type" id="qio-adjust" value="ADJUST">
+                <label class="btn btn-outline-warning" for="qio-adjust">Adjust</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <div id="qio-preview" class="small text-muted"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" type="button">閉じる</button>
+          <button class="btn btn-primary" type="submit">登録</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
