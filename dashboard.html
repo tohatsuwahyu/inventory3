@@ -127,25 +127,36 @@
       <section id="view-dashboard" class="active">
         <h5 id="page-title" class="mb-3">ダッシュボード</h5>
 
-        <div class="row g-3">
-          <div class="col-6 col-lg-3">
-            <div class="card metric-card p-3">
-              <div class="text-muted small">商品数</div>
-              <div class="num" id="metric-total-items">0</div>
-            </div>
-          </div>
-          <div class="col-6 col-lg-3">
-            <div class="card metric-card p-3">
-              <div class="text-muted small">在庫不足</div>
-              <div class="num text-danger" id="metric-low-stock">0</div>
-            </div>
-          </div>
-          <div class="col-6 col-lg-3">
-            <div class="card metric-card p-3">
-              <div class="text-muted small">ユーザー</div>
-              <div class="num" id="metric-users">0</div>
-            </div>
-          </div>
+        <!-- METRIC CARDS -->
+<div class="row g-3 align-items-stretch">
+  <div class="col-12 col-md-4">
+    <div class="metric-card mc-items h-100">
+      <div class="mc-icon"><i class="bi bi-box-seam"></i></div>
+      <div class="mc-meta">
+        <div class="mc-label">商品数</div>
+        <div class="mc-value" id="metric-total-items">0</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="metric-card mc-low h-100">
+      <div class="mc-icon"><i class="bi bi-exclamation-triangle"></i></div>
+      <div class="mc-meta">
+        <div class="mc-label">在庫不足</div>
+        <div class="mc-value" id="metric-low-stock">0</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="metric-card mc-users h-100">
+      <div class="mc-icon"><i class="bi bi-people"></i></div>
+      <div class="mc-meta">
+        <div class="mc-label">ユーザー</div>
+        <div class="mc-value" id="metric-users">0</div>
+      </div>
+    </div>
+  </div>
+</div>
           <div class="col-12 col-lg-3">
             <div class="d-grid gap-2">
               <button id="btn-export-mov" class="btn btn-outline-primary"><i class="bi bi-download"></i> 月次IN/OUT CSV</button>
@@ -153,6 +164,25 @@
             </div>
           </div>
         </div>
+<!-- CHARTS ROW -->
+<div class="row g-3 mt-2">
+  <div class="col-12 col-lg-8">
+    <div class="card">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">月次推移</div>
+        <div class="chart-box chart-lg"><canvas id="chart-monthly"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-4">
+    <div class="card">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">直近 IN/OUT</div>
+        <div class="chart-box chart-sm"><canvas id="chart-pie"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
 
         <div class="row g-3 mt-1">
           <div class="col-12 col-lg-8">
