@@ -15,10 +15,24 @@
   // Escape
   function escapeHtml(s){ return String(s || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
   function escapeAttr(s){ return escapeHtml(s); }
+// CSV helper: paksa Excel baca UTF-8 + JP header OK
+// CSV helper: paksa Excel baca UTF-8 + JP header OK
+function downloadCSV_JP(filename, csv){
+  const bom = "\uFEFF"; // UTF-8 BOM
+  const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  // Jangan langsung revoke; beberapa browser bisa batal download.
+  // Kalau mau rapi, revoke dengan jeda:
+  // setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 
   // File helpers
   function sanitizeFilename(name){ return String(name || "").replace(/[\\/:*?"<>|]/g, "_"); }
   function normalizeCodeDash(s){ return String(s || "").replace(/[\u2212\u2010-\u2015\uFF0D]/g, "-").trim(); }
+function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
 
   // Global caches
   let _ITEMS_CACHE = [];
@@ -181,22 +195,42 @@
       $("#btn-export-mov")?.addEventListener("click", () => {
         const heads = ["月","IN","OUT"];
         const csv = [heads.join(",")].concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(","))).join("\n");
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = "月次INOUT.csv"; a.click(); URL.revokeObjectURL(url);
+        downloadCSV_JP("月次INOUT.csv", csv);
       }, { once: true });
     } catch {
       toast("ダッシュボードの読み込みに失敗しました。");
     }
   }
+// === Live reload antar device (5 detik) ===
+let LIVE_TIMER = null;
+function startLiveReload(){
+  clearInterval(LIVE_TIMER);
+  LIVE_TIMER = setInterval(async () => {
+    try {
+      const active = document.querySelector("main section.active")?.id || "";
+      // refresh cache item supaya stok/nama terbaru
+      api("items", { method: "GET", silent: true }).then(list => {
+        _ITEMS_CACHE = Array.isArray(list) ? list : (list?.data || []);
+      }).catch(()=>{});
+      // per layar aktif:
+      if (active === "view-dashboard")    renderDashboard();
+      if (active === "view-history")      renderHistory();
+      if (active === "view-shelf-list") { loadTanaList(); }       // 棚卸一覧
+      // opsional: jika ingin tabel ST ikut update ringkasan (tanpa merusak entry lokal)
+      // if (active === "view-shelf") renderShelfTable();
+    } catch {}
+  }, 5000);
+}
 
   /* -------------------- Items -------------------- */
   function tplItemRow(it) {
-    const qrid = `qr-${it.code}`;
+   const qrid = `qr-${safeId(it.code)}`;
+
     return `<tr>
       <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
       <td>${escapeHtml(it.code)}</td>
-      <td><a href="#" class="link-underline link-item" data-code="${escapeHtml(it.code)}">${escapeHtml(it.name)}</a></td>
+     <td><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
+
       <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ""}</td>
       <td class="text-end">¥${fmt(it.price)}</td>
       <td class="text-end">${fmt(it.stock)}</td>
@@ -224,7 +258,8 @@
 
       await ensureQRCode();
       for (const it of _ITEMS_CACHE) {
-        const holder = document.getElementById(`qr-${it.code}`);
+        const holder = document.getElementById(`qr-${safeId(it.code)}`);
+
         if (!holder) continue; holder.innerHTML = "";
         new QRCode(holder, { text: `ITEM|${normalizeCodeDash(it.code)}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
       }
@@ -1182,15 +1217,30 @@
       sumEl.textContent = `件数: ${total} ／ 差異あり: ${diffRows} ／ 差異合計: ${fmt(diffSum)} ／ 絶対差異: ${fmt(absSum)}`;
     }
 
-    tbody.oninput = (e) => {
-      const tr = e.target.closest("tr"); if (!tr) return;
-      if (!e.target.classList.contains("st-qty")) return;
-      const code = tr.getAttribute("data-code"); const rec = ST.rows.get(code); if (!rec) return;
-      rec.qty = Number(e.target.value || 0); rec.diff = rec.qty - rec.book;
-      tr.children[5].textContent = fmt(rec.diff);
-      tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
-      $("#st-summary") && renderShelfTable();
-    };
+   tbody.oninput = (e) => {
+  const tr = e.target.closest("tr"); if (!tr) return;
+  if (!e.target.classList.contains("st-qty")) return;
+
+  const code = tr.getAttribute("data-code");
+  const rec = ST.rows.get(code); if (!rec) return;
+
+  rec.qty = Number(e.target.value || 0);
+  rec.diff = rec.qty - rec.book;
+
+  // update sel diff
+  tr.children[5].textContent = fmt(rec.diff);
+  tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
+
+  // hitung ulang summary tanpa re-render tabel
+  const arr = [...ST.rows.values()];
+  const sumEl = $("#st-summary");
+  if (sumEl){
+    const diffRows = arr.filter(x => (x.diff||0) !== 0).length;
+    const diffSum  = arr.reduce((a,b)=>a+Number(b.diff||0),0);
+    const absSum   = arr.reduce((a,b)=>a+Math.abs(Number(b.diff||0)),0);
+    sumEl.textContent = `件数: ${arr.length} ／ 差異あり: ${diffRows} ／ 差異合計: ${fmt(diffSum)} ／ 絶対差異: ${fmt(absSum)}`;
+  }
+};
 
     tbody.onclick = (e) => {
       const tr = e.target.closest("tr"); if (!tr) return; 
@@ -1270,9 +1320,7 @@
           String(u.name || "").replace(/,/g, " "),
           (u.role || "user")
         ].join(","))).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = "ユーザー一覧.csv"; a.click(); URL.revokeObjectURL(url);
+      downloadCSV_JP("ユーザー一覧.csv", csv);
     } catch { alert("エクスポート失敗"); }
   });
   $("#btn-users-import")?.addEventListener("click", () => {
@@ -1314,11 +1362,7 @@
           i.img || ""
         ].join(",")))
         .join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "商品.csv"; a.click();
-      URL.revokeObjectURL(url);
+      downloadCSV_JP("商品.csv", csv);
     } catch { alert("エクスポート失敗"); }
   });
 
@@ -1386,9 +1430,7 @@
         .concat(recent.map(h => [
           h.timestamp || h.date || "", h.userId || "", h.code || "", h.qty || 0, h.unit || "", h.type || "", (h.note || "").replace(/,/g, " ")
         ].join(","))).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = "入出庫履歴.csv"; a.click(); URL.revokeObjectURL(url);
+      downloadCSV_JP("入出庫履歴.csv", csv);
     } catch { alert("エクスポート失敗"); }
   });
   $("#btn-io-import")?.addEventListener("click", (e) => {
@@ -1427,9 +1469,7 @@
           h.type || "",
           (h.note || "").replace(/,/g, " ")
         ].join(","))).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = "履歴.csv"; a.click(); URL.revokeObjectURL(url);
+      downloadCSV_JP("履歴.csv", csv);
     } catch { alert("エクスポート失敗"); }
   });
 
@@ -1487,14 +1527,12 @@
 }
 
 
-  $("#tana-exp")?.addEventListener("click", async ()=>{
-    const resp = await api("tanaExportCSV", { method:'GET' });
-    if(!resp || !resp.ok) return alert('エクスポート失敗');
-    const blob = new Blob([resp.csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download = resp.filename || '棚卸.csv'; a.click();
-    URL.revokeObjectURL(url);
-  });
+ $("#tana-exp")?.addEventListener("click", async ()=>{
+  const resp = await api("tanaExportCSV", { method:'GET' });
+  if(!resp || !resp.ok) return alert('エクスポート失敗');
+  downloadCSV_JP(resp.filename || "棚卸.csv", resp.csv);
+});
+
 
   $("#input-tana-imp")?.addEventListener("change", async (ev)=>{
     const file = ev.target.files?.[0]; if(!file) return;
@@ -1529,53 +1567,56 @@
         const heads = ["月","IN","OUT"];
         const csv = [heads.join(",")]
           .concat([...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, v.in, v.out].join(","))).join("\n");
-        const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = "棚卸_月次.csv"; a.click(); URL.revokeObjectURL(url);
+       downloadCSV_JP("棚卸_月次.csv", csv);
       }, { once: true });
 
       $("#tana-recap-export-yearly")?.addEventListener("click", () => {
-        const heads = ["年","IN","OUT"];
-        const csv = [heads.join(",")]
-          .concat([...byYear.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, v.in, k, v.out].join(",").replace(/,/,","))).join("\n"); // safe
-        const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = "棚卸_年次.csv"; a.click(); URL.revokeObjectURL(url);
-      }, { once: true });
+  const heads = ["年","IN","OUT"];
+  const csv = [heads.join(",")]
+    .concat(
+      [...byYear.entries()]
+        .sort((a,b)=>a[0].localeCompare(b[0]))
+        .map(([k,v]) => [k, v.in, v.out].join(","))
+    )
+    .join("\n");
+  downloadCSV_JP("棚卸_年次.csv", csv);
+}, { once: true });
 
-      $("#tana-matome-exp")?.addEventListener("click", async ()=>{
-        const res = await api("tanaList", { method:'GET' }); if(!res || !res.rows) return;
-        const agg = {}; res.rows.forEach(r=>{ agg[r.code] = (agg[r.code]||0) + Number(r.qty||0); });
-        const heads = ['コード','数量'];
-        const csv = [heads.join(',')]
-          .concat(Object.keys(agg).map(k=>[k, agg[k]].join(',')))
-          .join('\n');
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href=url; a.download = '棚卸まとめ.csv'; a.click();
-        URL.revokeObjectURL(url);
-      }, { once:true });
+
+     $("#tana-matome-exp")?.addEventListener("click", async ()=>{
+  const res = await api("tanaList", { method:'GET' }); if(!res || !res.rows) return;
+  const agg = {}; res.rows.forEach(r=>{ agg[r.code] = (agg[r.code]||0) + Number(r.qty||0); });
+  const heads = ['コード','数量'];
+  const csv = [heads.join(',')]
+    .concat(Object.keys(agg).map(k=>[k, agg[k]].join(',')))
+    .join('\n');
+  downloadCSV_JP("棚卸まとめ.csv", csv);
+}, { once:true });
+
 
     } catch (e) { /* noop */ }
   }
 
   /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
-    const logo = document.getElementById("brand-logo");
-    if (logo && window.CONFIG && CONFIG.LOGO_URL) { logo.src = CONFIG.LOGO_URL; logo.alt = "logo"; logo.onerror = () => { logo.style.display = "none"; }; }
+  const logo = document.getElementById("brand-logo");
+  if (logo && window.CONFIG && CONFIG.LOGO_URL) {
+    logo.src = CONFIG.LOGO_URL; logo.alt = "logo";
+    logo.onerror = () => { logo.style.display = "none"; };
+  }
 
-    const newItemBtn = $("#btn-open-new-item");
-    const newUserBtn = $("#btn-open-new-user");
-    if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
-    if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
+  const newItemBtn = $("#btn-open-new-item");
+  const newUserBtn = $("#btn-open-new-user");
+  if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
+  if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
 
-    // Bind IO & Shelf (scan/input)
-    bindIO();
-    bindShelf();
+  bindIO();
+  bindShelf();
+  renderDashboard();
+  $("#btn-logout")?.addEventListener("click", logout);
+  startLiveReload();
+});
 
-    // Dashboard
-    renderDashboard();
-
-    // Logout
-    $("#btn-logout")?.addEventListener("click", logout);
-  });
+  
 
 })();
