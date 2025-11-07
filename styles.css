@@ -588,3 +588,25 @@ header.appbar{ position: sticky; top: 0; z-index: 1020; } /* terasa app-like */
 .row.between { justify-content:space-between; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .hidden { display:none; }
+/* === Desktop layout fixes (full width) === */
+:root{ --page-max: 1680px; }
+
+main, .app-main, .content-wrap { width:100%; }
+
+.container,
+.container-lg, .container-xl, .container-xxl {
+  max-width: var(--page-max);   /* besarkan batas */
+}
+
+.container-fluid { max-width: 100%; }
+
+@media (min-width: 1400px){
+  .dashboard-row { margin-right:0; margin-left:0; }
+}
+
+/* Kartu chart agar melebar penuh & tinggi pas */
+.chart-card .card-body{ height: 360px; }
+.chart-card canvas{ width:100% !important; height:100% !important; }
+
+/* Hilangkan kemungkinan scroll horisontal “ruang kosong kanan” */
+html, body { overflow-x: hidden; }
