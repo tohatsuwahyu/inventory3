@@ -1657,3 +1657,76 @@ function bindIO() {
   });
 
 })();
+// === Tanaoroshi (棚卸) additions ===
+// Header map JP (frontend)
+const JP_TANA_MAP = {
+  date:'日付', code:'コード', name:'品名', qty:'数量', unit:'単位',
+  location:'場所', department:'部門', userId:'担当者', note:'備考'
+};
+function tanaJPHeaders(){ return Object.values(JP_TANA_MAP); }
+function tanaToJPRow(r){
+  return {
+    [JP_TANA_MAP.date]: r.date || '',
+    [JP_TANA_MAP.code]: r.code || '',
+    [JP_TANA_MAP.name]: r.name || '',
+    [JP_TANA_MAP.qty] : String(r.qty ?? ''),
+    [JP_TANA_MAP.unit]: r.unit || 'pcs',
+    [JP_TANA_MAP.location]: r.location || '',
+    [JP_TANA_MAP.department]: r.department || '',
+    [JP_TANA_MAP.userId]: r.userId || '',
+    [JP_TANA_MAP.note]: r.note || ''
+  };
+}
+
+// API helper assumed: api(payload) -> Promise
+// download helper assumed: downloadBlob(text, filename, mime)
+
+async function loadTanaList(){
+  const res = await api({ action:'tanaList' });
+  const tbl = document.getElementById('tbl-tana');
+  if (!tbl) return;
+  if(!res || !res.ok){ tbl.innerHTML = '<tbody><tr><td>取得に失敗</td></tr></tbody>'; return; }
+  const heads = tanaJPHeaders();
+  tbl.innerHTML = '<thead><tr>' + heads.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
+  const rows = res.rows.map(tanaToJPRow);
+  tbl.insertAdjacentHTML('beforeend',
+    '<tbody>' + rows.map(r => `<tr>${
+      heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
+    }</tr>`).join('') + '</tbody>');
+}
+
+function bindTanaUI(){
+  const nav = document.querySelector('[data-nav="tana-list"]');
+  if (nav) nav.addEventListener('click', loadTanaList);
+
+  const exp = document.getElementById('tana-exp');
+  if (exp) exp.addEventListener('click', async ()=>{
+    const resp = await api({ action:'tanaExportCSV' });
+    if(!resp || !resp.ok) return alert('エクスポート失敗');
+    downloadBlob(resp.csv, resp.filename, 'text/csv;charset=utf-8');
+  });
+
+  const imp = document.getElementById('tana-imp');
+  if (imp) imp.addEventListener('change', async (ev)=>{
+    const file = ev.target.files[0]; if(!file) return;
+    const buf = await file.arrayBuffer();
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const resp = await api({ action:'tanaImportCSV', csvBase64: b64 });
+    if(!resp || !resp.ok) return alert('インポート失敗');
+    alert(`インポート: ${resp.imported} 行`);
+    loadTanaList();
+    ev.target.value = '';
+  });
+
+  const matExp = document.getElementById('tana-matome-exp');
+  if (matExp) matExp.addEventListener('click', async ()=>{
+    const res = await api({ action:'tanaList' }); if(!res || !res.ok) return;
+    const agg = {}; res.rows.forEach(r=>{ agg[r.code] = (agg[r.code]||0) + Number(r.qty||0); });
+    const heads = ['コード','数量'];
+    const csv = [heads].concat(Object.keys(agg).map(k=>[k, agg[k]])).map(a=>a.join(',')).join('\n');
+    downloadBlob(csv, '棚卸まとめ_' + new Date().toISOString().slice(0,19).replace(/[-:T]/g,'') + '.csv', 'text/csv;charset=utf-8');
+  });
+}
+
+// Call once on app init
+document.addEventListener('DOMContentLoaded', bindTanaUI);
