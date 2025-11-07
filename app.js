@@ -4,39 +4,30 @@
 (function () {
   "use strict";
 
-  // Helpers (satu kali saja)
+  // Helpers
   const $  = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
-  function ensure(x, msg) { if (!x) throw new Error(msg || "Assertion failed"); return x; }
-
-  // cache item (satu kali saja)
-  let _ITEMS_CACHE = [];
-
-  // Escape helpers (fixed)
-  function escapeHtml(s){
-    return String(s || "").replace(/[&<>"']/g, (m) => ({
-      "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;"
-    })[m]);
-  }
-  function escapeAttr(s){ return escapeHtml(s); }
-
-  // Filename & code normalizer
-  function sanitizeFilename(name){ return String(name || "").replace(/[\\/:*?"<>|]/g, "_"); }
-  // Samakan semua dash Unicode ke '-' ASCII agar konsisten di QR & parser
-  function normalizeCodeDash(s){
-    return String(s || "").replace(/[\u2212\u2010-\u2015\uFF0D]/g, "-").trim();
-  }
-
-  /* -------------------- Helpers -------------------- */
   const fmt = (n) => new Intl.NumberFormat("ja-JP").format(Number(n || 0));
   const isMobile = () => /Android|iPhone|iPad/i.test(navigator.userAgent);
   function toast(msg) { alert(msg); }
+  function ensure(x, msg) { if (!x) throw new Error(msg || "Assertion failed"); return x; }
+
+  // Escape
+  function escapeHtml(s){ return String(s || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
+  function escapeAttr(s){ return escapeHtml(s); }
+
+  // File helpers
+  function sanitizeFilename(name){ return String(name || "").replace(/[\\/:*?"<>|]/g, "_"); }
+  function normalizeCodeDash(s){ return String(s || "").replace(/[\u2212\u2010-\u2015\uFF0D]/g, "-").trim(); }
+
+  // Global caches
+  let _ITEMS_CACHE = [];
+
   function setLoading(show, text) {
     const el = $("#global-loading"); if (!el) return;
     if (show) { el.classList.remove("d-none"); $("#loading-text").textContent = text || "読み込み中…"; }
     else el.classList.add("d-none");
   }
-
   async function api(action, { method = "GET", body = null, silent = false } = {}) {
     if (!window.CONFIG || !CONFIG.BASE_URL) { throw new Error("config.js BASE_URL belum di-set"); }
     const apikey = encodeURIComponent(CONFIG.API_KEY || "");
@@ -71,25 +62,25 @@
   async function ensureQRCode() {
     if (window.QRCode) return;
     const locals = ["./qrlib.js", "./qrcode.min.js", "./vendor/qrcode.min.js"];
-    for (const p of locals) { try { await loadScriptOnce(p); if (window.QRCode) return; } catch { } }
+    for (const p of locals) { try { await loadScriptOnce(p); if (window.QRCode) return; } catch {} }
     const cdns = [
       "https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js",
       "https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js",
       "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
     ];
-    for (const u of cdns) { try { await loadScriptOnce(u); if (window.QRCode) return; } catch { } }
+    for (const u of cdns) { try { await loadScriptOnce(u); if (window.QRCode) return; } catch {} }
     throw new Error("QRCode library tidak tersedia (qrlib.js)");
   }
   async function ensureHtml5Qrcode() {
     if (window.Html5Qrcode) return;
     const locals = ["./html5-qrcode.min.js", "./vendor/html5-qrcode.min.js"];
-    for (const p of locals) { try { await loadScriptOnce(p); if (window.Html5Qrcode) return; } catch { } }
+    for (const p of locals) { try { await loadScriptOnce(p); if (window.Html5Qrcode) return; } catch {} }
     const cdns = [
       "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js",
       "https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js",
       "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/minified/html5-qrcode.min.js"
     ];
-    for (const u of cdns) { try { await loadScriptOnce(u); if (window.Html5Qrcode) return; } catch { } }
+    for (const u of cdns) { try { await loadScriptOnce(u); if (window.Html5Qrcode) return; } catch {} }
     throw new Error("html5-qrcode tidak tersedia");
   }
 
@@ -134,7 +125,8 @@
       if (id === "view-items") renderItems();
       if (id === "view-users") renderUsers();
       if (id === "view-history") renderHistory();
-      if (id === "view-shelf") { renderShelfTable(); renderShelfRecap(); }
+      if (id === "view-shelf") { renderShelfTable(); }
+      if (id === "view-shelf-list") { loadTanaList(); renderShelfRecapForList(); }
     });
   })();
 
@@ -187,9 +179,11 @@
       }
 
       $("#btn-export-mov")?.addEventListener("click", () => {
-        const csv = ["month,in,out"].concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(","))).join("\n");
-        const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = "monthly.csv"; a.click(); URL.revokeObjectURL(url);
+        const heads = ["月","IN","OUT"];
+        const csv = [heads.join(",")].concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(","))).join("\n");
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = "月次INOUT.csv"; a.click(); URL.revokeObjectURL(url);
       }, { once: true });
     } catch {
       toast("ダッシュボードの読み込みに失敗しました。");
@@ -200,9 +194,7 @@
   function tplItemRow(it) {
     const qrid = `qr-${it.code}`;
     return `<tr>
-      <td style="width:110px">
-        <div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div>
-      </td>
+      <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
       <td>${escapeHtml(it.code)}</td>
       <td><a href="#" class="link-underline link-item" data-code="${escapeHtml(it.code)}">${escapeHtml(it.name)}</a></td>
       <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ""}</td>
@@ -392,7 +384,7 @@
     wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
   }
 
-  // === LOT QR: modal pembuat QR per lot/kotak ===
+  // === LOT QR modal ===
   function openLotQRModal(item) {
     if (!item) return;
     const wrap = document.createElement("div");
@@ -435,7 +427,6 @@
       const codeNorm = normalizeCodeDash(item.code);
       const text = lot ? `LOT|${codeNorm}|${qty}|${lot}` : `LOT|${codeNorm}|${qty}`;
 
-      // Caption rapi (tanpa string debug)
       const cap = $("#lot-caption", wrap);
       if (cap) cap.textContent = `コード: ${codeNorm} / 数量: ${qty}` + (lot ? ` / ロット: ${lot}` : "");
 
@@ -494,7 +485,7 @@
     w.document.write(`<img src="${url}" style="max-width:100%">`);
   }
 
-  // ---------- LABEL CANVAS (wrap teks & grid cetak) ----------
+  // ---------- LABEL CANVAS ----------
   async function makeItemLabelDataURL(item) {
     const W = 760, H = 260, pad = 18, imgW = 200, gap = 16;
     const QUIET = 16, qrSize = 136, gapQR = 14;
@@ -676,76 +667,63 @@
     });
   }
 
-  // === LOT QR: label dataURL (mirip item, ada info lot & qty/box) ===
-  // === LOT QR: label dataURL (dengan caption "箱あたり" & "ロット" DI BAWAH QR) ===
-async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
-  // 1) Render label item standar (sudah memuat: 画像欄, QR item, コード, 商品名, 部門／置場)
-  const base = await makeItemLabelDataURL(item);
-  const im = new Image(); im.src = base;
-  await new Promise(r => { im.onload = r; im.onerror = r; });
+  // === LOT label (pakai layout item, QR diganti LOT + caption) ===
+  async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
+    const base = await makeItemLabelDataURL(item);
+    const im = new Image(); im.src = base;
+    await new Promise(r => { im.onload = r; im.onerror = r; });
 
-  const W = im.width, H = im.height;
-  const c = document.createElement("canvas"); c.width = W; c.height = H;
-  const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
+    const W = im.width, H = im.height;
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
 
-  // tempel label dasar
-  g.drawImage(im, 0, 0);
+    // tempel label dasar
+    g.drawImage(im, 0, 0);
 
-  // 2) Hitung ulang posisi kolom supaya kita tahu letak QR item
-  const pad = 18, imgW = 200, gap = 16;
-  const QUIET = 16, qrSize = 136, gapQR = 14;
+    // hitung posisi QR
+    const pad = 18, imgW = 200, gap = 16;
+    const QUIET = 16, qrSize = 136, gapQR = 14;
+    const colStart = pad + imgW + gap;
+    const qy = pad + ((H - 2 * pad) - qrSize) / 2;
+    const qx = colStart + gapQR + QUIET;
 
-  // posisi QR (sama seperti di makeItemLabelDataURL)
-  const colStart = pad + imgW + gap;
-  const qy = pad + ((H - 2 * pad) - qrSize) / 2;
-  const qx = colStart + gapQR + QUIET;
+    // QR LOT
+    try {
+      const codeNorm = normalizeCodeDash(item.code);
+      const txt = lotId ? `LOT|${codeNorm}|${qtyPerBox}|${lotId}` : `LOT|${codeNorm}|${qtyPerBox}`;
+      const du = await generateQrDataUrl(txt, qrSize);
+      const qr = new Image(); qr.src = du;
+      await new Promise(r => { qr.onload = r; qr.onerror = r; });
+      g.fillStyle = "#fff"; g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
+      g.drawImage(qr, qx, qy, qrSize, qrSize);
+    } catch {}
 
-  // 3) Gambar ulang QR **LOT** di posisi QR (agar kontennya LOT…)
-  try {
-    const codeNorm = normalizeCodeDash(item.code);
-    const txt = lotId
-      ? `LOT|${codeNorm}|${qtyPerBox}|${lotId}`
-      : `LOT|${codeNorm}|${qtyPerBox}`;
-    const du = await generateQrDataUrl(txt, qrSize);
-    const qr = new Image(); qr.src = du;
-    await new Promise(r => { qr.onload = r; qr.onerror = r; });
+    // caption bawah QR
+    const capW = qrSize + 2 * QUIET;
+    const capH = 40;
+    const capX = colStart + gapQR;
+    const capY = qy + qrSize + 6;
 
-    // kotak putih + QR LOT
-    g.fillStyle = "#fff";
-    g.fillRect(qx - QUIET, qy - QUIET, qrSize + 2 * QUIET, qrSize + 2 * QUIET);
-    g.drawImage(qr, qx, qy, qrSize, qrSize);
-  } catch {}
+    g.fillStyle = "#ffffff";
+    g.fillRect(capX, capY, capW, capH);
+    g.strokeStyle = "#d1d5db";
+    g.lineWidth = 1;
+    g.strokeRect(capX + 0.5, capY + 0.5, capW - 1, capH - 1);
 
-  // 4) Caption di BAWAH barcode/QR (bukan di “コード”)
-  const capW = qrSize + 2 * QUIET;         // lebar sama dengan area QR
-  const capH = 40;                          // tinggi kecil, dua baris muat
-  const capX = colStart + gapQR;            // sejajar kotak putih QR
-  const capY = qy + qrSize + 6;             // tepat di bawah QR
+    g.fillStyle = "#111";
+    g.textAlign = "center";
+    g.textBaseline = "top";
+    g.font = '700 14px "Noto Sans JP", system-ui';
+    g.fillText(`箱あたり：${Number(qtyPerBox || 0)} pcs`, capX + capW / 2, capY + 6);
 
-  // panel kecil
-  g.fillStyle = "#ffffff";
-  g.fillRect(capX, capY, capW, capH);
-  g.strokeStyle = "#d1d5db";
-  g.lineWidth = 1;
-  g.strokeRect(capX + 0.5, capY + 0.5, capW - 1, capH - 1);
+    if ((lotId || "").trim()) {
+      g.font = '600 12px "Noto Sans JP", system-ui';
+      g.fillStyle = "#374151";
+      g.fillText(`ロット：${String(lotId)}`, capX + capW / 2, capY + 22);
+    }
 
-  // teks "箱あたり" dan (opsional) "ロット"
-  g.fillStyle = "#111";
-  g.textAlign = "center";
-  g.textBaseline = "top";
-  g.font = '700 14px "Noto Sans JP", system-ui';
-  g.fillText(`箱あたり：${Number(qtyPerBox || 0)} pcs`, capX + capW / 2, capY + 6);
-
-  if ((lotId || "").trim()) {
-    g.font = '600 12px "Noto Sans JP", system-ui';
-    g.fillStyle = "#374151";
-    g.fillText(`ロット：${String(lotId)}`, capX + capW / 2, capY + 22);
+    return c.toDataURL("image/png");
   }
-
-  // Selesai
-  return c.toDataURL("image/png");
-}
-
 
   /* -------------------- Users -------------------- */
   async function renderUsers() {
@@ -890,121 +868,112 @@ async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
   /* -------------------- IO Scanner -------------------- */
   let IO_SCANNER = null;
 
-  // >>> DEFERRED BINDING: dipanggil setelah DOM siap
-function bindIO() {
-  // 1) Variabel tombol/area (inisialisasi)
-  const btnStart = $("#btn-io-scan"),
-        btnStop  = $("#btn-io-stop"),
-        area     = $("#io-scan-area");
-  if (!btnStart || !btnStop || !area) return;
+  function bindIO() {
+    const btnStart = $("#btn-io-scan"),
+          btnStop  = $("#btn-io-stop"),
+          area     = $("#io-scan-area");
+    if (!btnStart || !btnStop || !area) return;
 
-  // 2) AUTO-LOOKUP saat mengetik di コード
-  const ioCode = document.getElementById("io-code");
-  if (ioCode) {
-    let timer = null;
-
-    ioCode.addEventListener("input", (e) => {
-      clearTimeout(timer);
-      const v = (e.target.value || "").trim();
-
-      if (!v) {
-        const n = document.getElementById("io-name");
-        const p = document.getElementById("io-price");
-        const s = document.getElementById("io-stock");
-        if (n) n.value = "";
-        if (p) p.value = "";
-        if (s) s.value = "";
-        return;
-      }
-      timer = setTimeout(() => findItemIntoIO(v), 220);
-    });
-
-    ioCode.addEventListener("blur", () => {
-      const v = (ioCode.value || "").trim();
-      if (v) findItemIntoIO(v);
-    });
-    ioCode.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
+    // auto-lookup saat ketik kode
+    const ioCode = document.getElementById("io-code");
+    if (ioCode) {
+      let timer = null;
+      ioCode.addEventListener("input", (e) => {
+        clearTimeout(timer);
+        const v = (e.target.value || "").trim();
+        if (!v) {
+          const n = document.getElementById("io-name");
+          const p = document.getElementById("io-price");
+          const s = document.getElementById("io-stock");
+          if (n) n.value = ""; if (p) p.value = ""; if (s) s.value = "";
+          return;
+        }
+        timer = setTimeout(() => findItemIntoIO(v), 220);
+      });
+      ioCode.addEventListener("blur", () => {
         const v = (ioCode.value || "").trim();
         if (v) findItemIntoIO(v);
-      }
-    });
-  }
-
-  // 3) Handler existing (tetap seperti semula)
-  btnStart.addEventListener("click", async () => {
-    try {
-      area.textContent = "カメラ起動中…";
-      IO_SCANNER = await startBackCameraScan("io-scan-area", async (text) => {
-        const parsed = parseScanText(String(text || ""));
-        if (!parsed) return;
-
-        if (parsed.kind === "item") {
-          const code = parsed.code;
-          $("#io-code").value = code;
-          await findItemIntoIO(code);
-          if (confirm("この商品を追加してもよろしいですか？")) {
-            // user isi qty lalu submit manual
-          }
-          return;
-        }
-
-        if (parsed.kind === "lot") {
-          const { code, qty, lot } = parsed;
-          $("#io-code").value = code;
-          await findItemIntoIO(code);
-
-          const unit = $("#io-unit").value || "pcs";
-          const type = $("#io-type").value || "IN";
-          const who  = getCurrentUser();
-          if (!who) return toast("ログイン情報がありません。");
-
-          if (confirm("この商品を追加してもよろしいですか？")) {
-            try {
-              const r = await api("log", { method: "POST", body: {
-                userId: who.id, code, qty: Number(qty || 0), unit, type,
-                note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
-              }});
-              if (r?.ok) {
-                toast("登録しました");
-                $("#io-qty").value = "";
-                await findItemIntoIO(code);
-                renderDashboard();
-              } else {
-                toast(r?.error || "登録失敗");
-              }
-            } catch(e){ toast("登録失敗: " + (e?.message || e)); }
-          }
-          return;
+      });
+      ioCode.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          const v = (ioCode.value || "").trim();
+          if (v) findItemIntoIO(v);
         }
       });
-    } catch (e) { toast(e?.message || String(e)); }
-  });
+    }
 
-  btnStop.addEventListener("click", async () => {
-    try { await IO_SCANNER?.stop?.(); IO_SCANNER?.clear?.(); } catch { }
-    area.innerHTML = "カメラ待機中…";
-  });
+    btnStart.addEventListener("click", async () => {
+      try {
+        area.textContent = "カメラ起動中…";
+        IO_SCANNER = await startBackCameraScan("io-scan-area", async (text) => {
+          const parsed = parseScanText(String(text || ""));
+          if (!parsed) return;
 
-  // <<<<<<<< 照会 tombol: memicu lookup manual
-  $("#btn-io-lookup")?.addEventListener("click", (e) => {
-    e.preventDefault();
-    const code = ($("#io-code").value || "").trim();
-    if (code) findItemIntoIO(code);
-  });
+          if (parsed.kind === "item") {
+            const code = parsed.code;
+            $("#io-code").value = code;
+            await findItemIntoIO(code);
+            if (confirm("この商品を追加してもよろしいですか？")) {
+              // user isi qty lalu submit manual
+            }
+            return;
+          }
 
-  $("#form-io")?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const who = getCurrentUser(); if (!who) return toast("ログイン情報がありません。");
-    const code = $("#io-code").value, qty = Number($("#io-qty").value || 0);
-    const unit = $("#io-unit").value, type = $("#io-type").value;
-    try {
-      const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
-      if (r?.ok) { toast("登録しました"); $("#io-qty").value = ""; await findItemIntoIO(code); renderDashboard(); }
-      else toast(r?.error || "登録失敗");
-    } catch (e2) { toast("登録失敗: " + (e2?.message || e2)); }
-  });
-}
+          if (parsed.kind === "lot") {
+            const { code, qty, lot } = parsed;
+            $("#io-code").value = code;
+            await findItemIntoIO(code);
+
+            const unit = $("#io-unit").value || "pcs";
+            const type = $("#io-type").value || "IN";
+            const who  = getCurrentUser();
+            if (!who) return toast("ログイン情報がありません。");
+
+            if (confirm("この商品を追加してもよろしいですか？")) {
+              try {
+                const r = await api("log", { method: "POST", body: {
+                  userId: who.id, code, qty: Number(qty || 0), unit, type,
+                  note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
+                }});
+                if (r?.ok) {
+                  toast("登録しました");
+                  $("#io-qty").value = "";
+                  await findItemIntoIO(code);
+                  renderDashboard();
+                } else {
+                  toast(r?.error || "登録失敗");
+                }
+              } catch(e){ toast("登録失敗: " + (e?.message || e)); }
+            }
+            return;
+          }
+        });
+      } catch (e) { toast(e?.message || String(e)); }
+    });
+
+    btnStop.addEventListener("click", async () => {
+      try { await IO_SCANNER?.stop?.(); IO_SCANNER?.clear?.(); } catch { }
+      area.innerHTML = "カメラ待機中…";
+    });
+
+    $("#btn-io-lookup")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      const code = ($("#io-code").value || "").trim();
+      if (code) findItemIntoIO(code);
+    });
+
+    $("#form-io")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const who = getCurrentUser(); if (!who) return toast("ログイン情報がありません。");
+      const code = $("#io-code").value, qty = Number($("#io-qty").value || 0);
+      const unit = $("#io-unit").value, type = $("#io-type").value;
+      try {
+        const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
+        if (r?.ok) { toast("登録しました"); $("#io-qty").value = ""; await findItemIntoIO(code); renderDashboard(); }
+        else toast(r?.error || "登録失敗");
+      } catch (e2) { toast("登録失敗: " + (e2?.message || e2)); }
+    });
+  }
 
   async function startBackCameraScan(mountId, onScan, boxSize) {
     const isPhone = isMobile();
@@ -1093,16 +1062,14 @@ function bindIO() {
     }
   }
 
-  // === LOT & ITEM parser (satu tempat) ===
+  // Parser QR
   function parseScanText(txt) {
     const s = String(txt || "").trim();
 
-    // ITEM|CODE
     if (/^ITEM\|/i.test(s)) {
       const code = normalizeCodeDash((s.split("|")[1] || "").trim());
       return { kind: "item", code };
     }
-    // LOT|CODE|QTY|LOT?
     if (/^LOT\|/i.test(s)) {
       const [, codeRaw, qtyRaw, lotRaw] = s.split("|");
       const code = normalizeCodeDash(codeRaw || "");
@@ -1110,7 +1077,6 @@ function bindIO() {
       const lot  = (lotRaw || "").trim();
       if (code && qty > 0) return { kind: "lot", code, qty, lot };
     }
-    // JSON
     try {
       const o = JSON.parse(s);
       if ((o.t === "item" || o.type === "item") && o.code) {
@@ -1123,7 +1089,7 @@ function bindIO() {
     return null;
   }
 
-  // === IO: lookup item by code lalu isi Nama/Harga/Stok di form ===
+  // IO lookup form
   async function findItemIntoIO(codeRaw) {
     const code = normalizeCodeDash(String(codeRaw || "")).trim();
     const nameEl  = document.getElementById("io-name");
@@ -1156,7 +1122,7 @@ function bindIO() {
     return item;
   }
 
-  /* -------------------- Stocktake (棚卸) -------------------- */
+  /* -------------------- Stocktake (棚卸) : scan & input saja -------------------- */
   let SHELF_SCANNER = null;
   const ST = { rows: new Map() };
   window.ST = ST;
@@ -1199,13 +1165,22 @@ function bindIO() {
         <td class="text-end"><input type="number" class="form-control form-control-sm st-qty" value="${r.qty}"></td>
         <td class="text-end ${r.diff === 0 ? "" : "fw-bold"}">${fmt(r.qty - r.book)}</td>
         <td class="text-end">
-          <div class="st-actions">
-            ${isadmin ? `<button class="btn btn-outline-primary btn-st-adjust">Adjust</button>` : ""}
-            ${isadmin ? `<button class="btn btn-outline-secondary btn-st-edit">Edit</button>` : ""}
+          <div class="st-actions d-inline-flex gap-2">
+            ${isadmin ? `<button class="btn btn-outline-primary btn-st-adjust btn-sm">Edit</button>` : ""}
+            <button class="btn btn-outline-danger btn-st-del btn-sm">削除</button>
           </div>
         </td>
       </tr>
     `).join("");
+
+    const sumEl = $("#st-summary");
+    if (sumEl) {
+      const total = arr.length;
+      const diffRows = arr.filter(x => (x.diff||0) !== 0).length;
+      const diffSum = arr.reduce((a,b)=>a+Number(b.diff||0),0);
+      const absSum  = arr.reduce((a,b)=>a+Math.abs(Number(b.diff||0)),0);
+      sumEl.textContent = `件数: ${total} ／ 差異あり: ${diffRows} ／ 差異合計: ${fmt(diffSum)} ／ 絶対差異: ${fmt(absSum)}`;
+    }
 
     tbody.oninput = (e) => {
       const tr = e.target.closest("tr"); if (!tr) return;
@@ -1214,101 +1189,20 @@ function bindIO() {
       rec.qty = Number(e.target.value || 0); rec.diff = rec.qty - rec.book;
       tr.children[5].textContent = fmt(rec.diff);
       tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
+      $("#st-summary") && renderShelfTable();
     };
 
     tbody.onclick = (e) => {
-      const tr = e.target.closest("tr"); if (!tr) return; const code = tr.getAttribute("data-code"); const rec = ST.rows.get(code); if (!rec) return;
-      if (e.target.closest(".btn-st-adjust")) { if (!isAdmin()) return toast("Akses ditolak (admin only)"); openAdjustModal(rec); }
-      else if (e.target.closest(".btn-st-edit")) { if (!isAdmin()) return toast("Akses ditolak (admin only)"); openEditItem(code); }
+      const tr = e.target.closest("tr"); if (!tr) return; 
+      const code = tr.getAttribute("data-code"); const rec = ST.rows.get(code); if (!rec) return;
+      if (e.target.closest(".btn-st-adjust")) { if (!isAdmin()) return toast("Akses ditolak (admin only)"); openEditItem(code); }
+      if (e.target.closest(".btn-st-del")) {
+        ST.rows.delete(code);
+        renderShelfTable();
+      }
     };
   }
 
-  async function renderShelfRecap() {
-    try {
-      const raw = await api("history", { method: "GET" });
-      const list = Array.isArray(raw) ? raw : (raw?.history || raw?.data || []);
-      const byMonth = new Map();
-      const byYear = new Map();
-      for (const h of list) {
-        const d = new Date(h.timestamp || h.date || ""); if (isNaN(d)) continue;
-        const m = d.toISOString().slice(0, 7);
-        const y = String(d.getFullYear());
-        const type = String(h.type || "").toUpperCase();
-        const qty = Number(h.qty || 0);
-        if (!byMonth.has(m)) byMonth.set(m, { in: 0, out: 0 });
-        if (!byYear.has(y)) byYear.set(y, { in: 0, out: 0 });
-        if (type === "IN") { byMonth.get(m).in += qty; byYear.get(y).in += qty; }
-        else if (type === "OUT") { byMonth.get(m).out += qty; byYear.get(y).out += qty; }
-      }
-      const tbM = $("#st-recap-monthly"); const tbY = $("#st-recap-yearly");
-      if (tbM) {
-        const rows = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `<tr><td>${k}</td><td class="text-end">${fmt(v.in)}</td><td class="text-end">${fmt(v.out)}</td></tr>`);
-        tbM.innerHTML = rows.join("");
-      }
-      if (tbY) {
-        const rows = [...byYear.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `<tr><td>${k}</td><td class="text-end">${fmt(v.in)}</td><td class="text-end">${fmt(v.out)}</td></tr>`);
-        tbY.innerHTML = rows.join("");
-      }
-
-      $("#st-recap-export-monthly")?.addEventListener("click", () => {
-        const csv = ["month,in,out"].concat([...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, v.in, v.out].join(","))).join("\n");
-        const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = "stocktake_monthly.csv"; a.click(); URL.revokeObjectURL(url);
-      }, { once: true });
-      $("#st-recap-export-yearly")?.addEventListener("click", () => {
-        const csv = ["year,in,out"].concat([...byYear.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, v.in, v.out].join(","))).join("\n");
-        const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = "stocktake_yearly.csv"; a.click(); URL.revokeObjectURL(url);
-      }, { once: true });
-
-    } catch (e) { console.warn(e); }
-  }
-
-  function openAdjustModal(rec) {
-    const wrap = document.createElement("div");
-    wrap.className = "modal fade";
-    wrap.innerHTML = `
-<div class="modal-dialog">
-  <div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">Adjust 在庫</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <div class="mb-2"><b>コード：</b>${escapeHtml(rec.code)}</div>
-      <div class="mb-2"><b>名称：</b>${escapeHtml(rec.name)}</div>
-      <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">帳簿</label><input class="form-control" value="${rec.book}" readonly></div>
-        <div class="col-md-6"><label class="form-label">新しい在庫</label><input id="aj-new" type="number" class="form-control" value="${rec.qty || rec.book}"></div>
-      </div>
-      <div class="small text-muted mt-2">この操作は即時に在庫を上書きします（履歴は別管理）。</div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-      <button class="btn btn-primary" id="aj-save">保存</button>
-    </div>
-  </div>
-</div>`;
-    document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap); modal.show();
-
-    $("#aj-save", wrap)?.addEventListener("click", async () => {
-      try {
-        const newStock = Number($("#aj-new", wrap).value || 0);
-        const payload = { code: rec.code, name: rec.name, stock: newStock, overwrite: true };
-        const r = await api("updateItem", { method: "POST", body: payload });
-        if (r?.ok) {
-          rec.book = newStock; rec.qty = newStock; rec.diff = 0;
-          ST.rows.set(rec.code, rec); renderShelfTable();
-          const idx = _ITEMS_CACHE.findIndex(x => String(x.code) === String(rec.code));
-          if (idx >= 0) _ITEMS_CACHE[idx].stock = newStock;
-          modal.hide(); wrap.remove(); toast("在庫を更新しました");
-        } else toast(r?.error || "更新失敗");
-      } catch (e) { toast("更新失敗: " + (e?.message || e)); }
-    });
-
-    wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
-  }
-
-  // >>> DEFERRED BINDING: dipanggil setelah DOM siap
   function bindShelf() {
     const btnStart = $("#btn-start-scan"), btnStop = $("#btn-stop-scan"), area = $("#scan-area");
     if (!btnStart || !btnStop || !area) return;
@@ -1319,14 +1213,12 @@ function bindIO() {
         SHELF_SCANNER = await startBackCameraScan("scan-area", async (text) => {
           const p = parseScanText(String(text || ""));
           if (!p) return;
-
           if (p.kind === "item") {
             if (confirm("この商品を追加してもよろしいですか？")) {
               await addOrUpdateStocktake(p.code, ST.rows.get(p.code)?.qty ?? undefined);
             }
             return;
           }
-
           if (p.kind === "lot") {
             if (confirm("この商品を追加してもよろしいですか？")) {
               await addOrIncStocktake(p.code, Number(p.qty || 0));
@@ -1334,12 +1226,11 @@ function bindIO() {
             return;
           }
         });
-
       } catch (e) { toast(e?.message || String(e)); }
     });
 
     btnStop.addEventListener("click", async () => {
-      try { await SHELF_SCANNER?.stop?.(); SHELF_SCANNER?.clear?.(); } catch { }
+      try { await SHELF_SCANNER?.stop?.(); SHELF_SCANNER?.clear?.(); } catch {}
       area.innerHTML = "カメラ待機中…";
     });
 
@@ -1362,20 +1253,26 @@ function bindIO() {
     });
   }
 
-  /* -------------------- Export / Import wiring -------------------- */
+  /* -------------------- Export / Import (JP) -------------------- */
 
   // Users print
   $("#btn-print-qr-users")?.addEventListener("click", () => window.print());
 
-  // Users export/import
+  // Users export/import (JP headers)
   $("#btn-users-export")?.addEventListener("click", async () => {
     try {
       const list = await api("users", { method: "GET" });
       const arr = Array.isArray(list) ? list : (list?.data || []);
-      const csv = ["id,name,role"]
-        .concat(arr.map(u => [u.id, (u.name || "").replace(/,/g, " "), (u.role || "user")].join(","))).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = "users.csv"; a.click(); URL.revokeObjectURL(url);
+      const heads = ["ユーザーID","氏名","権限"];
+      const csv = [heads.join(",")]
+        .concat(arr.map(u => [
+          u.id,
+          String(u.name || "").replace(/,/g, " "),
+          (u.role || "user")
+        ].join(","))).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = "ユーザー一覧.csv"; a.click(); URL.revokeObjectURL(url);
     } catch { alert("エクスポート失敗"); }
   });
   $("#btn-users-import")?.addEventListener("click", () => {
@@ -1385,26 +1282,27 @@ function bindIO() {
   $("#input-users-import")?.addEventListener("change", async (e) => {
     if (!isAdmin()) return alert("権限がありません（admin のみ）");
     const f = e.target.files?.[0]; if (!f) return;
-    const text = await f.text(); const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
-    const start = rows[0]?.toLowerCase?.().startsWith("id") ? 1 : 0;
+    const text = await f.text();
+    const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
+    const start = rows[0]?.includes("ユーザーID") ? 1 : 0;
     let ok = 0, fail = 0;
     for (let i = start; i < rows.length; i++) {
       const [id, name, role] = rows[i].split(",").map(s => s?.trim());
       if (!id) { fail++; continue; }
-      try {
-        await api("upsertUser", { method: "POST", body: { id, name, role: (role || "user") } }); ok++;
-      } catch { fail++; }
+      try { await api("upsertUser", { method: "POST", body: { id, name, role: (role || "user") } }); ok++; }
+      catch { fail++; }
     }
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderUsers();
   });
 
-  // Items export (CSV) + department
+  // Items export (CSV) + Excel (JP)
   $("#btn-items-export")?.addEventListener("click", async (e) => {
     e.preventDefault();
     try {
       const list = await api("items", { method: "GET" });
       const arr = Array.isArray(list) ? list : (list?.data || []);
-      const csv = ["code,name,price,stock,min,location,department,img"]
+      const heads = ["コード","品名","価格","在庫","最小","置場","部門","画像"];
+      const csv = [heads.join(",")]
         .concat(arr.map(i => [
           i.code,
           String(i.name || "").replace(/,/g, " "),
@@ -1419,148 +1317,54 @@ function bindIO() {
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = "items.csv"; a.click();
+      a.href = url; a.download = "商品.csv"; a.click();
       URL.revokeObjectURL(url);
     } catch { alert("エクスポート失敗"); }
   });
 
-  // Items export (Excel)
   $("#btn-items-xlsx")?.addEventListener("click", async (e) => {
     e.preventDefault();
     try {
       const list = await api("items", { method: "GET" });
       const arr = Array.isArray(list) ? list : (list?.data || []);
       const rows = arr.map(i => ({
-        code: i.code,
-        name: i.name || "",
-        price: Number(i.price || 0),
-        stock: Number(i.stock || 0),
-        min: Number(i.min || 0),
-        location: String(i.location || "").toUpperCase(),
-        department: i.department || "",
-        img: i.img || ""
+        "コード": i.code,
+        "品名": i.name || "",
+        "価格": Number(i.price || 0),
+        "在庫": Number(i.stock || 0),
+        "最小": Number(i.min || 0),
+        "置場": String(i.location || "").toUpperCase(),
+        "部門": i.department || "",
+        "画像": i.img || ""
       }));
-      const ws = XLSX.utils.json_to_sheet(rows, { header: ["code","name","price","stock","min","location","department","img"] });
+      const ws = XLSX.utils.json_to_sheet(rows, { header: ["コード","品名","価格","在庫","最小","置場","部門","画像"] });
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "items");
-      XLSX.writeFile(wb, "items.xlsx");
+      XLSX.utils.book_append_sheet(wb, ws, "商品");
+      XLSX.writeFile(wb, "商品.xlsx");
     } catch { alert("エクスポート失敗"); }
   });
 
-  // --- Print all item labels (grid) ---
-  document.getElementById("btn-items-print-all")?.addEventListener("click", async () => {
-    try {
-      setLoading(true, "ラベルを生成中…");
-
-      let arr = _ITEMS_CACHE && _ITEMS_CACHE.length
-        ? _ITEMS_CACHE
-        : (await api("items", { method: "GET" })) || [];
-      if (!Array.isArray(arr)) arr = arr.data || [];
-
-      const urls = [];
-      for (const it of arr) { urls.push(await makeItemLabelDataURL(it)); }
-
-      const w = window.open("", "_blank");
-      const doc = w.document;
-      doc.write(`<!doctype html><html><head><meta charset="utf-8">
-        <title>Labels</title>
-        <style>
-          @page { size: A4; margin: 6mm; }
-          html,body{margin:0;padding:0}
-          .sheet{
-            display:grid;
-            grid-template-columns: repeat(auto-fill, minmax(90mm, 1fr));
-            gap:6mm;
-            align-items:start;
-          }
-          .label{ break-inside: avoid; page-break-inside: avoid; }
-          .label img{ width:100%; height:auto; display:block; }
-        </style>
-      </head><body><div class="sheet"></div></body></html>`);
-
-      const wrap = doc.querySelector(".sheet");
-      urls.forEach(u => {
-        const d = doc.createElement("div");
-        d.className = "label";
-        d.innerHTML = `<img src="${u}">`;
-        wrap.appendChild(d);
-      });
-
-      const imgs = [...doc.images];
-      let loaded = 0;
-      const done = () => { if (++loaded >= imgs.length) { w.focus(); w.print(); } };
-      if (imgs.length === 0) { w.focus(); w.print(); }
-      else imgs.forEach(im => (im.complete ? done() : im.onload = done));
-    } catch (e) {
-      console.error(e);
-      toast("印刷データの生成に失敗しました。");
-    } finally {
-      setLoading(false);
-    }
-  });
-
-  // ---------- Items Reload & Auto-refresh ----------
-  (function(){
-    let itemsAutoTimer = null;
-
-    function isItemsViewActive(){
-      const v = document.getElementById("view-items");
-      return v && !v.classList.contains("d-none");
-    }
-
-    async function reloadItemsSoft(){
-      try {
-        if (typeof window.renderItems === "function") {
-          await window.renderItems();
-        } else if (typeof window.loadItems === "function") {
-          await window.loadItems();
-        } else {
-          location.reload();
-          return;
-        }
-        if (isItemsViewActive() && typeof toast === "function") toast("更新しました");
-      } catch (e){
-        console.error(e);
-        location.reload();
-      }
-    }
-
-    document.getElementById("btn-items-reload")?.addEventListener("click", (e)=>{
-      e.preventDefault();
-      reloadItemsSoft();
-    });
-
-    document.querySelectorAll('[data-autorefresh]').forEach(el=>{
-      el.addEventListener("click", ()=>{
-        const sec = Number(el.getAttribute("data-autorefresh") || "0");
-        if (itemsAutoTimer) { clearInterval(itemsAutoTimer); itemsAutoTimer = null; }
-        const btn = document.getElementById("btn-items-auto");
-        if (btn) btn.textContent = sec ? `Auto ${sec}s` : "Auto";
-        if (!sec) return;
-        itemsAutoTimer = setInterval(()=>{
-          if (isItemsViewActive()) reloadItemsSoft();
-        }, sec * 1000);
-      });
-    });
-
-    window.addEventListener("beforeunload", ()=>{ if (itemsAutoTimer) clearInterval(itemsAutoTimer); });
-  })();
-
-  // Items import (CSV)
+  // Items import (CSV) — dukung header JP atau EN
   $("#btn-items-import")?.addEventListener("click", () => $("#input-items-import")?.click());
   $("#input-items-import")?.addEventListener("change", async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
-    const text = await file.text(); const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
-    const start = rows[0]?.toLowerCase?.().includes("code") ? 1 : 0;
+    const text = await file.text();
+    const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
+    const head = (rows[0] || "").toLowerCase();
+    const jp = head.includes("コード");
+    const start = (head.includes("code") || jp) ? 1 : 0;
     let ok = 0, fail = 0;
     for (let i = start; i < rows.length; i++) {
       const cols = rows[i].split(",").map(s => s?.trim());
-      const [code, name, price, stock, min, location, img, department] = [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7]];
+      const [code,name,price,stock,min,location,department,img] = jp
+        ? [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7]]
+        : [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[7], cols[6]]; // (EN: dep/img urutan lama)
       if (!code) { fail++; continue; }
       try {
         await api("updateItem", {
           method: "POST", body: {
-            code, name, price: Number(price || 0), stock: Number(stock || 0), min: Number(min || 0),
+            code, name,
+            price: Number(price || 0), stock: Number(stock || 0), min: Number(min || 0),
             location: (location || "").toUpperCase(), img, department: (department || "").trim(), overwrite: true
           }
         });
@@ -1570,29 +1374,31 @@ function bindIO() {
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderItems();
   });
 
-  // IO export/import
+  // IO export/import (CSV JP)
   $("#btn-io-export")?.addEventListener("click", async (e) => {
     e.preventDefault();
     try {
       const raw = await api("history", { method: "GET" });
       const list = Array.isArray(raw) ? raw : (raw?.history || raw?.data || []);
       const recent = list.slice(-200);
-      const csv = ["timestamp,userId,code,qty,unit,type,note"]
+      const heads = ["日時","ユーザーID","コード","数量","単位","種別","備考"];
+      const csv = [heads.join(",")]
         .concat(recent.map(h => [
           h.timestamp || h.date || "", h.userId || "", h.code || "", h.qty || 0, h.unit || "", h.type || "", (h.note || "").replace(/,/g, " ")
         ].join(","))).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = "io_history.csv"; a.click(); URL.revokeObjectURL(url);
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = "入出庫履歴.csv"; a.click(); URL.revokeObjectURL(url);
     } catch { alert("エクスポート失敗"); }
   });
   $("#btn-io-import")?.addEventListener("click", (e) => {
-    e.preventDefault();
-    $("#input-io-import")?.click();
+    e.preventDefault(); $("#input-io-import")?.click();
   });
   $("#input-io-import")?.addEventListener("change", async (e) => {
     const f = e.target.files?.[0]; if (!f) return;
-    const text = await f.text(); const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
-    const start = rows[0]?.toLowerCase?.().includes("user") ? 1 : 0;
+    const text = await f.text();
+    const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
+    const start = rows[0]?.includes("ユーザーID") || rows[0]?.toLowerCase?.().includes("user") ? 1 : 0;
     let ok = 0, fail = 0;
     for (let i = start; i < rows.length; i++) {
       const [userId, code, qty, unit, type, note] = rows[i].split(",").map(s => s?.trim());
@@ -1603,40 +1409,135 @@ function bindIO() {
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = "";
   });
 
-  // Stocktake export/import
-  $("#st-export2")?.addEventListener("click", () => {
-    const arr = [...(ST.rows?.values?.() || [])];
-    const csv = ["code,name,book,qty,diff"]
-      .concat(arr.map(r => [r.code, (r.name || "").replace(/,/g, " "), r.book, r.qty, r.diff].join(","))).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "stocktake.csv"; a.click(); URL.revokeObjectURL(url);
-  });
-  $("#st-import")?.addEventListener("click", () => $("#input-st-import")?.click());
-  $("#input-st-import")?.addEventListener("change", async (e) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const text = await f.text(); const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
-    const start = rows[0]?.toLowerCase?.().includes("code") ? 1 : 0;
-    for (let i = start; i < rows.length; i++) {
-      const [code, qty] = rows[i].split(",").map(s => s?.trim());
-      if (!code) continue; await addOrUpdateStocktake(code, Number(qty || 0));
-    }
-    e.target.value = ""; alert("インポート完了");
-  });
-
-  // History export
+  // 履歴 CSV (JP)
   $("#btn-history-export")?.addEventListener("click", async () => {
     try {
       const raw = await api("history", { method: "GET" });
       const list = Array.isArray(raw) ? raw : (raw?.history || raw?.data || []);
-      const csv = ["timestamp,userId,userName,code,itemName,qty,unit,type,note"]
+      const heads = ["日時","ユーザーID","ユーザー名","コード","品名","数量","単位","種別","備考"];
+      const csv = [heads.join(",")]
         .concat(list.map(h => [
-          h.timestamp || h.date || "", h.userId || "", h.userName || "", h.code || "", (h.itemName || h.name || "").replace(/,/g, " "),
-          h.qty || 0, h.unit || "", h.type || "", (h.note || "").replace(/,/g, " ")
+          h.timestamp || h.date || "",
+          h.userId || "",
+          h.userName || "",
+          h.code || "",
+          (h.itemName || h.name || "").replace(/,/g, " "),
+          h.qty || 0,
+          h.unit || "",
+          h.type || "",
+          (h.note || "").replace(/,/g, " ")
         ].join(","))).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = "history.csv"; a.click(); URL.revokeObjectURL(url);
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = "履歴.csv"; a.click(); URL.revokeObjectURL(url);
     } catch { alert("エクスポート失敗"); }
   });
+
+  /* -------------------- Tanaoroshi List (menu baru) -------------------- */
+  const JP_TANA_MAP = {
+    date:'日付', code:'コード', name:'品名', qty:'数量', unit:'単位',
+    location:'場所', department:'部門', userId:'担当者', note:'備考'
+  };
+  function tanaJPHeaders(){ return Object.values(JP_TANA_MAP); }
+  function tanaToJPRow(r){
+    return {
+      [JP_TANA_MAP.date]: r.date || '',
+      [JP_TANA_MAP.code]: r.code || '',
+      [JP_TANA_MAP.name]: r.name || '',
+      [JP_TANA_MAP.qty] : String(r.qty ?? ''),
+      [JP_TANA_MAP.unit]: r.unit || 'pcs',
+      [JP_TANA_MAP.location]: r.location || '',
+      [JP_TANA_MAP.department]: r.department || '',
+      [JP_TANA_MAP.userId]: r.userId || '',
+      [JP_TANA_MAP.note]: r.note || ''
+    };
+  }
+
+  async function loadTanaList(){
+    try{
+      const res = await api("tanaList", { method:'GET' });
+      const tbl = document.getElementById('tbl-tana');
+      if (!tbl) return;
+      if(!res || !Array.isArray(res.rows)){ tbl.innerHTML = '<tbody><tr><td>取得に失敗</td></tr></tbody>'; return; }
+      const heads = tanaJPHeaders();
+      tbl.innerHTML = '<thead><tr>' + heads.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
+      const rows = (res.rows||[]).map(tanaToJPRow);
+      tbl.insertAdjacentHTML('beforeend',
+        '<tbody>' + rows.map(r => `<tr>${
+          heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
+        }</tr>`).join('') + '</tbody>');
+    }catch{ /* noop */ }
+  }
+
+  $("#tana-exp")?.addEventListener("click", async ()=>{
+    const resp = await api("tanaExportCSV", { method:'GET' });
+    if(!resp || !resp.ok) return alert('エクスポート失敗');
+    const blob = new Blob([resp.csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download = resp.filename || '棚卸.csv'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  $("#input-tana-imp")?.addEventListener("change", async (ev)=>{
+    const file = ev.target.files?.[0]; if(!file) return;
+    const buf = await file.arrayBuffer();
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const resp = await api("tanaImportCSV", { method:'POST', body:{ csvBase64: b64 } });
+    if(!resp || !resp.ok) return alert('インポート失敗');
+    alert(`インポート: ${resp.imported} 行`);
+    loadTanaList();
+    ev.target.value = '';
+  });
+
+  async function renderShelfRecapForList(){
+    try {
+      const raw = await api("history", { method: "GET" });
+      const list = Array.isArray(raw) ? raw : (raw?.history || raw?.data || []);
+      const byMonth = new Map();
+      const byYear = new Map();
+      for (const h of list) {
+        const d = new Date(h.timestamp || h.date || ""); if (isNaN(d)) continue;
+        const m = d.toISOString().slice(0, 7);
+        const y = String(d.getFullYear());
+        const type = String(h.type || "").toUpperCase();
+        const qty = Number(h.qty || 0);
+        if (!byMonth.has(m)) byMonth.set(m, { in: 0, out: 0 });
+        if (!byYear.has(y)) byYear.set(y, { in: 0, out: 0 });
+        if (type === "IN") { byMonth.get(m).in += qty; byYear.get(y).in += qty; }
+        else if (type === "OUT") { byMonth.get(m).out += qty; byYear.get(y).out += qty; }
+      }
+
+      $("#tana-recap-export-monthly")?.addEventListener("click", () => {
+        const heads = ["月","IN","OUT"];
+        const csv = [heads.join(",")]
+          .concat([...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, v.in, v.out].join(","))).join("\n");
+        const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = "棚卸_月次.csv"; a.click(); URL.revokeObjectURL(url);
+      }, { once: true });
+
+      $("#tana-recap-export-yearly")?.addEventListener("click", () => {
+        const heads = ["年","IN","OUT"];
+        const csv = [heads.join(",")]
+          .concat([...byYear.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, v.in, k, v.out].join(",").replace(/,/,","))).join("\n"); // safe
+        const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = "棚卸_年次.csv"; a.click(); URL.revokeObjectURL(url);
+      }, { once: true });
+
+      $("#tana-matome-exp")?.addEventListener("click", async ()=>{
+        const res = await api("tanaList", { method:'GET' }); if(!res || !res.rows) return;
+        const agg = {}; res.rows.forEach(r=>{ agg[r.code] = (agg[r.code]||0) + Number(r.qty||0); });
+        const heads = ['コード','数量'];
+        const csv = [heads.join(',')]
+          .concat(Object.keys(agg).map(k=>[k, agg[k]].join(',')))
+          .join('\n');
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href=url; a.download = '棚卸まとめ.csv'; a.click();
+        URL.revokeObjectURL(url);
+      }, { once:true });
+
+    } catch (e) { /* noop */ }
+  }
 
   /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
@@ -1648,85 +1549,15 @@ function bindIO() {
     if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
     if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
 
-    // Penting: pasang handler setelah DOM siap
+    // Bind IO & Shelf (scan/input)
     bindIO();
     bindShelf();
 
+    // Dashboard
     renderDashboard();
+
+    // Logout
     $("#btn-logout")?.addEventListener("click", logout);
   });
 
 })();
-// === Tanaoroshi (棚卸) additions ===
-// Header map JP (frontend)
-const JP_TANA_MAP = {
-  date:'日付', code:'コード', name:'品名', qty:'数量', unit:'単位',
-  location:'場所', department:'部門', userId:'担当者', note:'備考'
-};
-function tanaJPHeaders(){ return Object.values(JP_TANA_MAP); }
-function tanaToJPRow(r){
-  return {
-    [JP_TANA_MAP.date]: r.date || '',
-    [JP_TANA_MAP.code]: r.code || '',
-    [JP_TANA_MAP.name]: r.name || '',
-    [JP_TANA_MAP.qty] : String(r.qty ?? ''),
-    [JP_TANA_MAP.unit]: r.unit || 'pcs',
-    [JP_TANA_MAP.location]: r.location || '',
-    [JP_TANA_MAP.department]: r.department || '',
-    [JP_TANA_MAP.userId]: r.userId || '',
-    [JP_TANA_MAP.note]: r.note || ''
-  };
-}
-
-// API helper assumed: api(payload) -> Promise
-// download helper assumed: downloadBlob(text, filename, mime)
-
-async function loadTanaList(){
-  const res = await api({ action:'tanaList' });
-  const tbl = document.getElementById('tbl-tana');
-  if (!tbl) return;
-  if(!res || !res.ok){ tbl.innerHTML = '<tbody><tr><td>取得に失敗</td></tr></tbody>'; return; }
-  const heads = tanaJPHeaders();
-  tbl.innerHTML = '<thead><tr>' + heads.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
-  const rows = res.rows.map(tanaToJPRow);
-  tbl.insertAdjacentHTML('beforeend',
-    '<tbody>' + rows.map(r => `<tr>${
-      heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
-    }</tr>`).join('') + '</tbody>');
-}
-
-function bindTanaUI(){
-  const nav = document.querySelector('[data-nav="tana-list"]');
-  if (nav) nav.addEventListener('click', loadTanaList);
-
-  const exp = document.getElementById('tana-exp');
-  if (exp) exp.addEventListener('click', async ()=>{
-    const resp = await api({ action:'tanaExportCSV' });
-    if(!resp || !resp.ok) return alert('エクスポート失敗');
-    downloadBlob(resp.csv, resp.filename, 'text/csv;charset=utf-8');
-  });
-
-  const imp = document.getElementById('tana-imp');
-  if (imp) imp.addEventListener('change', async (ev)=>{
-    const file = ev.target.files[0]; if(!file) return;
-    const buf = await file.arrayBuffer();
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-    const resp = await api({ action:'tanaImportCSV', csvBase64: b64 });
-    if(!resp || !resp.ok) return alert('インポート失敗');
-    alert(`インポート: ${resp.imported} 行`);
-    loadTanaList();
-    ev.target.value = '';
-  });
-
-  const matExp = document.getElementById('tana-matome-exp');
-  if (matExp) matExp.addEventListener('click', async ()=>{
-    const res = await api({ action:'tanaList' }); if(!res || !res.ok) return;
-    const agg = {}; res.rows.forEach(r=>{ agg[r.code] = (agg[r.code]||0) + Number(r.qty||0); });
-    const heads = ['コード','数量'];
-    const csv = [heads].concat(Object.keys(agg).map(k=>[k, agg[k]])).map(a=>a.join(',')).join('\n');
-    downloadBlob(csv, '棚卸まとめ_' + new Date().toISOString().slice(0,19).replace(/[-:T]/g,'') + '.csv', 'text/csv;charset=utf-8');
-  });
-}
-
-// Call once on app init
-document.addEventListener('DOMContentLoaded', bindTanaUI);
