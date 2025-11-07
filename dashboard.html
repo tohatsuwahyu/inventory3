@@ -16,31 +16,33 @@
   <link href="print.css?v=20251030" rel="stylesheet"/>
 
   <style>
-    :root{
-      --appbar-h: 56px;
-    }
+    :root{ --appbar-h:56px; }
     body{ background:#f6f8fc; }
+
+    /* Appbar */
     header.appbar{
       position:sticky; top:0; z-index:1020; background:#fff;
       border-bottom:1px solid #e5e7eb; height:var(--appbar-h);
       display:flex; align-items:center; gap:.75rem; padding:.5rem .75rem;
     }
-    .brand { display:flex; align-items:center; gap:.5rem; }
+    .brand{ display:flex; align-items:center; gap:.5rem; }
     .brand img{ height:28px; }
     .brand .ttl{ font-weight:600; color:#0f172a; }
     .appbar-actions{ margin-left:auto; display:flex; align-items:center; gap:.5rem; }
-    .app-layout{ display:grid; grid-template-columns: 240px 1fr; min-height:calc(100dvh - var(--appbar-h)); }
+
+    /* Layout */
+    .app-layout{ display:grid; grid-template-columns:240px 1fr; min-height:calc(100dvh - var(--appbar-h)); }
     aside{ background:#fff; border-right:1px solid #e5e7eb; }
     aside .menu{ padding:.75rem; }
     aside .menu a{ display:flex; gap:.5rem; align-items:center; padding:.5rem .75rem; border-radius:.5rem; color:#0f172a; text-decoration:none; }
     aside .menu a.active, aside .menu a:hover{ background:#eef2ff; }
     main{ padding:1rem; }
-    .metric-card .num{ font-size:1.6rem; font-weight:700; }
+
     /* Sidebar overlay (mobile) */
     #sb-backdrop{ display:none; }
     .sb-open #sb-backdrop{ display:block; position:fixed; inset:0; background:rgba(15,23,42,.25); z-index:1010; }
     @media (max-width: 992px){
-      .app-layout{ grid-template-columns: 0 1fr; }
+      .app-layout{ grid-template-columns:0 1fr; }
       aside{ position:fixed; z-index:1025; top:var(--appbar-h); bottom:0; width:260px; transform:translateX(-100%); transition:.2s; }
       .sb-open aside{ transform:none; }
     }
@@ -62,9 +64,7 @@
       position:fixed; right:16px; bottom:16px; z-index:1050;
       width:56px; height:56px; border-radius:50%; box-shadow:0 10px 30px rgba(2,6,23,.18);
     }
-    @media (min-width: 993px){
-      #fab-quick-io{ right:24px; bottom:24px; }
-    }
+    @media (min-width: 993px){ #fab-quick-io{ right:24px; bottom:24px; } }
 
     /* Scan areas */
     #io-scan-area, #scan-area, #qio-scan-area, #cy-scan-area{
@@ -72,12 +72,37 @@
       display:flex; align-items:center; justify-content:center; min-height:220px;
     }
 
-    /* Simple table scroll */
+    /* Table scroll */
     .table-wrap{ overflow:auto; }
 
     /* Global loading */
     #global-loading{ position:fixed; inset:0; background:rgba(255,255,255,.6); backdrop-filter:saturate(140%) blur(2px);
       z-index:2000; display:flex; align-items:center; justify-content:center; }
+
+    /* -------- Metric Cards (ikon + warna) -------- */
+    .metric-card{
+      display:flex; gap:14px; align-items:center;
+      background:#fff; border:1px solid #e5e7eb; border-radius:16px;
+      padding:16px 18px; box-shadow:0 8px 26px rgba(15,23,42,.06);
+    }
+    .metric-card .mc-icon{
+      width:52px; height:52px; border-radius:14px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:24px;
+    }
+    .metric-card .mc-meta{ line-height:1.1 }
+    .metric-card .mc-label{ font-size:12px; color:#6b7280; letter-spacing:.02em }
+    .metric-card .mc-value{ font-size:28px; font-weight:800; margin-top:4px }
+
+    .mc-items .mc-icon{ background:linear-gradient(135deg,#dbeafe,#bfdbfe); color:#1d4ed8 }
+    .mc-low   .mc-icon{ background:linear-gradient(135deg,#fee2e2,#fecaca); color:#b91c1c }
+    .mc-users .mc-icon{ background:linear-gradient(135deg,#e9d5ff,#ddd6fe); color:#6d28d9 }
+
+    /* Charts fixed heights (kolom kanan tidak kosong) */
+    .chart-box{ position:relative; width:100% }
+    .chart-lg{ height:380px }
+    .chart-sm{ height:260px }
+    .chart-box canvas{ width:100% !important; height:100% !important; }
   </style>
 </head>
 <body>
@@ -127,74 +152,63 @@
       <section id="view-dashboard" class="active">
         <h5 id="page-title" class="mb-3">ダッシュボード</h5>
 
-        <!-- METRIC CARDS -->
-<div class="row g-3 align-items-stretch">
-  <div class="col-12 col-md-4">
-    <div class="metric-card mc-items h-100">
-      <div class="mc-icon"><i class="bi bi-box-seam"></i></div>
-      <div class="mc-meta">
-        <div class="mc-label">商品数</div>
-        <div class="mc-value" id="metric-total-items">0</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-12 col-md-4">
-    <div class="metric-card mc-low h-100">
-      <div class="mc-icon"><i class="bi bi-exclamation-triangle"></i></div>
-      <div class="mc-meta">
-        <div class="mc-label">在庫不足</div>
-        <div class="mc-value" id="metric-low-stock">0</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-12 col-md-4">
-    <div class="metric-card mc-users h-100">
-      <div class="mc-icon"><i class="bi bi-people"></i></div>
-      <div class="mc-meta">
-        <div class="mc-label">ユーザー</div>
-        <div class="mc-value" id="metric-users">0</div>
-      </div>
-    </div>
-  </div>
-</div>
-          <div class="col-12 col-lg-3">
-            <div class="d-grid gap-2">
-              <button id="btn-export-mov" class="btn btn-outline-primary"><i class="bi bi-download"></i> 月次IN/OUT CSV</button>
-              <button id="fab-quick-io" class="btn btn-primary d-lg-none"><i class="bi bi-plus-lg"></i></button>
+        <!-- Metric cards -->
+        <div class="row g-3 align-items-stretch">
+          <div class="col-12 col-md-4">
+            <div class="metric-card mc-items h-100">
+              <div class="mc-icon"><i class="bi bi-box-seam"></i></div>
+              <div class="mc-meta">
+                <div class="mc-label">商品数</div>
+                <div class="mc-value" id="metric-total-items">0</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="metric-card mc-low h-100">
+              <div class="mc-icon"><i class="bi bi-exclamation-triangle"></i></div>
+              <div class="mc-meta">
+                <div class="mc-label">在庫不足</div>
+                <div class="mc-value" id="metric-low-stock">0</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="metric-card mc-users h-100">
+              <div class="mc-icon"><i class="bi bi-people"></i></div>
+              <div class="mc-meta">
+                <div class="mc-label">ユーザー</div>
+                <div class="mc-value" id="metric-users">0</div>
+              </div>
             </div>
           </div>
         </div>
-<!-- CHARTS ROW -->
-<div class="row g-3 mt-2">
-  <div class="col-12 col-lg-8">
-    <div class="card">
-      <div class="card-body">
-        <div class="fw-semibold mb-2">月次推移</div>
-        <div class="chart-box chart-lg"><canvas id="chart-monthly"></canvas></div>
-      </div>
-    </div>
-  </div>
-  <div class="col-12 col-lg-4">
-    <div class="card">
-      <div class="card-body">
-        <div class="fw-semibold mb-2">直近 IN/OUT</div>
-        <div class="chart-box chart-sm"><canvas id="chart-pie"></canvas></div>
-      </div>
-    </div>
-  </div>
-</div>
 
-        <div class="row g-3 mt-1">
+        <!-- Action bar -->
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div></div>
+          <div class="d-flex gap-2">
+            <button id="btn-export-mov" class="btn btn-outline-primary">
+              <i class="bi bi-download me-1"></i> 月次IN/OUT CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="row g-3 mt-2">
           <div class="col-12 col-lg-8">
-            <div class="card p-3">
-              <div class="fw-semibold mb-2">月次推移</div>
-              <div style="height:300px"><canvas id="chart-monthly"></canvas></div>
+            <div class="card">
+              <div class="card-body">
+                <div class="fw-semibold mb-2">月次推移</div>
+                <div class="chart-box chart-lg"><canvas id="chart-monthly"></canvas></div>
+              </div>
             </div>
           </div>
           <div class="col-12 col-lg-4">
-            <div class="card p-3">
-              <div class="fw-semibold mb-2">直近 IN/OUT</div>
-              <div style="height:300px"><canvas id="chart-pie"></canvas></div>
+            <div class="card">
+              <div class="card-body">
+                <div class="fw-semibold mb-2">直近 IN/OUT</div>
+                <div class="chart-box chart-sm"><canvas id="chart-pie"></canvas></div>
+              </div>
             </div>
           </div>
         </div>
@@ -206,6 +220,9 @@
             <button id="btn-close-detail" class="btn btn-outline-secondary btn-sm">閉じる</button>
           </div>
         </div>
+
+        <!-- Floating Quick IO (mobile) -->
+        <button id="fab-quick-io" class="btn btn-primary d-lg-none"><i class="bi bi-plus-lg"></i></button>
       </section>
 
       <!-- Items -->
