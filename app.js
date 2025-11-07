@@ -1454,20 +1454,38 @@
   }
 
   async function loadTanaList(){
-    try{
-      const res = await api("tanaList", { method:'GET' });
-      const tbl = document.getElementById('tbl-tana');
-      if (!tbl) return;
-      if(!res || !Array.isArray(res.rows)){ tbl.innerHTML = '<tbody><tr><td>取得に失敗</td></tr></tbody>'; return; }
-      const heads = tanaJPHeaders();
-      tbl.innerHTML = '<thead><tr>' + heads.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
-      const rows = (res.rows||[]).map(tanaToJPRow);
+  try{
+    const res = await api("tanaList", { method:'GET' });
+    const tbl = document.getElementById('tbl-tana');
+    if (!tbl) return;
+
+    // Terima berbagai bentuk: array langsung, {rows:[]}, atau {data:[]}
+    const rowsRaw =
+      Array.isArray(res) ? res :
+      Array.isArray(res?.rows) ? res.rows :
+      Array.isArray(res?.data) ? res.data : [];
+
+    const heads = tanaJPHeaders();
+    tbl.innerHTML = '<thead><tr>' + heads.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
+
+    if (!rowsRaw.length){
       tbl.insertAdjacentHTML('beforeend',
-        '<tbody>' + rows.map(r => `<tr>${
-          heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
-        }</tr>`).join('') + '</tbody>');
-    }catch{ /* noop */ }
+        '<tbody><tr><td colspan="'+heads.length+'" class="text-muted py-4">データはありません</td></tr></tbody>');
+      return;
+    }
+
+    const rows = rowsRaw.map(tanaToJPRow);
+    tbl.insertAdjacentHTML('beforeend',
+      '<tbody>' + rows.map(r => `<tr>${
+        heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
+      }</tr>`).join('') + '</tbody>');
+  }catch{
+    const tbl = document.getElementById('tbl-tana');
+    if (tbl) tbl.innerHTML =
+      '<tbody><tr><td class="text-danger">取得に失敗</td></tr></tbody>';
   }
+}
+
 
   $("#tana-exp")?.addEventListener("click", async ()=>{
     const resp = await api("tanaExportCSV", { method:'GET' });
