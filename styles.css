@@ -570,3 +570,21 @@ header.appbar{ position: sticky; top: 0; z-index: 1020; } /* terasa app-like */
     word-break: keep-all !important;
   }
 }
+/* === Responsive grid & cards for 棚卸 pages (ADD) === */
+.grid-xl { display: grid; gap: 16px; }
+.grid-xl.cols-2 { grid-template-columns: repeat(1, minmax(0,1fr)); }
+@media (min-width: 1024px){
+  .grid-xl.cols-2 { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 1440px){
+  .page .container, .page { max-width: 1280px; margin: 0 auto; }
+}
+.page-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.table.compact th, .table.compact td { padding: 6px 10px; }
+.card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.04); }
+.card .card-body { padding:14px; }
+.title { font-size:20px; font-weight:700; }
+.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.row.between { justify-content:space-between; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.hidden { display:none; }
