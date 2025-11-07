@@ -15,24 +15,19 @@
   // Escape
   function escapeHtml(s){ return String(s || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
   function escapeAttr(s){ return escapeHtml(s); }
-// CSV helper: paksa Excel baca UTF-8 + JP header OK
-// CSV helper: paksa Excel baca UTF-8 + JP header OK
-function downloadCSV_JP(filename, csv){
-  const bom = "\uFEFF"; // UTF-8 BOM
-  const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  // Jangan langsung revoke; beberapa browser bisa batal download.
-  // Kalau mau rapi, revoke dengan jeda:
-  // setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
+  // CSV helper: paksa Excel baca UTF-8 + JP header OK
+  function downloadCSV_JP(filename, csv){
+    const bom = "\uFEFF"; // UTF-8 BOM
+    const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
 
   // File helpers
   function sanitizeFilename(name){ return String(name || "").replace(/[\\/:*?"<>|]/g, "_"); }
   function normalizeCodeDash(s){ return String(s || "").replace(/[\u2212\u2010-\u2015\uFF0D]/g, "-").trim(); }
-function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
 
   // Global caches
   let _ITEMS_CACHE = [];
@@ -141,6 +136,7 @@ function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
       if (id === "view-history") renderHistory();
       if (id === "view-shelf") { renderShelfTable(); }
       if (id === "view-shelf-list") { loadTanaList(); renderShelfRecapForList(); }
+      // view-cycle akan aktif otomatis jika section ada
     });
   })();
 
@@ -201,36 +197,43 @@ function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
       toast("ダッシュボードの読み込みに失敗しました。");
     }
   }
-// === Live reload antar device (5 detik) ===
-let LIVE_TIMER = null;
-function startLiveReload(){
-  clearInterval(LIVE_TIMER);
-  LIVE_TIMER = setInterval(async () => {
-    try {
-      const active = document.querySelector("main section.active")?.id || "";
-      // refresh cache item supaya stok/nama terbaru
-      api("items", { method: "GET", silent: true }).then(list => {
-        _ITEMS_CACHE = Array.isArray(list) ? list : (list?.data || []);
-      }).catch(()=>{});
-      // per layar aktif:
-      if (active === "view-dashboard")    renderDashboard();
-      if (active === "view-history")      renderHistory();
-      if (active === "view-shelf-list") { loadTanaList(); }       // 棚卸一覧
-      // opsional: jika ingin tabel ST ikut update ringkasan (tanpa merusak entry lokal)
-      // if (active === "view-shelf") renderShelfTable();
-    } catch {}
-  }, 5000);
-}
+
+  // === Live reload antar device (5 detik) ===
+  let LIVE_TIMER = null;
+  function startLiveReload(){
+    clearInterval(LIVE_TIMER);
+    LIVE_TIMER = setInterval(async () => {
+      try {
+        const active = document.querySelector("main section.active")?.id || "";
+        // refresh cache item supaya stok/nama terbaru
+        api("items", { method: "GET", silent: true }).then(list => {
+          _ITEMS_CACHE = Array.isArray(list) ? list : (list?.data || []);
+        }).catch(()=>{});
+        // per layar aktif:
+        if (active === "view-dashboard")    renderDashboard();
+        if (active === "view-history")      renderHistory();
+        if (active === "view-shelf-list") { loadTanaList(); }       // 棚卸一覧
+        // if (active === "view-shelf") renderShelfTable();
+      } catch {}
+    }, 5000);
+  }
 
   /* -------------------- Items -------------------- */
+  // versi dengan badge stok
   function tplItemRow(it) {
-   const qrid = `qr-${safeId(it.code)}`;
+    const qrid = `qr-${it.code}`;
+    const stock = Number(it.stock||0), min = Number(it.min||0);
+    let badgeClass = 'text-bg-success', badgeText = 'OK';
+    if (stock <= min) { badgeClass = 'text-bg-danger'; badgeText = 'LOW'; }
+    else if (stock <= min * 1.3) { badgeClass = 'text-bg-warning'; badgeText = 'WARN'; }
 
     return `<tr>
       <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
       <td>${escapeHtml(it.code)}</td>
-     <td><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
-
+      <td>
+        <a href="#" class="link-underline link-item" data-code="${escapeHtml(it.code)}">${escapeHtml(it.name)}</a>
+        <span class="badge ${badgeClass} ms-2 align-middle">${badgeText}</span>
+      </td>
       <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ""}</td>
       <td class="text-end">¥${fmt(it.price)}</td>
       <td class="text-end">${fmt(it.stock)}</td>
@@ -258,8 +261,7 @@ function startLiveReload(){
 
       await ensureQRCode();
       for (const it of _ITEMS_CACHE) {
-        const holder = document.getElementById(`qr-${safeId(it.code)}`);
-
+        const holder = document.getElementById(`qr-${it.code}`);
         if (!holder) continue; holder.innerHTML = "";
         new QRCode(holder, { text: `ITEM|${normalizeCodeDash(it.code)}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
       }
@@ -1217,30 +1219,15 @@ function startLiveReload(){
       sumEl.textContent = `件数: ${total} ／ 差異あり: ${diffRows} ／ 差異合計: ${fmt(diffSum)} ／ 絶対差異: ${fmt(absSum)}`;
     }
 
-   tbody.oninput = (e) => {
-  const tr = e.target.closest("tr"); if (!tr) return;
-  if (!e.target.classList.contains("st-qty")) return;
-
-  const code = tr.getAttribute("data-code");
-  const rec = ST.rows.get(code); if (!rec) return;
-
-  rec.qty = Number(e.target.value || 0);
-  rec.diff = rec.qty - rec.book;
-
-  // update sel diff
-  tr.children[5].textContent = fmt(rec.diff);
-  tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
-
-  // hitung ulang summary tanpa re-render tabel
-  const arr = [...ST.rows.values()];
-  const sumEl = $("#st-summary");
-  if (sumEl){
-    const diffRows = arr.filter(x => (x.diff||0) !== 0).length;
-    const diffSum  = arr.reduce((a,b)=>a+Number(b.diff||0),0);
-    const absSum   = arr.reduce((a,b)=>a+Math.abs(Number(b.diff||0)),0);
-    sumEl.textContent = `件数: ${arr.length} ／ 差異あり: ${diffRows} ／ 差異合計: ${fmt(diffSum)} ／ 絶対差異: ${fmt(absSum)}`;
-  }
-};
+    tbody.oninput = (e) => {
+      const tr = e.target.closest("tr"); if (!tr) return;
+      if (!e.target.classList.contains("st-qty")) return;
+      const code = tr.getAttribute("data-code"); const rec = ST.rows.get(code); if (!rec) return;
+      rec.qty = Number(e.target.value || 0); rec.diff = rec.qty - rec.book;
+      tr.children[5].textContent = fmt(rec.diff);
+      tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
+      $("#st-summary") && renderShelfTable();
+    };
 
     tbody.onclick = (e) => {
       const tr = e.target.closest("tr"); if (!tr) return; 
@@ -1494,45 +1481,43 @@ function startLiveReload(){
   }
 
   async function loadTanaList(){
-  try{
-    const res = await api("tanaList", { method:'GET' });
-    const tbl = document.getElementById('tbl-tana');
-    if (!tbl) return;
+    try{
+      const res = await api("tanaList", { method:'GET' });
+      const tbl = document.getElementById('tbl-tana');
+      if (!tbl) return;
 
-    // Terima berbagai bentuk: array langsung, {rows:[]}, atau {data:[]}
-    const rowsRaw =
-      Array.isArray(res) ? res :
-      Array.isArray(res?.rows) ? res.rows :
-      Array.isArray(res?.data) ? res.data : [];
+      // Terima berbagai bentuk: array langsung, {rows:[]}, atau {data:[]}
+      const rowsRaw =
+        Array.isArray(res) ? res :
+        Array.isArray(res?.rows) ? res.rows :
+        Array.isArray(res?.data) ? res.data : [];
 
-    const heads = tanaJPHeaders();
-    tbl.innerHTML = '<thead><tr>' + heads.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
+      const heads = tanaJPHeaders();
+      tbl.innerHTML = '<thead><tr>' + heads.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
 
-    if (!rowsRaw.length){
+      if (!rowsRaw.length){
+        tbl.insertAdjacentHTML('beforeend',
+          '<tbody><tr><td colspan="'+heads.length+'" class="text-muted py-4">データはありません</td></tr></tbody>');
+        return;
+      }
+
+      const rows = rowsRaw.map(tanaToJPRow);
       tbl.insertAdjacentHTML('beforeend',
-        '<tbody><tr><td colspan="'+heads.length+'" class="text-muted py-4">データはありません</td></tr></tbody>');
-      return;
+        '<tbody>' + rows.map(r => `<tr>${
+          heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
+        }</tr>`).join('') + '</tbody>');
+    }catch{
+      const tbl = document.getElementById('tbl-tana');
+      if (tbl) tbl.innerHTML =
+        '<tbody><tr><td class="text-danger">取得に失敗</td></tr></tbody>';
     }
-
-    const rows = rowsRaw.map(tanaToJPRow);
-    tbl.insertAdjacentHTML('beforeend',
-      '<tbody>' + rows.map(r => `<tr>${
-        heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
-      }</tr>`).join('') + '</tbody>');
-  }catch{
-    const tbl = document.getElementById('tbl-tana');
-    if (tbl) tbl.innerHTML =
-      '<tbody><tr><td class="text-danger">取得に失敗</td></tr></tbody>';
   }
-}
 
-
- $("#tana-exp")?.addEventListener("click", async ()=>{
-  const resp = await api("tanaExportCSV", { method:'GET' });
-  if(!resp || !resp.ok) return alert('エクスポート失敗');
-  downloadCSV_JP(resp.filename || "棚卸.csv", resp.csv);
-});
-
+  $("#tana-exp")?.addEventListener("click", async ()=>{
+    const resp = await api("tanaExportCSV", { method:'GET' });
+    if(!resp || !resp.ok) return alert('エクスポート失敗');
+    downloadCSV_JP(resp.filename || "棚卸.csv", resp.csv);
+  });
 
   $("#input-tana-imp")?.addEventListener("change", async (ev)=>{
     const file = ev.target.files?.[0]; if(!file) return;
@@ -1567,154 +1552,280 @@ function startLiveReload(){
         const heads = ["月","IN","OUT"];
         const csv = [heads.join(",")]
           .concat([...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, v.in, v.out].join(","))).join("\n");
-       downloadCSV_JP("棚卸_月次.csv", csv);
+        downloadCSV_JP("棚卸_月次.csv", csv);
       }, { once: true });
 
       $("#tana-recap-export-yearly")?.addEventListener("click", () => {
-  const heads = ["年","IN","OUT"];
-  const csv = [heads.join(",")]
-    .concat(
-      [...byYear.entries()]
-        .sort((a,b)=>a[0].localeCompare(b[0]))
-        .map(([k,v]) => [k, v.in, v.out].join(","))
-    )
-    .join("\n");
-  downloadCSV_JP("棚卸_年次.csv", csv);
-}, { once: true });
+        const heads = ["年","IN","OUT"];
+        const csv = [heads.join(",")]
+          .concat(
+            [...byYear.entries()]
+              .sort((a,b)=>a[0].localeCompare(b[0]))
+              .map(([k,v]) => [k, v.in, v.out].join(","))
+          )
+          .join("\n");
+        downloadCSV_JP("棚卸_年次.csv", csv);
+      }, { once: true });
 
-
-     $("#tana-matome-exp")?.addEventListener("click", async ()=>{
-  const res = await api("tanaList", { method:'GET' }); if(!res || !res.rows) return;
-  const agg = {}; res.rows.forEach(r=>{ agg[r.code] = (agg[r.code]||0) + Number(r.qty||0); });
-  const heads = ['コード','数量'];
-  const csv = [heads.join(',')]
-    .concat(Object.keys(agg).map(k=>[k, agg[k]].join(',')))
-    .join('\n');
-  downloadCSV_JP("棚卸まとめ.csv", csv);
-}, { once:true });
-
+      $("#tana-matome-exp")?.addEventListener("click", async ()=>{
+        const res = await api("tanaList", { method:'GET' }); if(!res || !res.rows) return;
+        const agg = {}; res.rows.forEach(r=>{ agg[r.code] = (agg[r.code]||0) + Number(r.qty||0); });
+        const heads = ['コード','数量'];
+        const csv = [heads.join(',')]
+          .concat(Object.keys(agg).map(k=>[k, agg[k]].join(',')))
+          .join('\n');
+        downloadCSV_JP("棚卸まとめ.csv", csv);
+      }, { once:true });
 
     } catch (e) { /* noop */ }
   }
 
-  /* -------------------- Boot -------------------- */
+  /* ===== Global Search ===== */
+  function bindGlobalSearch(){
+    const input = document.getElementById('global-search');
+    const box   = document.getElementById('global-search-results');
+    if (!input || !box) return;
+
+    let t = null;
+    function hide(){ box.style.display='none'; box.innerHTML=''; }
+
+    input.addEventListener('input', ()=>{
+      clearTimeout(t);
+      const q = (input.value||'').trim().toLowerCase();
+      if (!q){ hide(); return; }
+      t = setTimeout(()=>{
+        const arr = (_ITEMS_CACHE||[]).filter(it=>{
+          const name = (it.name||'').toLowerCase();
+          const code = (String(it.code||'')).toLowerCase();
+          const loc  = (String(it.location||'')).toLowerCase();
+          return name.includes(q) || code.includes(q) || loc.includes(q);
+        }).slice(0,8);
+
+        if (!arr.length){ hide(); return; }
+        box.innerHTML = arr.map(it=>`
+          <a href="#" class="list-group-item list-group-item-action" data-code="${escapeAttr(it.code)}">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <div class="fw-semibold">${escapeHtml(it.name||'')}</div>
+                <div class="small text-muted">${escapeHtml(it.code||'')} ・ ${escapeHtml((it.location||'').toUpperCase())}</div>
+              </div>
+              <span class="badge text-bg-light">${fmt(it.stock||0)}</span>
+            </div>
+          </a>
+        `).join('');
+        box.style.display='block';
+      }, 200);
+    });
+
+    box.addEventListener('click', (e)=>{
+      const a = e.target.closest('a[data-code]'); if (!a) return;
+      e.preventDefault();
+      const code = a.getAttribute('data-code');
+      const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
+      // pastikan view items aktif
+      const navLink = document.querySelector('aside nav a[data-view="view-items"]');
+      if (navLink){ navLink.click(); }
+      showItemDetail(it);
+      hide();
+      input.blur();
+    });
+
+    document.addEventListener('click', (e)=>{
+      if (!e.target.closest('#global-search') && !e.target.closest('#global-search-results')) hide();
+    });
+  }
+
   /* ===== Quick IN/OUT ===== */
-let QIO_SCANNER = null;
+  let QIO_SCANNER = null;
 
-function openQuickIO(){
-  const m = new bootstrap.Modal(document.getElementById('modal-quick-io'));
-  // reset
-  $('#qio-code').value = '';
-  $('#qio-qty').value  = 1;
-  $('#qio-unit').value = 'pcs';
-  $('#qio-in').checked = true;
-  $('#qio-preview').textContent = '';
-  $('#qio-scan-area').innerHTML = '';
-  m.show();
+  function openQuickIO(){
+    const m = new bootstrap.Modal(document.getElementById('modal-quick-io'));
+    // reset
+    $('#qio-code').value = '';
+    $('#qio-qty').value  = 1;
+    $('#qio-unit').value = 'pcs';
+    $('#qio-in').checked = true;
+    $('#qio-preview').textContent = '';
+    $('#qio-scan-area').innerHTML = '';
+    m.show();
 
-  // fokus awal
-  setTimeout(()=> $('#qio-code').focus(), 200);
-}
+    // fokus awal
+    setTimeout(()=> $('#qio-code').focus(), 200);
+  }
 
-function bindQuickIO(){
-  const fab = document.getElementById('fab-quick-io');
-  const form= document.getElementById('form-quick-io');
-  const btnScan = document.getElementById('qio-scan');
-  const area = document.getElementById('qio-scan-area');
+  function bindQuickIO(){
+    const fab = document.getElementById('fab-quick-io');
+    const form= document.getElementById('form-quick-io');
+    const btnScan = document.getElementById('qio-scan');
+    const area = document.getElementById('qio-scan-area');
 
-  if (fab) fab.addEventListener('click', openQuickIO);
+    if (fab) fab.addEventListener('click', openQuickIO);
 
-  // scan: isi #qio-code → fokus qty
-  if (btnScan && area){
-    btnScan.addEventListener('click', async ()=>{
+    // scan: isi #qio-code → fokus qty
+    if (btnScan && area){
+      btnScan.addEventListener('click', async ()=>{
+        area.textContent = 'カメラ起動中…';
+        try{
+          QIO_SCANNER = await startBackCameraScan('qio-scan-area', async (txt)=>{
+            const p = parseScanText(txt);
+            if (!p){ toast(`アイテムが見つかりません：${txt}`); return; }
+            if (p.kind === 'item'){
+              $('#qio-code').value = p.code;
+              await findItemIntoIO(p.code);
+              $('#qio-preview').textContent = `コード：${p.code}`;
+              $('#qio-qty').focus();
+            } else if (p.kind === 'lot'){
+              $('#qio-code').value = p.code;
+              $('#qio-qty').value  = Number(p.qty||1);
+              await findItemIntoIO(p.code);
+              $('#qio-preview').textContent = `コード：${p.code} / 数量：${p.qty}` + (p.lot?` / ロット：${p.lot}`:'');
+              $('#qio-qty').focus();
+            }
+          });
+        }catch(e){ toast(e?.message||String(e)); }
+      });
+    }
+
+    // Enter di qty = submit
+    $('#qio-qty')?.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter'){ e.preventDefault(); form?.requestSubmit(); }
+    });
+
+    // submit
+    if (form){
+      form.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const who = getCurrentUser(); if (!who) return toast('ログイン情報がありません。');
+        const code = $('#qio-code').value?.trim();
+        const qty  = Number($('#qio-qty').value||0);
+        const unit = $('#qio-unit').value||'pcs';
+        const type = (document.querySelector('input[name="qio-type"]:checked')?.value)||'IN';
+
+        if (!code || !qty) return;
+
+        if (type === 'ADJUST' && qty !== 0){
+          if (!confirm(`在庫を調整しますか？（${qty>0?'+':''}${qty}）この操作は履歴に記録されます。`)) return;
+        }
+
+        try{
+          const r = await api('log', { method:'POST', body:{ userId: who.id, code, qty, unit, type } });
+          if (r?.ok){
+            toast(`登録しました（${type} ${qty} ${unit}）`);
+            await findItemIntoIO(code);
+            renderDashboard();
+            bootstrap.Modal.getInstance(document.getElementById('modal-quick-io'))?.hide();
+          } else {
+            toast(r?.error || `登録失敗：${code}`);
+          }
+        }catch(err){ toast('登録失敗：' + (err?.message||err)); }
+      });
+    }
+
+    // bersihkan kamera saat modal ditutup
+    document.getElementById('modal-quick-io')?.addEventListener('hidden.bs.modal', async ()=>{
+      try{ await QIO_SCANNER?.stop?.(); QIO_SCANNER?.clear?.(); }catch{}
+      $('#qio-scan-area').innerHTML = '';
+    });
+  }
+
+  /* ===== Cycle Count Session ===== */
+  const CY_KEY = 'cycleSession';
+  let CY_SCANNER = null;
+
+  function cyLoad(){
+    try{ return JSON.parse(localStorage.getItem(CY_KEY)||'{"zone":"","rows":{}}'); }catch{return {zone:'', rows:{}};}
+  }
+  function cySave(s){ localStorage.setItem(CY_KEY, JSON.stringify(s)); }
+
+  function cyRender(){
+    const s = cyLoad();
+    $('#cy-zone') && ($('#cy-zone').value = s.zone||'');
+    const tb = $('#cy-table tbody'); if (!tb) return;
+    const rows = s.rows||{};
+    const arr = Object.keys(rows).map(code=>{
+      const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code))||{};
+      return { code, name: it.name||'', qty: rows[code], loc: (it.location||'').toUpperCase() };
+    });
+    tb.innerHTML = arr.map(r=>`<tr><td>${escapeHtml(r.code)}</td><td>${escapeHtml(r.name)}</td><td class="text-end">${fmt(r.qty)}</td><td>${escapeHtml(r.loc)}</td></tr>`).join('');
+    $('#cy-info') && ($('#cy-info').textContent = `件数：${arr.length}`);
+  }
+
+  function bindCycle(){
+    const btnStart = $('#cy-start'), btnStop = $('#cy-stop'), exp = $('#cy-exp'), clr = $('#cy-clear');
+    const area = $('#cy-scan-area'), zoneInput = $('#cy-zone');
+    if (!area) return;
+
+    zoneInput?.addEventListener('input', ()=>{
+      const s = cyLoad(); s.zone = (zoneInput.value||'').trim().toUpperCase(); cySave(s);
+    });
+
+    btnStart?.addEventListener('click', async ()=>{
       area.textContent = 'カメラ起動中…';
       try{
-        QIO_SCANNER = await startBackCameraScan('qio-scan-area', async (txt)=>{
-          const p = parseScanText(txt);
-          if (!p){ toast(`アイテムが見つかりません：${txt}`); return; }
-          if (p.kind === 'item'){
-            $('#qio-code').value = p.code;
-            await findItemIntoIO(p.code); // isi preview IO kalau ingin
-            $('#qio-preview').textContent = `コード：${p.code}`;
-            $('#qio-qty').focus();
-          } else if (p.kind === 'lot'){
-            // untuk LOT, ambil qty dari QR
-            $('#qio-code').value = p.code;
-            $('#qio-qty').value  = Number(p.qty||1);
-            await findItemIntoIO(p.code);
-            $('#qio-preview').textContent = `コード：${p.code} / 数量：${p.qty}` + (p.lot?` / ロット：${p.lot}`:'');
-            $('#qio-qty').focus();
+        CY_SCANNER = await startBackCameraScan('cy-scan-area', async (txt)=>{
+          const p = parseScanText(txt); if (!p) return;
+          const s = cyLoad();
+          const zone = (s.zone||'').trim();
+          if (zone && zone !== '*'){
+            const it = _ITEMS_CACHE.find(x=>String(x.code)===String(p.code));
+            const ok = it && ((it.location||'').toUpperCase().startsWith(zone.replace('*','')));
+            if (!ok){ toast(`置場がゾーン外です：${(it?.location||'').toUpperCase()}`); return; }
           }
+          const code = p.code;
+          s.rows[code] = (s.rows[code]||0) + (p.kind==='lot' ? Number(p.qty||0) : 1);
+          cySave(s); cyRender();
         });
       }catch(e){ toast(e?.message||String(e)); }
     });
-  }
 
-  // Enter di qty = submit
-  $('#qio-qty')?.addEventListener('keydown', (e)=>{
-    if (e.key === 'Enter'){ e.preventDefault(); form?.requestSubmit(); }
-  });
+    btnStop?.addEventListener('click', async ()=>{
+      try{ await CY_SCANNER?.stop?.(); CY_SCANNER?.clear?.(); }catch{}
+      area.textContent = 'カメラ待機中…';
+    });
 
-  // submit
-  if (form){
-    form.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      const who = getCurrentUser(); if (!who) return toast('ログイン情報がありません。');
-      const code = $('#qio-code').value?.trim();
-      const qty  = Number($('#qio-qty').value||0);
-      const unit = $('#qio-unit').value||'pcs';
-      const type = (document.querySelector('input[name="qio-type"]:checked')?.value)||'IN';
+    exp?.addEventListener('click', ()=>{
+      const s = cyLoad(); const rows = s.rows||{};
+      const heads = ['コード','数量','ゾーン'];
+      const csv = [heads.join(',')].concat(
+        Object.keys(rows).map(code=>[code, rows[code], s.zone||''].join(','))
+      ).join('\n');
+      downloadCSV_JP('棚卸セッション.csv', csv);
+    });
 
-      if (!code || !qty) return;
-
-      // konfirmasi berisiko untuk Adjust/OUT negatif
-      if (type === 'ADJUST' && qty !== 0){
-        if (!confirm(`在庫を調整しますか？（${qty>0?'+':''}${qty}）この操作は履歴に記録されます。`)) return;
-      }
-
-      try{
-        const r = await api('log', { method:'POST', body:{ userId: who.id, code, qty, unit, type } });
-        if (r?.ok){
-          toast(`登録しました（${type} ${qty} ${unit}）`);
-          // refresh data cepat
-          await findItemIntoIO(code);
-          renderDashboard();
-          // tutup modal
-          bootstrap.Modal.getInstance(document.getElementById('modal-quick-io'))?.hide();
-        } else {
-          toast(r?.error || `登録失敗：${code}`);
-        }
-      }catch(err){ toast('登録失敗：' + (err?.message||err)); }
+    clr?.addEventListener('click', ()=>{
+      if (!confirm('セッションをクリアしますか？')) return;
+      cySave({zone:'', rows:{}});
+      cyRender();
     });
   }
 
-  // bersihkan kamera saat modal ditutup
-  document.getElementById('modal-quick-io')?.addEventListener('hidden.bs.modal', async ()=>{
-    try{ await QIO_SCANNER?.stop?.(); QIO_SCANNER?.clear?.(); }catch{}
-    $('#qio-scan-area').innerHTML = '';
-  });
-}
-
+  /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
-  const logo = document.getElementById("brand-logo");
-  if (logo && window.CONFIG && CONFIG.LOGO_URL) {
-    logo.src = CONFIG.LOGO_URL; logo.alt = "logo";
-    logo.onerror = () => { logo.style.display = "none"; };
-  }
+    const logo = document.getElementById("brand-logo");
+    if (logo && window.CONFIG && CONFIG.LOGO_URL) {
+      logo.src = CONFIG.LOGO_URL; logo.alt = "logo";
+      logo.onerror = () => { logo.style.display = "none"; };
+    }
 
-  const newItemBtn = $("#btn-open-new-item");
-  const newUserBtn = $("#btn-open-new-user");
-  if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
-  if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
-bindQuickIO();
+    const newItemBtn = $("#btn-open-new-item");
+    const newUserBtn = $("#btn-open-new-user");
+    if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
+    if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
 
-  bindIO();
-  bindShelf();
-  renderDashboard();
-  $("#btn-logout")?.addEventListener("click", logout);
-  startLiveReload();
-});
+    // Bind fitur
+    bindIO();
+    bindShelf();
+    bindGlobalSearch();
+    bindQuickIO();
+    bindCycle();
+    cyRender();
 
-  
+    // Dashboard & logout
+    renderDashboard();
+    $("#btn-logout")?.addEventListener("click", logout);
+
+    // Live reload
+    startLiveReload();
+  });
 
 })();
