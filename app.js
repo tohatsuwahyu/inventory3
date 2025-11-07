@@ -1598,6 +1598,103 @@ function startLiveReload(){
   }
 
   /* -------------------- Boot -------------------- */
+  /* ===== Quick IN/OUT ===== */
+let QIO_SCANNER = null;
+
+function openQuickIO(){
+  const m = new bootstrap.Modal(document.getElementById('modal-quick-io'));
+  // reset
+  $('#qio-code').value = '';
+  $('#qio-qty').value  = 1;
+  $('#qio-unit').value = 'pcs';
+  $('#qio-in').checked = true;
+  $('#qio-preview').textContent = '';
+  $('#qio-scan-area').innerHTML = '';
+  m.show();
+
+  // fokus awal
+  setTimeout(()=> $('#qio-code').focus(), 200);
+}
+
+function bindQuickIO(){
+  const fab = document.getElementById('fab-quick-io');
+  const form= document.getElementById('form-quick-io');
+  const btnScan = document.getElementById('qio-scan');
+  const area = document.getElementById('qio-scan-area');
+
+  if (fab) fab.addEventListener('click', openQuickIO);
+
+  // scan: isi #qio-code → fokus qty
+  if (btnScan && area){
+    btnScan.addEventListener('click', async ()=>{
+      area.textContent = 'カメラ起動中…';
+      try{
+        QIO_SCANNER = await startBackCameraScan('qio-scan-area', async (txt)=>{
+          const p = parseScanText(txt);
+          if (!p){ toast(`アイテムが見つかりません：${txt}`); return; }
+          if (p.kind === 'item'){
+            $('#qio-code').value = p.code;
+            await findItemIntoIO(p.code); // isi preview IO kalau ingin
+            $('#qio-preview').textContent = `コード：${p.code}`;
+            $('#qio-qty').focus();
+          } else if (p.kind === 'lot'){
+            // untuk LOT, ambil qty dari QR
+            $('#qio-code').value = p.code;
+            $('#qio-qty').value  = Number(p.qty||1);
+            await findItemIntoIO(p.code);
+            $('#qio-preview').textContent = `コード：${p.code} / 数量：${p.qty}` + (p.lot?` / ロット：${p.lot}`:'');
+            $('#qio-qty').focus();
+          }
+        });
+      }catch(e){ toast(e?.message||String(e)); }
+    });
+  }
+
+  // Enter di qty = submit
+  $('#qio-qty')?.addEventListener('keydown', (e)=>{
+    if (e.key === 'Enter'){ e.preventDefault(); form?.requestSubmit(); }
+  });
+
+  // submit
+  if (form){
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const who = getCurrentUser(); if (!who) return toast('ログイン情報がありません。');
+      const code = $('#qio-code').value?.trim();
+      const qty  = Number($('#qio-qty').value||0);
+      const unit = $('#qio-unit').value||'pcs';
+      const type = (document.querySelector('input[name="qio-type"]:checked')?.value)||'IN';
+
+      if (!code || !qty) return;
+
+      // konfirmasi berisiko untuk Adjust/OUT negatif
+      if (type === 'ADJUST' && qty !== 0){
+        if (!confirm(`在庫を調整しますか？（${qty>0?'+':''}${qty}）この操作は履歴に記録されます。`)) return;
+      }
+
+      try{
+        const r = await api('log', { method:'POST', body:{ userId: who.id, code, qty, unit, type } });
+        if (r?.ok){
+          toast(`登録しました（${type} ${qty} ${unit}）`);
+          // refresh data cepat
+          await findItemIntoIO(code);
+          renderDashboard();
+          // tutup modal
+          bootstrap.Modal.getInstance(document.getElementById('modal-quick-io'))?.hide();
+        } else {
+          toast(r?.error || `登録失敗：${code}`);
+        }
+      }catch(err){ toast('登録失敗：' + (err?.message||err)); }
+    });
+  }
+
+  // bersihkan kamera saat modal ditutup
+  document.getElementById('modal-quick-io')?.addEventListener('hidden.bs.modal', async ()=>{
+    try{ await QIO_SCANNER?.stop?.(); QIO_SCANNER?.clear?.(); }catch{}
+    $('#qio-scan-area').innerHTML = '';
+  });
+}
+
   window.addEventListener("DOMContentLoaded", () => {
   const logo = document.getElementById("brand-logo");
   if (logo && window.CONFIG && CONFIG.LOGO_URL) {
@@ -1609,6 +1706,7 @@ function startLiveReload(){
   const newUserBtn = $("#btn-open-new-user");
   if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
   if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
+bindQuickIO();
 
   bindIO();
   bindShelf();
