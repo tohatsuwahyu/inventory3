@@ -76,6 +76,7 @@
         <a href="#" data-view="view-dashboard" class="active"><i class="bi bi-speedometer2"></i> ダッシュボード</a>
         <a href="#" data-view="view-io"><i class="bi bi-box-seam"></i> 入出庫（QR対応）</a>
         <a href="#" data-view="view-shelf"><i class="bi bi-clipboard-check"></i> 棚卸</a>
+        <li><a href="#tana-list" data-nav="tana-list">棚卸一覧</a></li>
         <a href="#" data-view="view-items"><i class="bi bi-boxes"></i> 商品一覧</a>
         <a href="#" data-view="view-users"><i class="bi bi-person-badge"></i> ユーザー / QR</a>
         <a href="#" data-view="view-history"><i class="bi bi-clock-history"></i> 履歴</a>
@@ -283,6 +284,24 @@
             </div>
           </div>
         </section>
+<!-- === 棚卸一覧 (NEW) === -->
+<section id="tana-list" class="page hidden">
+  <div class="page-head">
+    <h2 class="title">棚卸一覧</h2>
+    <div class="actions">
+      <button id="tana-exp" class="btn">CSVエクスポート</button>
+      <label class="btn">CSVインポート<input id="tana-imp" type="file" accept=".csv" hidden></label>
+    </div>
+  </div>
+  <div class="grid-xl">
+    <div class="card">
+      <div class="card-body">
+        <table id="tbl-tana" class="table compact"></table>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- === /棚卸一覧 === -->
 
         <!-- ========= 商品一覧 ========= -->
         <section id="view-items" class="d-none">
