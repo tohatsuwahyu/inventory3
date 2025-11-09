@@ -637,3 +637,4 @@ html, body { overflow-x: hidden; }
 .chart-lg{ height:380px }
 .chart-sm{ height:260px }
 .chart-box canvas{ width:100% !important; height:100% !important; }
+#card-item-detail{ position:sticky; bottom:0; z-index: 101; }
