@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  // Helpers
+  // -------------------- Helpers --------------------
   const $  = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
   const fmt = (n) => new Intl.NumberFormat("ja-JP").format(Number(n || 0));
@@ -15,6 +15,7 @@
   // Escape
   function escapeHtml(s){ return String(s || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
   function escapeAttr(s){ return escapeHtml(s); }
+
   // CSV helper: paksa Excel baca UTF-8 + JP header OK
   function downloadCSV_JP(filename, csv){
     const bom = "\uFEFF"; // UTF-8 BOM
@@ -37,6 +38,7 @@
     if (show) { el.classList.remove("d-none"); $("#loading-text").textContent = text || "読み込み中…"; }
     else el.classList.add("d-none");
   }
+
   async function api(action, { method = "GET", body = null, silent = false } = {}) {
     if (!window.CONFIG || !CONFIG.BASE_URL) { throw new Error("config.js BASE_URL belum di-set"); }
     const apikey = encodeURIComponent(CONFIG.API_KEY || "");
@@ -68,6 +70,7 @@
       document.head.appendChild(s);
     });
   }
+
   async function ensureQRCode() {
     if (window.QRCode) return;
     const locals = ["./qrlib.js", "./qrcode.min.js", "./vendor/qrcode.min.js"];
@@ -80,6 +83,7 @@
     for (const u of cdns) { try { await loadScriptOnce(u); if (window.QRCode) return; } catch {} }
     throw new Error("QRCode library tidak tersedia (qrlib.js)");
   }
+
   async function ensureHtml5Qrcode() {
     if (window.Html5Qrcode) return;
     const locals = ["./html5-qrcode.min.js", "./vendor/html5-qrcode.min.js"];
@@ -136,17 +140,69 @@
       if (id === "view-history") renderHistory();
       if (id === "view-shelf") { renderShelfTable(); }
       if (id === "view-shelf-list") { loadTanaList(); renderShelfRecapForList(); }
-      // view-cycle akan aktif otomatis jika section ada
+      // view-cycle: bind saat boot
     });
   })();
+
+  /* -------------------- Global Search (versi tunggal) -------------------- */
+  function initGlobalSearch(){
+    const input = document.getElementById('global-search');
+    const box   = document.getElementById('global-search-results');
+    if(!input || !box) return;
+
+    function hide(){ box.style.display='none'; box.innerHTML=''; }
+    function show(html){ box.innerHTML = html; box.style.display='block'; }
+
+    input.addEventListener('input', ()=>{
+      const q = (input.value||'').trim().toLowerCase();
+      if(!q){ hide(); return; }
+      const res = _ITEMS_CACHE
+        .filter(it=>{
+          const code = String(it.code||'').toLowerCase();
+          const name = String(it.name||'').toLowerCase();
+          const loc  = String(it.location||'').toLowerCase();
+          return code.includes(q) || name.includes(q) || loc.includes(q);
+        })
+        .slice(0,8);
+
+      if(!res.length){ hide(); return; }
+
+      const html = res.map(it=>`
+        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center gap-2" data-code="${escapeAttr(it.code)}">
+          <i class="bi bi-box-seam text-primary"></i>
+          <span class="flex-1 text-truncate">${escapeHtml(it.code)}／${escapeHtml(it.name)}</span>
+          <span class="badge text-bg-light border">${escapeHtml((it.location||'').toUpperCase())}</span>
+        </a>`).join('');
+      show(html);
+    });
+
+    box.addEventListener('click',(e)=>{
+      const a = e.target.closest('a[data-code]'); if(!a) return;
+      e.preventDefault();
+      const it = _ITEMS_CACHE.find(x=>String(x.code)===String(a.getAttribute('data-code')));
+      if(it){ showItemDetail(it); hide(); input.blur(); }
+    });
+
+    input.addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'){
+        const first = box.querySelector('a[data-code]');
+        if(first){ first.click(); }
+      }
+    });
+
+    document.addEventListener('click',(e)=>{
+      if(!e.target.closest('#global-search-wrap')) hide();
+    });
+  }
 
   /* -------------------- Dashboard -------------------- */
   let chartLine = null, chartPie = null;
   async function renderDashboard() {
     const who = getCurrentUser();
     if (who) $("#who").textContent = `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`;
-const wb = document.getElementById("welcome-badge");
-if (wb && who) { wb.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> ようこそ、${escapeHtml(who.name || who.id || "ユーザー")} さん`; }
+    // Welcome badge
+    const wb = document.getElementById("welcome-badge");
+    if (wb && who) { wb.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> ようこそ、${escapeHtml(who.name || who.id || "ユーザー")} さん`; wb.classList.remove("d-none"); }
 
     try {
       const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([
@@ -190,11 +246,15 @@ if (wb && who) { wb.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> ようこ�
         });
       }
 
-      $("#btn-export-mov")?.addEventListener("click", () => {
-        const heads = ["月","IN","OUT"];
-        const csv = [heads.join(",")].concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(","))).join("\n");
-        downloadCSV_JP("月次INOUT.csv", csv);
-      }, { once: true });
+      const btn = $("#btn-export-mov");
+      if (btn && !btn.dataset.bound) {
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", () => {
+          const heads = ["月","IN","OUT"];
+          const csv = [heads.join(",")].concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(","))).join("\n");
+          downloadCSV_JP("月次INOUT.csv", csv);
+        });
+      }
     } catch {
       toast("ダッシュボードの読み込みに失敗しました。");
     }
@@ -214,8 +274,7 @@ if (wb && who) { wb.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> ようこ�
         // per layar aktif:
         if (active === "view-dashboard")    renderDashboard();
         if (active === "view-history")      renderHistory();
-        if (active === "view-shelf-list") { loadTanaList(); }       // 棚卸一覧
-        // if (active === "view-shelf") renderShelfTable();
+        if (active === "view-shelf-list") { loadTanaList(); } // 棚卸一覧
       } catch {}
     }, 5000);
   }
@@ -225,23 +284,21 @@ if (wb && who) { wb.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> ようこ�
   function tplItemRow(it) {
     const qrid = `qr-${it.code}`;
     const stock = Number(it.stock||0), min = Number(it.min||0);
-    let badgeClass = 'text-bg-success', badgeText = 'OK';
-    if (stock <= min) { badgeClass = 'text-bg-danger'; badgeText = 'LOW'; }
-    else if (stock <= min * 1.3) { badgeClass = 'text-bg-warning'; badgeText = 'WARN'; }
+    let badgeClass = 'text-bg-success';
+    if (stock <= 0) badgeClass = 'text-bg-danger';
+    else if (stock <= min) badgeClass = 'text-bg-warning';
+    const badge = `<span class="badge ${badgeClass}">${fmt(stock)}</span>`;
 
     return `<tr>
       <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
       <td>${escapeHtml(it.code)}</td>
-      <td>
-        <a href="#" class="link-underline link-item" data-code="${escapeHtml(it.code)}">${escapeHtml(it.name)}</a>
-        <span class="badge ${badgeClass} ms-2 align-middle">${badgeText}</span>
-      </td>
+      <td><a href="#" class="link-underline link-item" data-code="${escapeHtml(it.code)}">${escapeHtml(it.name)}</a></td>
       <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ""}</td>
       <td class="text-end">¥${fmt(it.price)}</td>
-      <td class="text-end">${fmt(it.stock)}</td>
+      <td class="text-end">${badge}</td>
       <td class="text-end">${fmt(it.min)}</td>
       <td>${escapeHtml(it.department || "")}</td>
-      <td>${escapeHtml(it.location || "")}</td>
+      <td>${escapeHtml((it.location || "").toUpperCase())}</td>
       <td>
         <div class="act-grid">
           <button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>
@@ -1008,9 +1065,106 @@ if (wb && who) { wb.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> ようこ�
       const unit = $("#io-unit").value, type = $("#io-type").value;
       try {
         const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
-        if (r?.ok) { toast("登録しました"); $("#io-qty").value = ""; await findItemIntoIO(code); renderDashboard(); }
-        else toast(r?.error || "登録失敗");
+        if (r?.ok) {
+          const typeTxt = (type==='IN'?'IN':type==='OUT'?'OUT':'ADJUST');
+          toast(`登録しました（${typeTxt} ${qty} ${unit}）`);
+          $("#io-qty").value = "";
+          await findItemIntoIO(code);
+          renderDashboard();
+        } else  toast(r?.error || "登録失敗");
       } catch (e2) { toast("登録失敗: " + (e2?.message || e2)); }
+    });
+  }
+
+  /* -------------------- Quick IN/OUT Modal (versi tunggal) -------------------- */
+  function bindQuickIO(){
+    const fab = document.getElementById('fab-quick-io');
+    const mEl = document.getElementById('modal-quick-io');
+    if(!mEl) return;
+    const modal = new bootstrap.Modal(mEl);
+    let QIO_SCANNER = null;
+
+    function focusQty(){ document.getElementById('qio-qty')?.focus(); }
+    function fillPreview(it){
+      const pv = document.getElementById('qio-preview');
+      if(!pv) return;
+      if(!it) pv.textContent = 'アイテムが見つかりません。';
+      else pv.textContent = `コード：${it.code} ／ 名称：${it.name} ／ 在庫：${fmt(it.stock||0)}`;
+    }
+    async function lookup(code){
+      const it = await findItemIntoIO(code);
+      fillPreview(it);
+      return it;
+    }
+
+    fab?.addEventListener('click', ()=>{
+      modal.show();
+      setTimeout(()=>document.getElementById('qio-code')?.focus(), 120);
+    });
+
+    document.getElementById('qio-scan')?.addEventListener('click', async ()=>{
+      const area = document.getElementById('qio-scan-area');
+      if(!area) return;
+      area.textContent = 'カメラ起動中…';
+      try{
+        QIO_SCANNER = await startBackCameraScan('qio-scan-area', async (text)=>{
+          const p = parseScanText(String(text||''));
+          if(!p) return;
+          if(p.kind==='item'){
+            document.getElementById('qio-code').value = p.code;
+            await lookup(p.code);
+            focusQty();
+          } else if(p.kind==='lot'){
+            document.getElementById('qio-code').value = p.code;
+            document.getElementById('qio-qty').value  = Number(p.qty||0);
+            await lookup(p.code);
+            focusQty();
+          }
+        }, 220);
+      }catch(e){ toast(e?.message||String(e)); }
+    });
+
+    document.getElementById('form-quick-io')?.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const who = getCurrentUser(); if(!who) return toast('ログイン情報がありません。');
+      const code = document.getElementById('qio-code').value;
+      const qty  = Number(document.getElementById('qio-qty').value||0);
+      const unit = document.getElementById('qio-unit').value||'pcs';
+      const type = (document.querySelector('input[name="qio-type"]:checked')?.value)||'IN';
+      try{
+        const r = await api('log',{ method:'POST', body:{ userId: who.id, code, qty, unit, type } });
+        if(r?.ok){
+          toast(`登録しました（${type} ${qty} ${unit}）`);
+          document.getElementById('qio-qty').value = '1';
+          renderDashboard();
+          modal.hide();
+        }else{
+          toast(r?.error||'登録失敗');
+        }
+      }catch(err){ toast('登録失敗: '+(err?.message||err)); }
+    });
+
+    document.getElementById('qio-code')?.addEventListener('keydown', async (e)=>{
+      if(e.key==='Enter'){
+        e.preventDefault();
+        const v = (e.target.value||'').trim();
+        if(v) await lookup(v);
+        focusQty();
+      }
+    });
+
+    document.getElementById('qio-qty')?.addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'){
+        e.preventDefault();
+        document.getElementById('form-quick-io')?.requestSubmit();
+      }
+    });
+
+    mEl.addEventListener('hidden.bs.modal', async ()=>{
+      try{ await QIO_SCANNER?.stop?.(); QIO_SCANNER?.clear?.(); }catch{}
+      const area = document.getElementById('qio-scan-area'); if(area) area.textContent = 'カメラ待機中…';
+      document.getElementById('qio-code').value='';
+      document.getElementById('qio-preview').textContent='';
     });
   }
 
@@ -1289,6 +1443,91 @@ if (wb && who) { wb.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> ようこ�
       if (!code) return;
       await addOrUpdateStocktake(code, qty || undefined);
       $("#st-code").value = ""; $("#st-qty").value = "";
+    });
+  }
+
+  /* -------------------- Cycle Count (棚卸セッション) — versi Map (tunggal) -------------------- */
+  const CY = {
+    key: 'cycle-session',
+    rows: new Map(), // code -> {code,name,qty,location}
+    load(){
+      try{
+        const raw = JSON.parse(localStorage.getItem(this.key)||'[]');
+        this.rows = new Map(raw.map(r=>[String(r.code), r]));
+      }catch{ this.rows = new Map(); }
+    },
+    save(){
+      const arr = [...this.rows.values()];
+      localStorage.setItem(this.key, JSON.stringify(arr));
+    }
+  };
+
+  function cy_render(){
+    const tbody = document.querySelector('#cy-table tbody'); if(!tbody) return;
+    const zone = (document.getElementById('cy-zone')?.value||'').trim().toUpperCase();
+    const arr = [...CY.rows.values()].filter(r=>{
+      if(!zone || zone==='*') return true;
+      return String(r.location||'').toUpperCase().startsWith(zone);
+    });
+    tbody.innerHTML = arr.map(r=>`
+      <tr>
+        <td>${escapeHtml(r.code)}</td>
+        <td>${escapeHtml(r.name||'')}</td>
+        <td class="text-end">${fmt(r.qty||0)}</td>
+        <td>${escapeHtml((r.location||'').toUpperCase())}</td>
+      </tr>`).join('');
+    const info = document.getElementById('cy-info'); if(info) info.textContent = `件数：${arr.length}`;
+  }
+
+  async function cy_add(code, delta=1){
+    let it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
+    if(!it){
+      try{ const r = await api('itemByCode',{ method:'POST', body:{ code }, silent:true }); if(r?.ok) it = r.item; }catch{}
+    }
+    if(!it){ toast(`アイテムが見つかりません：${code}`); return; }
+    const row = CY.rows.get(code) || { code, name: it.name, qty:0, location: it.location||'' };
+    row.qty = Number(row.qty||0) + Number(delta||1);
+    CY.rows.set(code, row);
+    CY.save(); cy_render();
+  }
+
+  function cy_clear(){ CY.rows.clear(); CY.save(); cy_render(); }
+
+  function cy_export(){
+    const arr = [...CY.rows.values()];
+    const heads = ['コード','品名','数量','置場'];
+    const csv = [heads.join(',')]
+      .concat(arr.map(r=>[r.code, (r.name||'').replace(/,/g,' '), Number(r.qty||0), String(r.location||'').toUpperCase()].join(',')))
+      .join('\n');
+    downloadCSV_JP('棚卸セッション.csv', csv);
+  }
+
+  function bindCycle(){
+    CY.load(); cy_render();
+
+    document.getElementById('cy-clear')?.addEventListener('click', ()=>{
+      if(confirm('セッションをクリアしますか？')) cy_clear();
+    });
+    document.getElementById('cy-exp')?.addEventListener('click', ()=> cy_export());
+    document.getElementById('cy-zone')?.addEventListener('input', ()=> cy_render());
+
+    let CY_SCANNER = null;
+    document.getElementById('cy-start')?.addEventListener('click', async ()=>{
+      const area = document.getElementById('cy-scan-area'); if(!area) return;
+      area.textContent='カメラ起動中…';
+      try{
+        CY_SCANNER = await startBackCameraScan('cy-scan-area', async (text)=>{
+          const p = parseScanText(String(text||''));
+          if(!p) return;
+          if(p.kind==='item') await cy_add(p.code, 1);
+          if(p.kind==='lot')  await cy_add(p.code, Number(p.qty||1));
+        }, 220);
+      }catch(e){ toast(e?.message||String(e)); }
+    });
+
+    document.getElementById('cy-stop')?.addEventListener('click', async ()=>{
+      try{ await CY_SCANNER?.stop?.(); CY_SCANNER?.clear?.(); }catch{}
+      document.getElementById('cy-scan-area').textContent='カメラ待機中…';
     });
   }
 
@@ -1582,225 +1821,6 @@ if (wb && who) { wb.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> ようこ�
     } catch (e) { /* noop */ }
   }
 
-  /* ===== Global Search ===== */
-  function bindGlobalSearch(){
-    const input = document.getElementById('global-search');
-    const box   = document.getElementById('global-search-results');
-    if (!input || !box) return;
-
-    let t = null;
-    function hide(){ box.style.display='none'; box.innerHTML=''; }
-
-    input.addEventListener('input', ()=>{
-      clearTimeout(t);
-      const q = (input.value||'').trim().toLowerCase();
-      if (!q){ hide(); return; }
-      t = setTimeout(()=>{
-        const arr = (_ITEMS_CACHE||[]).filter(it=>{
-          const name = (it.name||'').toLowerCase();
-          const code = (String(it.code||'')).toLowerCase();
-          const loc  = (String(it.location||'')).toLowerCase();
-          return name.includes(q) || code.includes(q) || loc.includes(q);
-        }).slice(0,8);
-
-        if (!arr.length){ hide(); return; }
-        box.innerHTML = arr.map(it=>`
-          <a href="#" class="list-group-item list-group-item-action" data-code="${escapeAttr(it.code)}">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <div class="fw-semibold">${escapeHtml(it.name||'')}</div>
-                <div class="small text-muted">${escapeHtml(it.code||'')} ・ ${escapeHtml((it.location||'').toUpperCase())}</div>
-              </div>
-              <span class="badge text-bg-light">${fmt(it.stock||0)}</span>
-            </div>
-          </a>
-        `).join('');
-        box.style.display='block';
-      }, 200);
-    });
-
-    box.addEventListener('click', (e)=>{
-      const a = e.target.closest('a[data-code]'); if (!a) return;
-      e.preventDefault();
-      const code = a.getAttribute('data-code');
-      const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code));
-      // pastikan view items aktif
-      const navLink = document.querySelector('aside nav a[data-view="view-items"]');
-      if (navLink){ navLink.click(); }
-      showItemDetail(it);
-      hide();
-      input.blur();
-    });
-
-    document.addEventListener('click', (e)=>{
-      if (!e.target.closest('#global-search') && !e.target.closest('#global-search-results')) hide();
-    });
-  }
-
-  /* ===== Quick IN/OUT ===== */
-  let QIO_SCANNER = null;
-
-  function openQuickIO(){
-    const m = new bootstrap.Modal(document.getElementById('modal-quick-io'));
-    // reset
-    $('#qio-code').value = '';
-    $('#qio-qty').value  = 1;
-    $('#qio-unit').value = 'pcs';
-    $('#qio-in').checked = true;
-    $('#qio-preview').textContent = '';
-    $('#qio-scan-area').innerHTML = '';
-    m.show();
-
-    // fokus awal
-    setTimeout(()=> $('#qio-code').focus(), 200);
-  }
-
-  function bindQuickIO(){
-    const fab = document.getElementById('fab-quick-io');
-    const form= document.getElementById('form-quick-io');
-    const btnScan = document.getElementById('qio-scan');
-    const area = document.getElementById('qio-scan-area');
-
-    if (fab) fab.addEventListener('click', openQuickIO);
-
-    // scan: isi #qio-code → fokus qty
-    if (btnScan && area){
-      btnScan.addEventListener('click', async ()=>{
-        area.textContent = 'カメラ起動中…';
-        try{
-          QIO_SCANNER = await startBackCameraScan('qio-scan-area', async (txt)=>{
-            const p = parseScanText(txt);
-            if (!p){ toast(`アイテムが見つかりません：${txt}`); return; }
-            if (p.kind === 'item'){
-              $('#qio-code').value = p.code;
-              await findItemIntoIO(p.code);
-              $('#qio-preview').textContent = `コード：${p.code}`;
-              $('#qio-qty').focus();
-            } else if (p.kind === 'lot'){
-              $('#qio-code').value = p.code;
-              $('#qio-qty').value  = Number(p.qty||1);
-              await findItemIntoIO(p.code);
-              $('#qio-preview').textContent = `コード：${p.code} / 数量：${p.qty}` + (p.lot?` / ロット：${p.lot}`:'');
-              $('#qio-qty').focus();
-            }
-          });
-        }catch(e){ toast(e?.message||String(e)); }
-      });
-    }
-
-    // Enter di qty = submit
-    $('#qio-qty')?.addEventListener('keydown', (e)=>{
-      if (e.key === 'Enter'){ e.preventDefault(); form?.requestSubmit(); }
-    });
-
-    // submit
-    if (form){
-      form.addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        const who = getCurrentUser(); if (!who) return toast('ログイン情報がありません。');
-        const code = $('#qio-code').value?.trim();
-        const qty  = Number($('#qio-qty').value||0);
-        const unit = $('#qio-unit').value||'pcs';
-        const type = (document.querySelector('input[name="qio-type"]:checked')?.value)||'IN';
-
-        if (!code || !qty) return;
-
-        if (type === 'ADJUST' && qty !== 0){
-          if (!confirm(`在庫を調整しますか？（${qty>0?'+':''}${qty}）この操作は履歴に記録されます。`)) return;
-        }
-
-        try{
-          const r = await api('log', { method:'POST', body:{ userId: who.id, code, qty, unit, type } });
-          if (r?.ok){
-            toast(`登録しました（${type} ${qty} ${unit}）`);
-            await findItemIntoIO(code);
-            renderDashboard();
-            bootstrap.Modal.getInstance(document.getElementById('modal-quick-io'))?.hide();
-          } else {
-            toast(r?.error || `登録失敗：${code}`);
-          }
-        }catch(err){ toast('登録失敗：' + (err?.message||err)); }
-      });
-    }
-
-    // bersihkan kamera saat modal ditutup
-    document.getElementById('modal-quick-io')?.addEventListener('hidden.bs.modal', async ()=>{
-      try{ await QIO_SCANNER?.stop?.(); QIO_SCANNER?.clear?.(); }catch{}
-      $('#qio-scan-area').innerHTML = '';
-    });
-  }
-
-  /* ===== Cycle Count Session ===== */
-  const CY_KEY = 'cycleSession';
-  let CY_SCANNER = null;
-
-  function cyLoad(){
-    try{ return JSON.parse(localStorage.getItem(CY_KEY)||'{"zone":"","rows":{}}'); }catch{return {zone:'', rows:{}};}
-  }
-  function cySave(s){ localStorage.setItem(CY_KEY, JSON.stringify(s)); }
-
-  function cyRender(){
-    const s = cyLoad();
-    $('#cy-zone') && ($('#cy-zone').value = s.zone||'');
-    const tb = $('#cy-table tbody'); if (!tb) return;
-    const rows = s.rows||{};
-    const arr = Object.keys(rows).map(code=>{
-      const it = _ITEMS_CACHE.find(x=>String(x.code)===String(code))||{};
-      return { code, name: it.name||'', qty: rows[code], loc: (it.location||'').toUpperCase() };
-    });
-    tb.innerHTML = arr.map(r=>`<tr><td>${escapeHtml(r.code)}</td><td>${escapeHtml(r.name)}</td><td class="text-end">${fmt(r.qty)}</td><td>${escapeHtml(r.loc)}</td></tr>`).join('');
-    $('#cy-info') && ($('#cy-info').textContent = `件数：${arr.length}`);
-  }
-
-  function bindCycle(){
-    const btnStart = $('#cy-start'), btnStop = $('#cy-stop'), exp = $('#cy-exp'), clr = $('#cy-clear');
-    const area = $('#cy-scan-area'), zoneInput = $('#cy-zone');
-    if (!area) return;
-
-    zoneInput?.addEventListener('input', ()=>{
-      const s = cyLoad(); s.zone = (zoneInput.value||'').trim().toUpperCase(); cySave(s);
-    });
-
-    btnStart?.addEventListener('click', async ()=>{
-      area.textContent = 'カメラ起動中…';
-      try{
-        CY_SCANNER = await startBackCameraScan('cy-scan-area', async (txt)=>{
-          const p = parseScanText(txt); if (!p) return;
-          const s = cyLoad();
-          const zone = (s.zone||'').trim();
-          if (zone && zone !== '*'){
-            const it = _ITEMS_CACHE.find(x=>String(x.code)===String(p.code));
-            const ok = it && ((it.location||'').toUpperCase().startsWith(zone.replace('*','')));
-            if (!ok){ toast(`置場がゾーン外です：${(it?.location||'').toUpperCase()}`); return; }
-          }
-          const code = p.code;
-          s.rows[code] = (s.rows[code]||0) + (p.kind==='lot' ? Number(p.qty||0) : 1);
-          cySave(s); cyRender();
-        });
-      }catch(e){ toast(e?.message||String(e)); }
-    });
-
-    btnStop?.addEventListener('click', async ()=>{
-      try{ await CY_SCANNER?.stop?.(); CY_SCANNER?.clear?.(); }catch{}
-      area.textContent = 'カメラ待機中…';
-    });
-
-    exp?.addEventListener('click', ()=>{
-      const s = cyLoad(); const rows = s.rows||{};
-      const heads = ['コード','数量','ゾーン'];
-      const csv = [heads.join(',')].concat(
-        Object.keys(rows).map(code=>[code, rows[code], s.zone||''].join(','))
-      ).join('\n');
-      downloadCSV_JP('棚卸セッション.csv', csv);
-    });
-
-    clr?.addEventListener('click', ()=>{
-      if (!confirm('セッションをクリアしますか？')) return;
-      cySave({zone:'', rows:{}});
-      cyRender();
-    });
-  }
-
   /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
     const logo = document.getElementById("brand-logo");
@@ -1814,19 +1834,13 @@ if (wb && who) { wb.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> ようこ�
     if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
     if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
 
-    // Bind fitur
     bindIO();
     bindShelf();
-    bindGlobalSearch();
-    bindQuickIO();
-    bindCycle();
-    cyRender();
-
-    // Dashboard & logout
+    bindQuickIO();     // Quick IO: versi tunggal
+    bindCycle();       // Cycle Count: versi Map tunggal
     renderDashboard();
+    initGlobalSearch(); // Global search: versi tunggal
     $("#btn-logout")?.addEventListener("click", logout);
-
-    // Live reload
     startLiveReload();
   });
 
