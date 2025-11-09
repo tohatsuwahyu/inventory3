@@ -145,6 +145,8 @@
   async function renderDashboard() {
     const who = getCurrentUser();
     if (who) $("#who").textContent = `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`;
+const wb = document.getElementById("welcome-badge");
+if (wb && who) { wb.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> ようこそ、${escapeHtml(who.name || who.id || "ユーザー")} さん`; }
 
     try {
       const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([
