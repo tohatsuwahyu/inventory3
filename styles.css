@@ -338,3 +338,6 @@ main, .app-main, .content-wrap { width:100%; }
 /* 5) Jaga full-width & anti “ruang kosong kanan” (redundan tapi aman) */
 main{ min-width: 0; }
 html, body{ overflow-x: hidden; }
+#help .accordion-button{ font-weight:600; }
+#help .accordion-body{ line-height:1.7; }
+#help dl dd{ color:#374151; }
