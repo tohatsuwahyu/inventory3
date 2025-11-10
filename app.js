@@ -354,6 +354,60 @@ function itemsAuto_extendMenu(){
   const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
   itemsAuto_refreshLabel(saved);
 }
+/* ===== Auto-refresh: injector untuk view lain (history & shelf-list) ===== */
+function ensureViewAutoMenu(viewKey, toolbarRightSel){
+  const host = document.querySelector(toolbarRightSel); if (!host) return;
+
+  const BTN_ID = `btn-auto-${viewKey}`;
+  const WRAP_ID = `auto-wrap-${viewKey}`;
+
+  // Kalau sudah ada, cukup update label dari preferensi terakhir
+  if (document.getElementById(BTN_ID)) {
+    const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
+    const btn = document.getElementById(BTN_ID);
+    if (btn) {
+      btn.textContent = !saved ? "Auto: Off" : (saved >= 60 ? `Auto: ${Math.round(saved/60)}分` : `Auto: ${saved}秒`);
+    }
+    return;
+  }
+
+  // Sisipkan dropdown kecil di sisi kanan toolbar
+  const wrap = document.createElement("div");
+  wrap.id = WRAP_ID;
+  wrap.className = "btn-group";
+  wrap.innerHTML = `
+    <button id="${BTN_ID}" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+      Auto
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end">
+      <li><a class="dropdown-item" data-autorefresh="0">Off</a></li>
+      <li><a class="dropdown-item" data-autorefresh="120">120秒（2分）</a></li>
+      <li><a class="dropdown-item" data-autorefresh="180">180秒（3分）</a></li>
+      <li><a class="dropdown-item" data-autorefresh="300">300秒（5分）</a></li>
+      <li><a class="dropdown-item" data-autorefresh="600">600秒（10分）</a></li>
+    </ul>
+  `;
+  host.appendChild(wrap);
+
+  // Bind klik semua opsi
+  wrap.querySelectorAll("[data-autorefresh]").forEach(a=>{
+    a.addEventListener("click",(e)=>{
+      e.preventDefault();
+      const sec = Number(a.getAttribute("data-autorefresh") || "0");
+      // simpan & restart timer global
+      setLiveRefresh(sec);
+      // update label tombol ini
+      const btn = document.getElementById(BTN_ID);
+      if (!btn) return;
+      btn.textContent = !sec ? "Auto: Off" : (sec >= 60 ? `Auto: ${Math.round(sec/60)}分` : `Auto: ${sec}秒`);
+    });
+  });
+
+  // Set label awal dari preferensi tersimpan
+  const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
+  const btn = document.getElementById(BTN_ID);
+  if (btn) btn.textContent = !saved ? "Auto: Off" : (saved >= 60 ? `Auto: ${Math.round(saved/60)}分` : `Auto: ${saved}秒`);
+}
 
   function openEditItem(code) {
     if (!isAdmin()) return toast("Akses ditolak (admin only)");
@@ -827,25 +881,32 @@ function itemsAuto_extendMenu(){
       }
 
       const tbody = $("#tbl-userqr");
-      tbody.innerHTML = arr.map(u => `
-        <tr>
-          <td style="width:170px"><div id="uqr-${escapeAttr(u.id)}"></div></td>
-          <td>${escapeHtml(u.id)}</td>
-          <td>${escapeHtml(u.name)}</td>
-          <td>${escapeHtml(u.role || "user")}</td>
-          <td class="text-end">
-            <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
-              <i class="bi bi-download"></i>
-            </button>
-          </td>
-        </tr>
-      `).join("");
+     tbody.innerHTML = arr.map(u => {
+  const uidSafe = safeId(u.id);
+  return `
+    <tr>
+      <td style="width:170px"><div id="uqr-${uidSafe}"></div></td>
+      <td>${escapeHtml(u.id)}</td>
+      <td>${escapeHtml(u.name)}</td>
+      <td>${escapeHtml(u.role || "user")}</td>
+      <td class="text-end">
+        <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
+          <i class="bi bi-download"></i>
+        </button>
+      </td>
+    </tr>
+  `;
+}).join("");
+
 
       await ensureQRCode();
       for (const u of arr) {
-        const el = document.getElementById(`uqr-${u.id}`); if (!el) continue;
-        el.innerHTML = ""; new QRCode(el, { text: `USER|${u.id}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
-      }
+  const el = document.getElementById(`uqr-${safeId(u.id)}`); // <— gunakan safeId di sini
+  if (!el) continue;
+  el.innerHTML = "";
+  new QRCode(el, { text: `USER|${u.id}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
+}
+
 
       tbody.addEventListener("click", async (e) => {
         const b = e.target.closest(".btn-dl-user"); if (!b) return;
@@ -945,6 +1006,7 @@ function itemsAuto_extendMenu(){
           <td></td>
         </tr>
       `).join("");
+      ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
     } catch { toast("履歴の読み込みに失敗しました。"); }
   }
 
@@ -1035,16 +1097,13 @@ function itemsAuto_extendMenu(){
     });
 
     btnStop.addEventListener("click", async () => {
-      try { await IO_SCANNER?.stop?.(); 
-    // Diff-only filter
-    $("#st-diff-only")?.addEventListener("change", (e) => {
-      const only = !!e.target.checked;
-      $$("#tbl-stocktake tr").forEach(tr => {
-        const diffText = tr.children[5]?.textContent || "0";
-        const diff = Number(diffText.replace(/,/g,''));
-        tr.style.display = (only && diff===0) ? "none" : "";
-      });
-    });
+  try {
+    await IO_SCANNER?.stop?.();
+    IO_SCANNER?.clear?.();
+  } catch {}
+  area.innerHTML = "カメラ待機中…";
+});
+
 
     // Draft buttons
     $("#st-save")?.addEventListener("click", (e) => { e.preventDefault(); saveShelfDraft(); });
@@ -1634,13 +1693,12 @@ IO_SCANNER?.clear?.(); } catch { }
     };
   }
 
-  async function loadTanaList(){
+async function loadTanaList(){
   try{
     const res = await api("tanaList", { method:'GET' });
     const tbl = document.getElementById('tbl-tana');
     if (!tbl) return;
 
-    // Terima berbagai bentuk: array langsung, {rows:[]}, atau {data:[]}
     const rowsRaw =
       Array.isArray(res) ? res :
       Array.isArray(res?.rows) ? res.rows :
@@ -1652,8 +1710,28 @@ IO_SCANNER?.clear?.(); } catch { }
     if (!rowsRaw.length){
       tbl.insertAdjacentHTML('beforeend',
         '<tbody><tr><td colspan="'+heads.length+'" class="text-muted py-4">データはありません</td></tr></tbody>');
+      // tampilkan tombol auto di toolbar meski tabel kosong
+      ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
       return;
     }
+
+    const rows = rowsRaw.map(tanaToJPRow);
+    tbl.insertAdjacentHTML('beforeend',
+      '<tbody>' + rows.map(r => `<tr>${
+        heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
+      }</tr>`).join('') + '</tbody>');
+
+    // pastikan tombol auto muncul juga saat ada data
+    ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+  } catch {
+    const tbl = document.getElementById('tbl-tana');
+    if (tbl) tbl.innerHTML =
+      '<tbody><tr><td class="text-danger">取得に失敗</td></tr></tbody>';
+    // tetap inject tombol auto agar user bisa atur refresh
+    ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+  }
+}
+
 
     const rows = rowsRaw.map(tanaToJPRow);
     tbl.insertAdjacentHTML('beforeend',
@@ -1733,6 +1811,7 @@ IO_SCANNER?.clear?.(); } catch { }
     .join('\n');
   downloadCSV_JP("棚卸まとめ.csv", csv);
 }, { once:true });
+ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
 
 
     } catch (e) { /* noop */ }
