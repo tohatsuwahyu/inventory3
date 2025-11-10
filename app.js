@@ -102,6 +102,44 @@
   function setCurrentUser(u) { localStorage.setItem("currentUser", JSON.stringify(u || null)); }
   function logout() { setCurrentUser(null); location.href = "index.html"; }
   function isAdmin() { return (getCurrentUser()?.role || "user").toLowerCase() === "admin"; }
+// --- User hydrator & sync ---
+function readCookie(name){
+  const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g,'\\$1') + '=([^;]*)'));
+  try { return m ? decodeURIComponent(m[1]) : null; } catch { return null; }
+}
+
+/** Coba ambil identitas user dari berbagai sumber, lalu simpan ke localStorage jika belum ada */
+function hydrateCurrentUser(){
+  // 1) localStorage (kunci lain yang mungkin dipakai halaman login lama)
+  const keys = ["currentUser","authUser","user","loggedInUser","me"];
+  for (const k of keys){
+    const v = localStorage.getItem(k);
+    if (v){ try { const o = JSON.parse(v); if (o && o.id){ setCurrentUser(o); return o; } } catch{} }
+  }
+  // 2) sessionStorage
+  for (const k of keys){
+    const v = sessionStorage.getItem(k);
+    if (v){ try { const o = JSON.parse(v); if (o && o.id){ setCurrentUser(o); return o; } } catch{} }
+  }
+  // 3) cookie `currentUser`
+  const ck = readCookie("currentUser");
+  if (ck){ try { const o = JSON.parse(ck); if (o && o.id){ setCurrentUser(o); return o; } } catch{} }
+
+  // 4) global var yang mungkin diisi server-side
+  if (window.CURRENT_USER && window.CURRENT_USER.id){ setCurrentUser(window.CURRENT_USER); return window.CURRENT_USER; }
+
+  // 5) fallback opsional dari config
+  if (window.CONFIG && CONFIG.DEFAULT_USER && CONFIG.DEFAULT_USER.id){
+    setCurrentUser(CONFIG.DEFAULT_USER);
+    return CONFIG.DEFAULT_USER;
+  }
+  return null;
+}
+
+// Jika tab/login lain mengubah user → refresh banner di sini juga
+window.addEventListener("storage", (e) => {
+  if (e.key === "currentUser") { updateWelcomeBanner(); }
+});
 
   /* -------------------- Sidebar + Router -------------------- */
   (function navHandler() {
@@ -1766,7 +1804,7 @@
     const newUserBtn = $("#btn-open-new-user");
     if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
     if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
-
+hydrateCurrentUser();
     bindIO();
     bindShelf();
     updateWelcomeBanner(); 
