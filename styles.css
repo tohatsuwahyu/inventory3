@@ -300,3 +300,41 @@ main, .app-main, .content-wrap { width:100%; }
 @media (max-width: 360px){
   #who{ display: none; }
 }
+/* ===== Dashboard polish (non-breaking) ===== */
+
+/* 1) Chart adaptif: 320–360px di desktop, 220px di HP */
+.chart-box{ height: 320px; }
+@media (min-width: 1400px){ .chart-box{ height: 360px; } }
+@media (max-width: 480px){ .chart-box{ height: 220px; } }
+/* Pastikan kanvas selalu isi container */
+.chart-box canvas{ width:100% !important; height:100% !important; }
+
+/* 2) Kartu metrik lebih rapat di HP, angka tetap besar tapi tidak “ngejedug” */
+@media (max-width: 480px){
+  /* kalau kartu kamu sudah .card.p-3, ini hanya merapatkan sedikit */
+  .card.p-3{ padding: .75rem !important; }
+  .metric-head{ font-size: .80rem; }
+  .metric-value{ font-size: 1.6rem; }
+}
+/* Tablet */
+@media (min-width: 481px) and (max-width: 991px){
+  .metric-value{ font-size: 1.8rem; }
+}
+
+/* 3) Judul page tidak kepotong & rapi saat tombol berderet */
+.section-title{
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 65vw;   /* aman di HP/tablet */
+}
+@media (min-width: 992px){
+  .section-title{ max-width: none; }
+}
+
+/* 4) Header tabel sticky (kalau belum aktif di halaman ini) */
+#view-dashboard .table-responsive thead th{
+  position: sticky; top: 0; z-index: 1;
+}
+
+/* 5) Jaga full-width & anti “ruang kosong kanan” (redundan tapi aman) */
+main{ min-width: 0; }
+html, body{ overflow-x: hidden; }
