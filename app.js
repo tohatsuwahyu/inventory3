@@ -251,7 +251,7 @@ function updateWelcomeBanner() {
   const banner = document.getElementById("welcome-banner");
   if (banner) {
     banner.innerHTML = `ようこそ、<b>${escapeHtml(nama)}</b> さん。<span class="badge-soft" style="margin-left:.4rem">${roleJP}</span>
-      <span class="text-muted small">（ヒント：サイドバーの「棚卸」でカメラスキャンが使えます）</span>`;
+      <span class="text-muted small">端末、電源、電波確認しましょう。</span>`;
   }
 
   // 2) Kompatibel dengan struktur lama: cuma ada <b id="wel-name">
