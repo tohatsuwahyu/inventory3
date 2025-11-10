@@ -1,28 +1,10 @@
 /* =========================================================
  * login.js — Login USER+PIN & QR (fast scan, mobile-safe)
- * (patched) — pastikan localStorage.currentUser punya id,name,role
  * =======================================================*/
 (function(){
   "use strict";
   const qs = (s, el=document)=>el.querySelector(s);
   const isPhone = /Android|iPhone|iPad/i.test(navigator.userAgent);
-
-  /* --- util kecil --- */
-  const normUser = (u)=>({
-    id: String(u?.id || "").trim(),
-    name: String(u?.name || u?.displayName || u?.fullname || u?.id || "user").trim(),
-    role: String(u?.role || "user").trim().toLowerCase()
-  });
-
-  // Ambil data user dari server jika respon login belum mengirim name/role
-  async function enrichUserById(id){
-    try{
-      const list = await api('users',{method:'GET'});
-      const arr = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
-      const u = arr.find(x => String(x.id) === String(id));
-      return u ? normUser(u) : { id, name:id, role:'user' };
-    }catch{ return { id, name:id, role:'user' }; }
-  }
 
   /* CSS anti overlay/tap miss */
   (function injectTapCss(){
@@ -123,15 +105,7 @@
       setLoading(true, 'ログイン中…');
       const r=await api('login',{method:'POST',body:{id,pass:pin}});
       if(!r || r.ok===false){ setLoading(false); return toast(r?.error||'ログインに失敗しました。'); }
-
-      // === PATCH: pastikan name & role terisi ===
-      let user = r.user?.id ? normUser(r.user) : { id:String(id) };
-      if (!user.name || !user.role || user.name === 'user') {
-        user = await enrichUserById(user.id);
-      }
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      // === END PATCH ===
-
+      localStorage.setItem('currentUser', JSON.stringify(r.user));
       setLoading(true, 'ダッシュボードへ移動中…');
       location.href='dashboard.html';
     }catch(err){ setLoading(false); toast('ログイン失敗: '+(err?.message||err)); }
@@ -172,15 +146,7 @@
         ? await api('loginById',{method:'POST',body:{id:p.id}})
         : await api('login',{method:'POST',body:{id:p.id,pass:p.pin}});
       if(!r || r.ok===false){ setLoading(false); return toast(r?.error||'ログインに失敗しました。'); }
-
-      // === PATCH: normalisasi & enrichment ===
-      let user = r.user?.id ? normUser(r.user) : { id:String(p.id) };
-      if (!user.name || !user.role || user.name === 'user') {
-        user = await enrichUserById(user.id);
-      }
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      // === END PATCH ===
-
+      localStorage.setItem('currentUser', JSON.stringify(r.user));
       setLoading(true, 'ダッシュボードへ移動中…');
       location.href='dashboard.html';
     }catch(err){ setLoading(false); toast('QRログイン失敗: '+(err?.message||err)); }
@@ -204,6 +170,7 @@
       });
       video.srcObject=stream;
 
+      // beri waktu autofocus/exposure lock
       await new Promise(r=>setTimeout(r, 500));
 
       const det = new BarcodeDetector({ formats:['qr_code'] });
@@ -237,6 +204,7 @@
       scanner = new Html5Qrcode('qr-area', { useBarCodeDetectorIfSupported:true });
       async function startWith(source){
         await scanner.start(source, cfg, onScan);
+        // jeda kecil untuk autofocus lalu set zoom/constraints
         await new Promise(r=>setTimeout(r, 600));
         try{
           await scanner.applyVideoConstraints({ advanced:[{focusMode:'continuous'},{exposureMode:'continuous'},{zoom:3}] }).catch(()=>{});
