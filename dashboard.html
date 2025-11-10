@@ -401,20 +401,154 @@
           <h5 id="helpModalLabel" class="modal-title">取扱説明（クイックガイド）</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
         </div>
-        <div class="modal-body">
-          <ol class="small">
-            <li><b>入出庫：</b> カメラを開始 → QR/バーコードを読み取り → 数量・種別を入力 → 登録。</li>
-            <li><b>棚卸：</b> スキャンまたは手入力で数量を記録。<i>差異のみ</i>で確認し、必要なら<i>下書き保存</i>。</li>
-            <li><b>棚卸一覧：</b> まとめ表示・CSV入出力。棚卸の履歴や集計を確認。</li>
-            <li><b>商品一覧：</b> 検索・編集・ラベル印刷。</li>
-          </ol>
-          <p class="text-muted small m-0">※ 管理者のみ編集/確定操作が可能です。</p>
+       <div class="modal-body">
+  <section id="help" class="container-fluid p-0">
+    <h2 class="h5 mb-3">ヘルプ｜在庫管理システム 取扱説明書 & トラブルシューティング</h2>
+    <div class="accordion" id="helpAccordion">
+      <!-- 1. はじめに -->
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="h-intro">
+          <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#c-intro">1）はじめに</button>
+        </h2>
+        <div id="c-intro" class="accordion-collapse collapse show" data-bs-parent="#helpAccordion" aria-labelledby="h-intro">
+          <div class="accordion-body">
+            本システムは、商品在庫の「登録・検索・入出庫・棚卸・印刷」を簡単に行えるように設計されています。<br/>
+            役割（ロール）は <b>管理者（Admin）</b> と <b>ユーザー（User）</b> があり、機能により権限が異なります（例：「Adjust／編集」は管理者のみ）。
+          </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">閉じる</button>
+      </div>
+
+      <!-- 2. ログイン -->
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="h-login">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-login">2）ログイン（ユーザー名＋PIN／QR）</button>
+        </h2>
+        <div id="c-login" class="accordion-collapse collapse" data-bs-parent="#helpAccordion" aria-labelledby="h-login">
+          <div class="accordion-body">
+            <ol class="mb-2">
+              <li>ユーザーIDとPINを入力して「ログイン」。</li>
+              <li>または「QRログイン」で枠内にQRを合わせます。</li>
+              <li>右上ウェルカムに<b>氏名とロール</b>が表示されます。</li>
+            </ol>
+            <small class="text-muted">※ カメラが使えない場合はブラウザの「サイトの権限」でカメラ許可をON。</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 画面の見かた -->
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="h-ui">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-ui">3）画面の見かた</button>
+        </h2>
+        <div id="c-ui" class="accordion-collapse collapse" data-bs-parent="#helpAccordion" aria-labelledby="h-ui">
+          <div class="accordion-body">
+            <ul class="mb-2">
+              <li><b>ダッシュボード：</b> 指標（在庫数／不足／最近の入出庫）。</li>
+              <li><b>検索・フィルタ：</b> 名称、コード、部門、置場など。</li>
+              <li><b>棚卸：</b> スキャン中心で実在数を確定。</li>
+              <li><b>棚卸一覧：</b> セクション／棚の進捗・集計・入出力。</li>
+              <li><b>商品一覧：</b> 検索・編集・ラベル印刷。</li>
+            </ul>
+            <small class="text-muted">「棚卸」と「棚卸一覧」は別機能。前者＝入力・確定、後者＝集計・入出力。</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 基本操作 -->
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="h-basic">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-basic">4）基本操作（登録・編集・入出庫・検索）</button>
+        </h2>
+        <div id="c-basic" class="accordion-collapse collapse" data-bs-parent="#helpAccordion" aria-labelledby="h-basic">
+          <div class="accordion-body">
+            <ol class="mb-2">
+              <li><b>商品登録：</b> 「新規商品」でコード・名称・部門・置場・最小在庫を保存。</li>
+              <li><b>編集：</b> 行のメニューから「Edit」（<u>管理者のみ</u>）。</li>
+              <li><b>入出庫：</b> 入庫/出庫の数量と単位を入力して登録。</li>
+              <li><b>検索：</b> 上部検索やフィルタを利用。複合条件OK。</li>
+            </ol>
+            <small class="text-muted">不足在庫は赤いバッジで表示。</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. 棚卸（スキャン） -->
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="h-scan">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-scan">5）棚卸（スキャン）手順</button>
+        </h2>
+        <div id="c-scan" class="accordion-collapse collapse" data-bs-parent="#helpAccordion" aria-labelledby="h-scan">
+          <div class="accordion-body">
+            <ol class="mb-2">
+              <li>「棚卸」を開き「開始」でカメラ起動。</li>
+              <li>コードを枠の中央・水平に合わせる。</li>
+              <li>数量を入力し確定。必要に応じて連続スキャン。</li>
+            </ol>
+            <small class="text-muted">暗所・反射面は精度低下。明るい場所で、レンズ清掃も有効。</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. 権限 -->
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="h-role">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-role">6）権限（ロール）</button>
+        </h2>
+        <div id="c-role" class="accordion-collapse collapse" data-bs-parent="#helpAccordion" aria-labelledby="h-role">
+          <div class="accordion-body">
+            <ul class="mb-2">
+              <li><b>管理者：</b> 新規／編集／Adjust／一括操作 可</li>
+              <li><b>ユーザー：</b> 検索・閲覧・スキャン入力 など基本操作</li>
+            </ul>
+            <small class="text-muted">右上ウェルカムに現在のロールが表示。</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. 印刷・エクスポート -->
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="h-print">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-print">7）印刷・エクスポート</button>
+        </h2>
+        <div id="c-print" class="accordion-collapse collapse" data-bs-parent="#helpAccordion" aria-labelledby="h-print">
+          <div class="accordion-body">
+            <ul class="mb-2">
+              <li>一覧・ラベルは「印刷」で最適化レイアウトを出力。</li>
+              <li>CSV/Excel の入出力に対応（権限により制限あり）。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- 8. トラブルシューティング -->
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="h-trouble">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-trouble">8）トラブルシューティング</button>
+        </h2>
+        <div id="c-trouble" class="accordion-collapse collapse" data-bs-parent="#helpAccordion" aria-labelledby="h-trouble">
+          <div class="accordion-body">
+            <dl class="mb-0">
+              <dt class="fw-semibold">Q1. ウェルカムが「ユーザー」のまま。</dt>
+              <dd class="mb-3">ロールが管理者か確認。キャッシュ削除→再ログインで解決する場合あり。</dd>
+
+              <dt class="fw-semibold">Q2. カメラが起動しない／QRが遅い。</dt>
+              <dd class="mb-3">ブラウザのカメラ許可ON、他アプリのカメラ占有なし、明るい場所で水平に。</dd>
+
+              <dt class="fw-semibold">Q3. 文字が切れる／横スクロール。</dt>
+              <dd class="mb-3">ズーム100%・画面回転切替。印刷時は縮尺90–95%推奨。</dd>
+
+              <dt class="fw-semibold">Q4. 「Adjust／Edit」が出ない。</dt>
+              <dd class="mb-3">権限がユーザーの可能性。管理者へ権限付与依頼。</dd>
+
+              <dt class="fw-semibold">Q5. バーコードを隣列として読む。</dt>
+              <dd class="mb-0">中央に合わせ、ガイド枠を外さない。反射面・暗所を避ける。</dd>
+            </dl>
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  </section>
+</div>
+
 </body>
 </html>
