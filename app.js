@@ -240,24 +240,36 @@ window.addEventListener("storage", (e) => {
     }
   }
   // --- PASANG DI SINI: tepat setelah } penutup renderDashboard() ---
-  function updateWelcomeBanner() {
-    const who = getCurrentUser();
-    const nama = who?.name || who?.id || "ユーザー";
-    const roleJP = (who?.role || "user").toLowerCase() === "admin" ? "管理者" : "ユーザー";
+  // --- PASANG MENGGANTI fungsi lama updateWelcomeBanner ---
+function updateWelcomeBanner() {
+  const who = getCurrentUser();
+  const nama = who?.name || who?.id || "ユーザー";
+  const roleRaw = (who?.role || "user").toLowerCase();
+  const roleJP  = roleRaw === "admin" ? "管理者" : "ユーザー";
 
-    const banner = document.getElementById("welcome-banner");
-    if (banner) {
-      banner.innerHTML = `ようこそ、<b>${escapeHtml(nama)}</b> さん。<span class="text-muted">（${roleJP}）</span>
-        <span class="text-muted small">（ヒント：サイドバーの「棚卸」でカメラスキャンが使えます）</span>`;
-    }
-
-    const whoEl = document.getElementById("who");
-    if (whoEl) {
-      const id = who?.id || "";
-      const role = who?.role || "user";
-      whoEl.textContent = `${nama} (${id} | ${role})`;
-    }
+  // 1) Jika dashboard pakai kontainer khusus (rencana baru)
+  const banner = document.getElementById("welcome-banner");
+  if (banner) {
+    banner.innerHTML = `ようこそ、<b>${escapeHtml(nama)}</b> さん。<span class="badge-soft" style="margin-left:.4rem">${roleJP}</span>
+      <span class="text-muted small">（ヒント：サイドバーの「棚卸」でカメラスキャンが使えます）</span>`;
   }
+
+  // 2) Kompatibel dengan struktur lama: cuma ada <b id="wel-name">
+  const welName = document.getElementById("wel-name");
+  if (welName) {
+    // Tampilkan nama + peran agar “Admin” tidak lagi terbaca “User”
+    welName.textContent = `${nama}（${roleJP}）`;
+  }
+
+  // 3) Header kecil di kanan (info ringkas)
+  const whoEl = document.getElementById("who");
+  if (whoEl) {
+    const id = who?.id || "";
+    const role = who?.role || "user";
+    whoEl.textContent = `${nama} (${id} | ${role})`;
+  }
+}
+
 
   // === Live reload (user-configurable) ===
   const LIVE_KEY = "liveRefreshSec";
