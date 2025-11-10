@@ -201,6 +201,25 @@
       toast("ダッシュボードの読み込みに失敗しました。");
     }
   }
+// --- PASANG DI SINI: tepat setelah } penutup renderDashboard() ---
+function updateWelcomeBanner() {
+  const who = getCurrentUser();
+  const nama = who?.name || who?.id || "ユーザー";
+  const roleJP = (who?.role || "user").toLowerCase() === "admin" ? "管理者" : "ユーザー";
+
+  const banner = document.getElementById("welcome-banner");
+  if (banner) {
+    banner.innerHTML = `ようこそ、<b>${escapeHtml(nama)}</b> さん。<span class="text-muted">（${roleJP}）</span>
+      <span class="text-muted small">（ヒント：サイドバーの「棚卸」でカメラスキャンが使えます）</span>`;
+  }
+
+  const whoEl = document.getElementById("who");
+  if (whoEl) {
+    const id = who?.id || "";
+    const role = who?.role || "user";
+    whoEl.textContent = `${nama} (${id} | ${role})`;
+  }
+}
 
   // === Live reload (user-configurable) ===
   const LIVE_KEY = "liveRefreshSec";
@@ -1750,6 +1769,7 @@
 
     bindIO();
     bindShelf();
+    updateWelcomeBanner(); 
     renderDashboard();
     $("#btn-logout")?.addEventListener("click", logout);
     startLiveReload();
