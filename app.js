@@ -15,24 +15,21 @@
   // Escape
   function escapeHtml(s){ return String(s || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
   function escapeAttr(s){ return escapeHtml(s); }
-// CSV helper: paksa Excel baca UTF-8 + JP header OK
-// CSV helper: paksa Excel baca UTF-8 + JP header OK
-function downloadCSV_JP(filename, csv){
-  const bom = "\uFEFF"; // UTF-8 BOM
-  const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  // Jangan langsung revoke; beberapa browser bisa batal download.
-  // Kalau mau rapi, revoke dengan jeda:
-  // setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
 
+  // CSV helper: paksa Excel baca UTF-8 + JP header OK
+  function downloadCSV_JP(filename, csv){
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    // setTimeout(() => URL.revokeObjectURL(url), 2000); // opsional
+  }
 
   // File helpers
   function sanitizeFilename(name){ return String(name || "").replace(/[\\/:*?"<>|]/g, "_"); }
   function normalizeCodeDash(s){ return String(s || "").replace(/[\u2212\u2010-\u2015\uFF0D]/g, "-").trim(); }
-function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
+  function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
 
   // Global caches
   let _ITEMS_CACHE = [];
@@ -42,6 +39,7 @@ function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
     if (show) { el.classList.remove("d-none"); $("#loading-text").textContent = text || "読み込み中…"; }
     else el.classList.add("d-none");
   }
+
   async function api(action, { method = "GET", body = null, silent = false } = {}) {
     if (!window.CONFIG || !CONFIG.BASE_URL) { throw new Error("config.js BASE_URL belum di-set"); }
     const apikey = encodeURIComponent(CONFIG.API_KEY || "");
@@ -73,6 +71,7 @@ function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
       document.head.appendChild(s);
     });
   }
+
   async function ensureQRCode() {
     if (window.QRCode) return;
     const locals = ["./qrlib.js", "./qrcode.min.js", "./vendor/qrcode.min.js"];
@@ -85,6 +84,7 @@ function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
     for (const u of cdns) { try { await loadScriptOnce(u); if (window.QRCode) return; } catch {} }
     throw new Error("QRCode library tidak tersedia (qrlib.js)");
   }
+
   async function ensureHtml5Qrcode() {
     if (window.Html5Qrcode) return;
     const locals = ["./html5-qrcode.min.js", "./vendor/html5-qrcode.min.js"];
@@ -201,47 +201,44 @@ function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
       toast("ダッシュボードの読み込みに失敗しました。");
     }
   }
-// === Live reload antar device (5 detik) ===
-// === Live reload (user-configurable) ===
-const LIVE_KEY = "liveRefreshSec";
-let LIVE_TIMER = null;
-let LIVE_SEC = Number(localStorage.getItem(LIVE_KEY) || "120"); // default 120s (lebih lambat)
 
-function setLiveRefresh(seconds){
-  LIVE_SEC = Math.max(0, Number(seconds || 0));
-  localStorage.setItem(LIVE_KEY, String(LIVE_SEC));
-  startLiveReload(); // restart timer dengan interval baru
-}
+  // === Live reload (user-configurable) ===
+  const LIVE_KEY = "liveRefreshSec";
+  let LIVE_TIMER = null;
+  let LIVE_SEC = Number(localStorage.getItem(LIVE_KEY) || "120"); // default 120s (lebih lambat)
 
-function startLiveReload(){
-  clearInterval(LIVE_TIMER);
-  if (LIVE_SEC <= 0) return; // Off
-  LIVE_TIMER = setInterval(async () => {
-    try {
-      const active = document.querySelector("main section.active")?.id || "";
-      // refresh cache item supaya stok/nama terbaru
-      api("items", { method: "GET", silent: true }).then(list => {
-        _ITEMS_CACHE = Array.isArray(list) ? list : (list?.data || []);
-      }).catch(()=>{});
-      // per layar aktif:
-      if (active === "view-dashboard")    renderDashboard();
-      if (active === "view-history")      renderHistory();
-      if (active === "view-shelf-list")   loadTanaList();  // 棚卸一覧
-      // if (active === "view-shelf")    renderShelfTable(); // opsional
-    } catch {}
-  }, LIVE_SEC * 1000);
-}
+  function setLiveRefresh(seconds){
+    LIVE_SEC = Math.max(0, Number(seconds || 0));
+    localStorage.setItem(LIVE_KEY, String(LIVE_SEC));
+    startLiveReload();
+  }
 
+  function startLiveReload(){
+    clearInterval(LIVE_TIMER);
+    if (LIVE_SEC <= 0) return; // Off
+    LIVE_TIMER = setInterval(async () => {
+      try {
+        const active = document.querySelector("main section.active")?.id || "";
+        // refresh cache item supaya stok/nama terbaru
+        api("items", { method: "GET", silent: true }).then(list => {
+          _ITEMS_CACHE = Array.isArray(list) ? list : (list?.data || []);
+        }).catch(()=>{});
+        // per layar aktif:
+        if (active === "view-dashboard")    renderDashboard();
+        if (active === "view-history")      renderHistory();
+        if (active === "view-shelf-list")   loadTanaList();  // 棚卸一覧
+        // if (active === "view-shelf")     renderShelfTable(); // opsional
+      } catch {}
+    }, LIVE_SEC * 1000);
+  }
 
   /* -------------------- Items -------------------- */
   function tplItemRow(it) {
-   const qrid = `qr-${safeId(it.code)}`;
-
+    const qrid = `qr-${safeId(it.code)}`;
     return `<tr>
       <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
       <td>${escapeHtml(it.code)}</td>
-     <td><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
-
+      <td><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
       <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ""}</td>
       <td class="text-end">¥${fmt(it.price)}</td>
       <td class="text-end">${fmt(it.stock)}</td>
@@ -270,7 +267,6 @@ function startLiveReload(){
       await ensureQRCode();
       for (const it of _ITEMS_CACHE) {
         const holder = document.getElementById(`qr-${safeId(it.code)}`);
-
         if (!holder) continue; holder.innerHTML = "";
         new QRCode(holder, { text: `ITEM|${normalizeCodeDash(it.code)}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
       }
@@ -314,100 +310,94 @@ function startLiveReload(){
           tr.style.display = (name.includes(q) || code.includes(q)) ? "" : "none";
         });
       });
-itemsAuto_extendMenu();
+
+      itemsAuto_extendMenu();
     } catch { toast("商品一覧の読み込みに失敗しました。"); }
   }
-/* ===== Auto-refresh controller (pakai tombol #btn-items-auto yang sudah ada) ===== */
-function itemsAuto_refreshLabel(sec){
-  const btn = document.getElementById("btn-items-auto");
-  if (!btn) return;
-  if (!sec) btn.textContent = "Auto: Off";
-  else if (sec >= 60) btn.textContent = `Auto: ${Math.round(sec/60)}分`;
-  else btn.textContent = `Auto: ${sec}秒`;
-}
 
-function itemsAuto_extendMenu(){
-  const btn = document.getElementById("btn-items-auto");
-  const menu = btn?.parentElement?.querySelector(".dropdown-menu");
-  if (!menu) return;
-
-  // Tambahkan pilihan lebih lambat jika belum ada
-  if (!menu.querySelector('[data-autorefresh="180"]')) {
-    menu.insertAdjacentHTML("beforeend", `
-      <li><a class="dropdown-item" data-autorefresh="180">180秒</a></li>
-      <li><a class="dropdown-item" data-autorefresh="300">300秒（5分）</a></li>
-      <li><a class="dropdown-item" data-autorefresh="600">600秒（10分）</a></li>
-    `);
+  /* ===== Auto-refresh controller (pakai tombol #btn-items-auto yang sudah ada) ===== */
+  function itemsAuto_refreshLabel(sec){
+    const btn = document.getElementById("btn-items-auto");
+    if (!btn) return;
+    if (!sec) btn.textContent = "Auto: Off";
+    else if (sec >= 60) btn.textContent = `Auto: ${Math.round(sec/60)}分`;
+    else btn.textContent = `Auto: ${sec}秒`;
   }
 
-  // Re-bind semua opsi (termasuk yang lama: 0/30/60/120)
-  menu.querySelectorAll("[data-autorefresh]").forEach(a => {
-    a.addEventListener("click", (e) => {
-      e.preventDefault();
-      const sec = Number(a.getAttribute("data-autorefresh") || "0");
-      itemsAuto_refreshLabel(sec);
-      setLiveRefresh(sec); // <- atur interval global dari pilihan user
+  function itemsAuto_extendMenu(){
+    const btn = document.getElementById("btn-items-auto");
+    const menu = btn?.parentElement?.querySelector(".dropdown-menu");
+    if (!menu) return;
+
+    if (!menu.querySelector('[data-autorefresh="180"]')) {
+      menu.insertAdjacentHTML("beforeend", `
+        <li><a class="dropdown-item" data-autorefresh="180">180秒</a></li>
+        <li><a class="dropdown-item" data-autorefresh="300">300秒（5分）</a></li>
+        <li><a class="dropdown-item" data-autorefresh="600">600秒（10分）</a></li>
+      `);
+    }
+
+    menu.querySelectorAll("[data-autorefresh]").forEach(a => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const sec = Number(a.getAttribute("data-autorefresh") || "0");
+        itemsAuto_refreshLabel(sec);
+        setLiveRefresh(sec);
+      });
     });
-  });
 
-  // Set label awal dari preferensi tersimpan
-  const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
-  itemsAuto_refreshLabel(saved);
-}
-/* ===== Auto-refresh: injector untuk view lain (history & shelf-list) ===== */
-function ensureViewAutoMenu(viewKey, toolbarRightSel){
-  const host = document.querySelector(toolbarRightSel); if (!host) return;
+    const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
+    itemsAuto_refreshLabel(saved);
+  }
 
-  const BTN_ID = `btn-auto-${viewKey}`;
-  const WRAP_ID = `auto-wrap-${viewKey}`;
+  /* ===== Auto-refresh: injector untuk view lain (history & shelf-list) ===== */
+  function ensureViewAutoMenu(viewKey, toolbarRightSel){
+    const host = document.querySelector(toolbarRightSel); if (!host) return;
 
-  // Kalau sudah ada, cukup update label dari preferensi terakhir
-  if (document.getElementById(BTN_ID)) {
+    const BTN_ID = `btn-auto-${viewKey}`;
+    const WRAP_ID = `auto-wrap-${viewKey}`;
+
+    if (document.getElementById(BTN_ID)) {
+      const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
+      const btn = document.getElementById(BTN_ID);
+      if (btn) {
+        btn.textContent = !saved ? "Auto: Off" : (saved >= 60 ? `Auto: ${Math.round(saved/60)}分` : `Auto: ${saved}秒`);
+      }
+      return;
+    }
+
+    const wrap = document.createElement("div");
+    wrap.id = WRAP_ID;
+    wrap.className = "btn-group";
+    wrap.innerHTML = `
+      <button id="${BTN_ID}" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+        Auto
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" data-autorefresh="0">Off</a></li>
+        <li><a class="dropdown-item" data-autorefresh="120">120秒（2分）</a></li>
+        <li><a class="dropdown-item" data-autorefresh="180">180秒（3分）</a></li>
+        <li><a class="dropdown-item" data-autorefresh="300">300秒（5分）</a></li>
+        <li><a class="dropdown-item" data-autorefresh="600">600秒（10分）</a></li>
+      </ul>
+    `;
+    host.appendChild(wrap);
+
+    wrap.querySelectorAll("[data-autorefresh]").forEach(a=>{
+      a.addEventListener("click",(e)=>{
+        e.preventDefault();
+        const sec = Number(a.getAttribute("data-autorefresh") || "0");
+        setLiveRefresh(sec);
+        const btn = document.getElementById(BTN_ID);
+        if (!btn) return;
+        btn.textContent = !sec ? "Auto: Off" : (sec >= 60 ? `Auto: ${Math.round(sec/60)}分` : `Auto: ${sec}秒`);
+      });
+    });
+
     const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
     const btn = document.getElementById(BTN_ID);
-    if (btn) {
-      btn.textContent = !saved ? "Auto: Off" : (saved >= 60 ? `Auto: ${Math.round(saved/60)}分` : `Auto: ${saved}秒`);
-    }
-    return;
+    if (btn) btn.textContent = !saved ? "Auto: Off" : (saved >= 60 ? `Auto: ${Math.round(saved/60)}分` : `Auto: ${saved}秒`);
   }
-
-  // Sisipkan dropdown kecil di sisi kanan toolbar
-  const wrap = document.createElement("div");
-  wrap.id = WRAP_ID;
-  wrap.className = "btn-group";
-  wrap.innerHTML = `
-    <button id="${BTN_ID}" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-      Auto
-    </button>
-    <ul class="dropdown-menu dropdown-menu-end">
-      <li><a class="dropdown-item" data-autorefresh="0">Off</a></li>
-      <li><a class="dropdown-item" data-autorefresh="120">120秒（2分）</a></li>
-      <li><a class="dropdown-item" data-autorefresh="180">180秒（3分）</a></li>
-      <li><a class="dropdown-item" data-autorefresh="300">300秒（5分）</a></li>
-      <li><a class="dropdown-item" data-autorefresh="600">600秒（10分）</a></li>
-    </ul>
-  `;
-  host.appendChild(wrap);
-
-  // Bind klik semua opsi
-  wrap.querySelectorAll("[data-autorefresh]").forEach(a=>{
-    a.addEventListener("click",(e)=>{
-      e.preventDefault();
-      const sec = Number(a.getAttribute("data-autorefresh") || "0");
-      // simpan & restart timer global
-      setLiveRefresh(sec);
-      // update label tombol ini
-      const btn = document.getElementById(BTN_ID);
-      if (!btn) return;
-      btn.textContent = !sec ? "Auto: Off" : (sec >= 60 ? `Auto: ${Math.round(sec/60)}分` : `Auto: ${sec}秒`);
-    });
-  });
-
-  // Set label awal dari preferensi tersimpan
-  const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
-  const btn = document.getElementById(BTN_ID);
-  if (btn) btn.textContent = !saved ? "Auto: Off" : (saved >= 60 ? `Auto: ${Math.round(saved/60)}分` : `Auto: ${saved}秒`);
-}
 
   function openEditItem(code) {
     if (!isAdmin()) return toast("Akses ditolak (admin only)");
@@ -629,17 +619,14 @@ function ensureViewAutoMenu(viewKey, toolbarRightSel){
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
 
-    // border
     g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
     g.strokeStyle = "#000"; g.lineWidth = 1;
     g.strokeRect(0.5, 0.5, W - 1, H - 1);
 
-    // kolom kiri (gambar)
     const rx = pad, ry = pad, rw = imgW, rh = H - 2 * pad, r = 18;
     roundRect(g, rx, ry, rw, rh, r, true, true, "#eaf1ff", "#cbd5e1");
     await drawImageIfAny(g, item.img, rx, ry, rw, rh, r);
 
-    // QR
     const colStart = pad + imgW + gap;
     const qy = pad + ((H - 2 * pad) - qrSize) / 2;
     const qx = colStart + gapQR + QUIET;
@@ -652,7 +639,6 @@ function ensureViewAutoMenu(viewKey, toolbarRightSel){
       g.drawImage(im, qx, qy, qrSize, qrSize);
     } catch {}
 
-    // grid kanan
     const colQRW = qrSize + 2 * QUIET;
     const gridX  = colStart + gapQR + colQRW + gapQR;
     const cellH  = (H - 2 * pad) / 3;
@@ -663,7 +649,6 @@ function ensureViewAutoMenu(viewKey, toolbarRightSel){
       g.beginPath(); g.moveTo(gridX + 0.5, y + 0.5); g.lineTo(W - pad - 0.5, y + 0.5); g.stroke();
     }
 
-    // label & nilai
     const labelWidth = 96;
     const labelX = gridX + 10;
     const valX   = gridX + 10 + labelWidth;
@@ -680,14 +665,12 @@ function ensureViewAutoMenu(viewKey, toolbarRightSel){
 
     cells.forEach((cell, i) => {
       const yTop = pad + i * cellH;
-      // label
       g.font = LBL_FONT; g.fillStyle = "#000";
       const labelH = 14;
       const ly = yTop + (cellH - labelH) / 2;
       g.textBaseline = "top"; g.textAlign = "left";
       g.fillText(cell.title, labelX, Math.round(ly));
 
-      // nilai
       drawWrapBoxVCenter(
         g, cell.value, valX, yTop + 4, valMaxW, cellH - 8,
         { base: cell.base, min: cell.min, lineGap: 3, weight: VAL_WEIGHT }
@@ -814,17 +797,14 @@ function ensureViewAutoMenu(viewKey, toolbarRightSel){
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
 
-    // tempel label dasar
     g.drawImage(im, 0, 0);
 
-    // hitung posisi QR
     const pad = 18, imgW = 200, gap = 16;
     const QUIET = 16, qrSize = 136, gapQR = 14;
     const colStart = pad + imgW + gap;
     const qy = pad + ((H - 2 * pad) - qrSize) / 2;
     const qx = colStart + gapQR + QUIET;
 
-    // QR LOT
     try {
       const codeNorm = normalizeCodeDash(item.code);
       const txt = lotId ? `LOT|${codeNorm}|${qtyPerBox}|${lotId}` : `LOT|${codeNorm}|${qtyPerBox}`;
@@ -835,7 +815,6 @@ function ensureViewAutoMenu(viewKey, toolbarRightSel){
       g.drawImage(qr, qx, qy, qrSize, qrSize);
     } catch {}
 
-    // caption bawah QR
     const capW = qrSize + 2 * QUIET;
     const capH = 40;
     const capX = colStart + gapQR;
@@ -881,32 +860,28 @@ function ensureViewAutoMenu(viewKey, toolbarRightSel){
       }
 
       const tbody = $("#tbl-userqr");
-     tbody.innerHTML = arr.map(u => {
-  const uidSafe = safeId(u.id);
-  return `
-    <tr>
-      <td style="width:170px"><div id="uqr-${uidSafe}"></div></td>
-      <td>${escapeHtml(u.id)}</td>
-      <td>${escapeHtml(u.name)}</td>
-      <td>${escapeHtml(u.role || "user")}</td>
-      <td class="text-end">
-        <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
-          <i class="bi bi-download"></i>
-        </button>
-      </td>
-    </tr>
-  `;
-}).join("");
-
+      tbody.innerHTML = arr.map(u => {
+        const uidSafe = safeId(u.id);
+        return `
+        <tr>
+          <td style="width:170px"><div id="uqr-${uidSafe}"></div></td>
+          <td>${escapeHtml(u.id)}</td>
+          <td>${escapeHtml(u.name)}</td>
+          <td>${escapeHtml(u.role || "user")}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-success btn-dl-user" data-id="${escapeAttr(u.id)}" title="ダウンロード">
+              <i class="bi bi-download"></i>
+            </button>
+          </td>
+        </tr>`;
+      }).join("");
 
       await ensureQRCode();
       for (const u of arr) {
-  const el = document.getElementById(`uqr-${safeId(u.id)}`); // <— gunakan safeId di sini
-  if (!el) continue;
-  el.innerHTML = "";
-  new QRCode(el, { text: `USER|${u.id}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
-}
-
+        const el = document.getElementById(`uqr-${safeId(u.id)}`); // konsisten safeId
+        if (!el) continue;
+        el.innerHTML = ""; new QRCode(el, { text: `USER|${u.id}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
+      }
 
       tbody.addEventListener("click", async (e) => {
         const b = e.target.closest(".btn-dl-user"); if (!b) return;
@@ -1096,51 +1071,9 @@ function ensureViewAutoMenu(viewKey, toolbarRightSel){
       } catch (e) { toast(e?.message || String(e)); }
     });
 
+    // >>> FIX: bersihkan handler Stop (tidak tercampur kode棚卸)
     btnStop.addEventListener("click", async () => {
-  try {
-    await IO_SCANNER?.stop?.();
-    IO_SCANNER?.clear?.();
-  } catch {}
-  area.innerHTML = "カメラ待機中…";
-});
-
-
-    // Draft buttons
-    $("#st-save")?.addEventListener("click", (e) => { e.preventDefault(); saveShelfDraft(); });
-    $("#st-load")?.addEventListener("click", (e) => { e.preventDefault(); loadShelfDraft(); });
-    $("#st-clear")?.addEventListener("click", (e) => { e.preventDefault(); if(confirm("下書きを削除しますか？")){ clearShelfDraft(); }});
-
-    // Commit button
-    $("#st-commit")?.addEventListener("click", async (e) => {
-      e.preventDefault();
-      if (!isAdmin()) return toast("Akses ditolak (admin only)");
-      const who = getCurrentUser(); if (!who) return toast("ログイン情報がありません。");
-      const arr = [...ST.rows.values()].filter(r => Number(r.diff||0) !== 0);
-      if (arr.length === 0) return toast("差異がありません");
-      if (!confirm(`差異 ${arr.length} 件を確定します。よろしいですか？`)) return;
-
-      try{
-        setLoading(true, "確定中…");
-        for (const r of arr){
-          const diff = Number(r.diff||0);
-          const type = diff >= 0 ? "IN" : "OUT";
-          const qty  = Math.abs(diff);
-          const note = "棚卸確定 " + new Date().toISOString().slice(0,10);
-          await api("log", { method:"POST", body: { userId: who.id, code: r.code, qty, unit: "pcs", type, note }});
-        }
-        setLoading(false);
-        toast("棚卸を確定しました");
-        clearShelfDraft();
-        ST.rows.clear();
-        renderShelfTable();
-        try{ await renderDashboard(); }catch{}
-        try{ await renderItems(); }catch{}
-      }catch(err){
-        setLoading(false);
-        toast("確定失敗: " + (err?.message || err));
-      }
-    });
-IO_SCANNER?.clear?.(); } catch { }
+      try { await IO_SCANNER?.stop?.(); IO_SCANNER?.clear?.(); } catch {}
       area.innerHTML = "カメラ待機中…";
     });
 
@@ -1313,6 +1246,7 @@ IO_SCANNER?.clear?.(); } catch { }
   /* -------------------- Stocktake (棚卸) : scan & input saja -------------------- */
   let SHELF_SCANNER = null;
   const ST = { rows: new Map() };
+
   /* === Draft & Diff-only & Commit helpers (added) === */
   const ST_DRAFT_KEY = "shelfDraftV1";
   function saveShelfDraft(){
@@ -1399,30 +1333,28 @@ IO_SCANNER?.clear?.(); } catch { }
       sumEl.textContent = `件数: ${total} ／ 差異あり: ${diffRows} ／ 差異合計: ${fmt(diffSum)} ／ 絶対差異: ${fmt(absSum)}`;
     }
 
-   tbody.oninput = (e) => {
-  const tr = e.target.closest("tr"); if (!tr) return;
-  if (!e.target.classList.contains("st-qty")) return;
+    tbody.oninput = (e) => {
+      const tr = e.target.closest("tr"); if (!tr) return;
+      if (!e.target.classList.contains("st-qty")) return;
 
-  const code = tr.getAttribute("data-code");
-  const rec = ST.rows.get(code); if (!rec) return;
+      const code = tr.getAttribute("data-code");
+      const rec = ST.rows.get(code); if (!rec) return;
 
-  rec.qty = Number(e.target.value || 0);
-  rec.diff = rec.qty - rec.book;
+      rec.qty = Number(e.target.value || 0);
+      rec.diff = rec.qty - rec.book;
 
-  // update sel diff
-  tr.children[5].textContent = fmt(rec.diff);
-  tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
+      tr.children[5].textContent = fmt(rec.diff);
+      tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
 
-  // hitung ulang summary tanpa re-render tabel
-  const arr = [...ST.rows.values()];
-  const sumEl = $("#st-summary");
-  if (sumEl){
-    const diffRows = arr.filter(x => (x.diff||0) !== 0).length;
-    const diffSum  = arr.reduce((a,b)=>a+Number(b.diff||0),0);
-    const absSum   = arr.reduce((a,b)=>a+Math.abs(Number(b.diff||0)),0);
-    sumEl.textContent = `件数: ${arr.length} ／ 差異あり: ${diffRows} ／ 差異合計: ${fmt(diffSum)} ／ 絶対差異: ${fmt(absSum)}`;
-  }
-};
+      const arr = [...ST.rows.values()];
+      const sumEl = $("#st-summary");
+      if (sumEl){
+        const diffRows = arr.filter(x => (x.diff||0) !== 0).length;
+        const diffSum  = arr.reduce((a,b)=>a+Number(b.diff||0),0);
+        const absSum   = arr.reduce((a,b)=>a+Math.abs(Number(b.diff||0)),0);
+        sumEl.textContent = `件数: ${arr.length} ／ 差異あり: ${diffRows} ／ 差異合計: ${fmt(diffSum)} ／ 絶対差異: ${fmt(absSum)}`;
+      }
+    };
 
     tbody.onclick = (e) => {
       const tr = e.target.closest("tr"); if (!tr) return; 
@@ -1436,7 +1368,7 @@ IO_SCANNER?.clear?.(); } catch { }
   }
 
   function bindShelf() {
-    // Inject toolbar controls (差異のみ / 下書き保存 / 読込 / クリア / 確定) without changing HTML file
+    // Inject toolbar controls
     const toolbarRight = document.querySelector('#view-shelf .items-toolbar .right');
     if (toolbarRight && !toolbarRight.querySelector('.st-controls')) {
       const wrap = document.createElement('div');
@@ -1602,7 +1534,7 @@ IO_SCANNER?.clear?.(); } catch { }
       const cols = rows[i].split(",").map(s => s?.trim());
       const [code,name,price,stock,min,location,department,img] = jp
         ? [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7]]
-        : [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[7], cols[6]]; // (EN: dep/img urutan lama)
+        : [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[7], cols[6]];
       if (!code) { fail++; continue; }
       try {
         await api("updateItem", {
@@ -1693,65 +1625,49 @@ IO_SCANNER?.clear?.(); } catch { }
     };
   }
 
-async function loadTanaList(){
-  try{
-    const res = await api("tanaList", { method:'GET' });
-    const tbl = document.getElementById('tbl-tana');
-    if (!tbl) return;
+  async function loadTanaList(){
+    try{
+      const res = await api("tanaList", { method:'GET' });
+      const tbl = document.getElementById('tbl-tana');
+      if (!tbl) return;
 
-    const rowsRaw =
-      Array.isArray(res) ? res :
-      Array.isArray(res?.rows) ? res.rows :
-      Array.isArray(res?.data) ? res.data : [];
+      const rowsRaw =
+        Array.isArray(res) ? res :
+        Array.isArray(res?.rows) ? res.rows :
+        Array.isArray(res?.data) ? res.data : [];
 
-    const heads = tanaJPHeaders();
-    tbl.innerHTML = '<thead><tr>' + heads.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
+      const heads = tanaJPHeaders();
+      tbl.innerHTML = '<thead><tr>' + heads.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
 
-    if (!rowsRaw.length){
+      if (!rowsRaw.length){
+        tbl.insertAdjacentHTML('beforeend',
+          '<tbody><tr><td colspan="'+heads.length+'" class="text-muted py-4">データはありません</td></tr></tbody>');
+        // pastikan tombol auto selalu tersedia
+        ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+        return;
+      }
+
+      const rows = rowsRaw.map(tanaToJPRow);
       tbl.insertAdjacentHTML('beforeend',
-        '<tbody><tr><td colspan="'+heads.length+'" class="text-muted py-4">データはありません</td></tr></tbody>');
-      // tampilkan tombol auto di toolbar meski tabel kosong
+        '<tbody>' + rows.map(r => `<tr>${
+          heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
+        }</tr>`).join('') + '</tbody>');
+
+      // tombol auto juga muncul saat ada data
       ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
-      return;
+    }catch{
+      const tbl = document.getElementById('tbl-tana');
+      if (tbl) tbl.innerHTML =
+        '<tbody><tr><td class="text-danger">取得に失敗</td></tr></tbody>';
+      ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
     }
-
-    const rows = rowsRaw.map(tanaToJPRow);
-    tbl.insertAdjacentHTML('beforeend',
-      '<tbody>' + rows.map(r => `<tr>${
-        heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
-      }</tr>`).join('') + '</tbody>');
-
-    // pastikan tombol auto muncul juga saat ada data
-    ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
-  } catch {
-    const tbl = document.getElementById('tbl-tana');
-    if (tbl) tbl.innerHTML =
-      '<tbody><tr><td class="text-danger">取得に失敗</td></tr></tbody>';
-    // tetap inject tombol auto agar user bisa atur refresh
-    ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
   }
-}
 
-
-    const rows = rowsRaw.map(tanaToJPRow);
-    tbl.insertAdjacentHTML('beforeend',
-      '<tbody>' + rows.map(r => `<tr>${
-        heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
-      }</tr>`).join('') + '</tbody>');
-  }catch{
-    const tbl = document.getElementById('tbl-tana');
-    if (tbl) tbl.innerHTML =
-      '<tbody><tr><td class="text-danger">取得に失敗</td></tr></tbody>';
-  }
-}
-
-
- $("#tana-exp")?.addEventListener("click", async ()=>{
-  const resp = await api("tanaExportCSV", { method:'GET' });
-  if(!resp || !resp.ok) return alert('エクスポート失敗');
-  downloadCSV_JP(resp.filename || "棚卸.csv", resp.csv);
-});
-
+  $("#tana-exp")?.addEventListener("click", async ()=>{
+    const resp = await api("tanaExportCSV", { method:'GET' });
+    if(!resp || !resp.ok) return alert('エクスポート失敗');
+    downloadCSV_JP(resp.filename || "棚卸.csv", resp.csv);
+  });
 
   $("#input-tana-imp")?.addEventListener("change", async (ev)=>{
     const file = ev.target.files?.[0]; if(!file) return;
@@ -1786,57 +1702,57 @@ async function loadTanaList(){
         const heads = ["月","IN","OUT"];
         const csv = [heads.join(",")]
           .concat([...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, v.in, v.out].join(","))).join("\n");
-       downloadCSV_JP("棚卸_月次.csv", csv);
+        downloadCSV_JP("棚卸_月次.csv", csv);
       }, { once: true });
 
       $("#tana-recap-export-yearly")?.addEventListener("click", () => {
-  const heads = ["年","IN","OUT"];
-  const csv = [heads.join(",")]
-    .concat(
-      [...byYear.entries()]
-        .sort((a,b)=>a[0].localeCompare(b[0]))
-        .map(([k,v]) => [k, v.in, v.out].join(","))
-    )
-    .join("\n");
-  downloadCSV_JP("棚卸_年次.csv", csv);
-}, { once: true });
+        const heads = ["年","IN","OUT"];
+        const csv = [heads.join(",")]
+          .concat(
+            [...byYear.entries()]
+              .sort((a,b)=>a[0].localeCompare(b[0]))
+              .map(([k,v]) => [k, v.in, v.out].join(","))
+          )
+          .join("\n");
+        downloadCSV_JP("棚卸_年次.csv", csv);
+      }, { once: true });
 
+      $("#tana-matome-exp")?.addEventListener("click", async ()=>{
+        const res = await api("tanaList", { method:'GET' }); if(!res || !res.rows) return;
+        const agg = {}; res.rows.forEach(r=>{ agg[r.code] = (agg[r.code]||0) + Number(r.qty||0); });
+        const heads = ['コード','数量'];
+        const csv = [heads.join(',')]
+          .concat(Object.keys(agg).map(k=>[k, agg[k]].join(',')))
+          .join('\n');
+        downloadCSV_JP("棚卸まとめ.csv", csv);
+      }, { once:true });
 
-     $("#tana-matome-exp")?.addEventListener("click", async ()=>{
-  const res = await api("tanaList", { method:'GET' }); if(!res || !res.rows) return;
-  const agg = {}; res.rows.forEach(r=>{ agg[r.code] = (agg[r.code]||0) + Number(r.qty||0); });
-  const heads = ['コード','数量'];
-  const csv = [heads.join(',')]
-    .concat(Object.keys(agg).map(k=>[k, agg[k]].join(',')))
-    .join('\n');
-  downloadCSV_JP("棚卸まとめ.csv", csv);
-}, { once:true });
-ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
-
-
-    } catch (e) { /* noop */ }
+      // >>> injector tombol Auto di recap view
+      ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+    } catch (e) {
+      // tetap injeksi menu auto walau gagal data
+      ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+    }
   }
 
   /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
-  const logo = document.getElementById("brand-logo");
-  if (logo && window.CONFIG && CONFIG.LOGO_URL) {
-    logo.src = CONFIG.LOGO_URL; logo.alt = "logo";
-    logo.onerror = () => { logo.style.display = "none"; };
-  }
+    const logo = document.getElementById("brand-logo");
+    if (logo && window.CONFIG && CONFIG.LOGO_URL) {
+      logo.src = CONFIG.LOGO_URL; logo.alt = "logo";
+      logo.onerror = () => { logo.style.display = "none"; };
+    }
 
-  const newItemBtn = $("#btn-open-new-item");
-  const newUserBtn = $("#btn-open-new-user");
-  if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
-  if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
+    const newItemBtn = $("#btn-open-new-item");
+    const newUserBtn = $("#btn-open-new-user");
+    if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
+    if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
 
-  bindIO();
-  bindShelf();
-  renderDashboard();
-  $("#btn-logout")?.addEventListener("click", logout);
-  startLiveReload();
-});
-
-  
+    bindIO();
+    bindShelf();
+    renderDashboard();
+    $("#btn-logout")?.addEventListener("click", logout);
+    startLiveReload();
+  });
 
 })();
