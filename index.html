@@ -16,24 +16,13 @@
   <style>
     body{ background:linear-gradient(180deg,#eef2ff,#f8fafc); min-height:100vh; }
     .login-wrap{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
-    .login-card{ width:100%; max-width:680px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.08); }
-    #qr-area{ display:none; width:100%; max-width:360px; aspect-ratio:4/3; margin:12px auto 0; border-radius:12px; overflow:hidden; background:#0b0b0b10; }
+    .login-card{ width:100%; max-width:680px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.08); position:relative; z-index:2;}
+    #qr-area{ display:none; width:100%; max-width:360px; aspect-ratio:4/3; margin:12px auto 0; border-radius:12px; overflow:hidden; background:#0b0b0b10; position:relative; z-index:1; }
     #qr-area video, #qr-area canvas{ width:100%!important; height:100%!important; object-fit:cover; }
-     /* Pastikan elemen card & tombol berada di atas overlay manapun */
-  .login-card { position: relative; z-index: 2; }
-  #qr-area    { position: relative; z-index: 1; }
-
-  /* Jika ada overlay global, jangan block tap */
-  #global-loading { pointer-events: none !important; }
-
-  /* Beberapa lib menyisipkan elemen html5-qrcode sendiri — jangan biarkan tutup tombol */
-  .html5-qrcode-element { display: none !important; }
-
-  /* Bantu perangkat sentuh agar tap tidak ditahan sebagai gesture zoom/double-tap */
-  button, a, input, label { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-
-  /* Pastikan tautan QR terlihat sebagai tappable */
-  #btn-qr { cursor: pointer; }
+    #global-loading { pointer-events:none!important; }
+    .html5-qrcode-element { display:none!important; }
+    button, a, input, label { touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+    #btn-qr { cursor:pointer; }
   </style>
 </head>
 <body>
@@ -42,26 +31,32 @@
       <div class="card-body p-4 p-md-5">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h3 class="m-0">ログイン</h3>
-          <a id="btn-qr" href="#" class="small text-decoration-none">QRログイン</a>
+          <a id="btn-qr" href="#" class="small text-decoration-none"><i class="bi bi-qr-code-scan me-1"></i>QRログイン</a>
         </div>
         <p class="text-muted mb-4">ユーザーID か QR でログインできます。</p>
 
-        <div class="mb-3">
-          <label class="form-label">ユーザーID</label>
-          <input id="login-user" class="form-control" placeholder="USER001" autocomplete="username"/>
-        </div>
-        <div class="mb-4">
-          <label class="form-label">パスコード</label>
-          <input id="login-pin" class="form-control" placeholder="PIN" type="password" autocomplete="current-password"/>
-        </div>
+        <form id="login-form" autocomplete="on">
+          <div class="mb-3">
+            <label class="form-label">ユーザーID</label>
+            <input id="login-user" class="form-control" placeholder="USER001" autocomplete="username" required/>
+          </div>
+          <div class="mb-4">
+            <label class="form-label">パスコード</label>
+            <input id="login-pin" class="form-control" placeholder="PIN" type="password" autocomplete="current-password"/>
+          </div>
 
-        <div class="d-flex gap-2">
-          <button id="btn-qr-alt" class="btn btn-outline-secondary d-none"><i class="bi bi-qr-code-scan me-1"></i> QRログイン</button>
-          <button id="btn-login" type="button" class="btn btn-primary"><i class="bi bi-box-arrow-in-right me-1"></i> ログイン</button>
-        </div>
+          <div class="d-flex gap-2">
+            <button id="btn-qr-alt" type="button" class="btn btn-outline-secondary d-none">
+              <i class="bi bi-qr-code-scan me-1"></i> QRログイン
+            </button>
+            <button id="btn-login" type="submit" class="btn btn-primary">
+              <i class="bi bi-box-arrow-in-right me-1"></i> ログイン
+            </button>
+          </div>
+        </form>
 
         <!-- Area kamera QR -->
-        <div id="qr-area" class="mt-3"></div>
+        <div id="qr-area" class="mt-3" aria-label="QR Scanner"></div>
 
         <div class="text-muted small mt-4">© wahyu</div>
       </div>
@@ -72,18 +67,18 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
           onerror="this.onerror=null;this.src='vendor/bootstrap.bundle.min.js'"></script>
 
-  <!-- html5-qrcode harus ada sebelum login.js -->
+  <!-- html5-qrcode sebelum login.js -->
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 
   <!-- Konfigurasi GAS -->
   <script src="./config.js"></script>
 
-  <!-- Script login (versi terbaru yang saya kirim) -->
+  <!-- Script login -->
   <script src="./login.js"></script>
-  <footer class="app-footer">
-  © <span id="fy2"></span> — Design by <b>Wahyu</b>
-</footer>
-<script>document.getElementById('fy2').textContent=new Date().getFullYear();</script>
 
+  <footer class="app-footer text-center my-3">
+    © <span id="fy2"></span> — Design by <b>Wahyu</b>
+  </footer>
+  <script>document.getElementById('fy2').textContent=new Date().getFullYear();</script>
 </body>
 </html>
