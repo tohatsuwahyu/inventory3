@@ -202,9 +202,20 @@ function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
     }
   }
 // === Live reload antar device (5 detik) ===
+// === Live reload (user-configurable) ===
+const LIVE_KEY = "liveRefreshSec";
 let LIVE_TIMER = null;
+let LIVE_SEC = Number(localStorage.getItem(LIVE_KEY) || "120"); // default 120s (lebih lambat)
+
+function setLiveRefresh(seconds){
+  LIVE_SEC = Math.max(0, Number(seconds || 0));
+  localStorage.setItem(LIVE_KEY, String(LIVE_SEC));
+  startLiveReload(); // restart timer dengan interval baru
+}
+
 function startLiveReload(){
   clearInterval(LIVE_TIMER);
+  if (LIVE_SEC <= 0) return; // Off
   LIVE_TIMER = setInterval(async () => {
     try {
       const active = document.querySelector("main section.active")?.id || "";
@@ -215,12 +226,12 @@ function startLiveReload(){
       // per layar aktif:
       if (active === "view-dashboard")    renderDashboard();
       if (active === "view-history")      renderHistory();
-      if (active === "view-shelf-list") { loadTanaList(); }       // 棚卸一覧
-      // opsional: jika ingin tabel ST ikut update ringkasan (tanpa merusak entry lokal)
-      // if (active === "view-shelf") renderShelfTable();
+      if (active === "view-shelf-list")   loadTanaList();  // 棚卸一覧
+      // if (active === "view-shelf")    renderShelfTable(); // opsional
     } catch {}
-  }, 5000);
+  }, LIVE_SEC * 1000);
 }
+
 
   /* -------------------- Items -------------------- */
   function tplItemRow(it) {
@@ -303,9 +314,46 @@ function startLiveReload(){
           tr.style.display = (name.includes(q) || code.includes(q)) ? "" : "none";
         });
       });
-
+itemsAuto_extendMenu();
     } catch { toast("商品一覧の読み込みに失敗しました。"); }
   }
+/* ===== Auto-refresh controller (pakai tombol #btn-items-auto yang sudah ada) ===== */
+function itemsAuto_refreshLabel(sec){
+  const btn = document.getElementById("btn-items-auto");
+  if (!btn) return;
+  if (!sec) btn.textContent = "Auto: Off";
+  else if (sec >= 60) btn.textContent = `Auto: ${Math.round(sec/60)}分`;
+  else btn.textContent = `Auto: ${sec}秒`;
+}
+
+function itemsAuto_extendMenu(){
+  const btn = document.getElementById("btn-items-auto");
+  const menu = btn?.parentElement?.querySelector(".dropdown-menu");
+  if (!menu) return;
+
+  // Tambahkan pilihan lebih lambat jika belum ada
+  if (!menu.querySelector('[data-autorefresh="180"]')) {
+    menu.insertAdjacentHTML("beforeend", `
+      <li><a class="dropdown-item" data-autorefresh="180">180秒</a></li>
+      <li><a class="dropdown-item" data-autorefresh="300">300秒（5分）</a></li>
+      <li><a class="dropdown-item" data-autorefresh="600">600秒（10分）</a></li>
+    `);
+  }
+
+  // Re-bind semua opsi (termasuk yang lama: 0/30/60/120)
+  menu.querySelectorAll("[data-autorefresh]").forEach(a => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      const sec = Number(a.getAttribute("data-autorefresh") || "0");
+      itemsAuto_refreshLabel(sec);
+      setLiveRefresh(sec); // <- atur interval global dari pilihan user
+    });
+  });
+
+  // Set label awal dari preferensi tersimpan
+  const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
+  itemsAuto_refreshLabel(saved);
+}
 
   function openEditItem(code) {
     if (!isAdmin()) return toast("Akses ditolak (admin only)");
