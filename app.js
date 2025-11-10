@@ -139,7 +139,7 @@ function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
       if (id === "view-items") renderItems();
       if (id === "view-users") renderUsers();
       if (id === "view-history") renderHistory();
-      if (id === "view-shelf") { ensureShelfControls(); renderShelfTable(); }
+      if (id === "view-shelf") { renderShelfTable(); }
       if (id === "view-shelf-list") { loadTanaList(); renderShelfRecapForList(); }
     });
   })();
@@ -1161,13 +1161,13 @@ function startLiveReload(){
   let SHELF_SCANNER = null;
   const ST = { rows: new Map() };
   window.ST = ST;
-
-  /* === Draft save/load/clear & diff-only & commit === */
+  /* === Draft (下書き) helpers for 棚卸 === */
   const ST_DRAFT_KEY = "shelfDraftV1";
   function saveShelfDraft(){
     try{
       const arr = [...ST.rows.values()];
-      localStorage.setItem(ST_DRAFT_KEY, JSON.stringify({ at: new Date().toISOString(), rows: arr }));
+      const data = { at: new Date().toISOString(), rows: arr };
+      localStorage.setItem(ST_DRAFT_KEY, JSON.stringify(data));
       toast("下書きを保存しました");
     }catch(e){ toast("保存失敗: " + (e?.message || e)); }
   }
@@ -1177,7 +1177,7 @@ function startLiveReload(){
       if(!raw){ return toast("下書きがありません"); }
       const data = JSON.parse(raw||"{}");
       const map = new Map();
-      (data.rows||[]).forEach(r => { 
+      (data.rows||[]).forEach(r => {
         const book = Number(r.book||0), qty=Number(r.qty||0);
         map.set(String(r.code), { code:String(r.code), name:r.name, department:(r.department||""), book, qty, diff: qty - book });
       });
@@ -1190,67 +1190,6 @@ function startLiveReload(){
     try{ localStorage.removeItem(ST_DRAFT_KEY); toast("下書きを削除しました"); }catch{}
   }
 
-  function ensureShelfControls(){
-    const bars = $$('#view-shelf .items-toolbar .right');
-    if (!bars || bars.length < 2) return;
-    const right = bars[1];
-    if (right.dataset.enhanced === '1') return;
-    right.dataset.enhanced = '1';
-
-    const wrap = document.createElement('div');
-    wrap.className = 'd-flex align-items-center gap-2 flex-wrap';
-    wrap.innerHTML = `
-      <div class="form-check form-switch m-0">
-        <input class="form-check-input" type="checkbox" id="st-diff-only">
-        <label class="form-check-label small" for="st-diff-only">差異のみ</label>
-      </div>
-      <button id="st-save"   class="btn btn-sm btn-outline-secondary">下書き保存</button>
-      <button id="st-load"   class="btn btn-sm btn-outline-secondary">読込</button>
-      <button id="st-clear"  class="btn btn-sm btn-outline-danger">クリア</button>
-      <button id="st-commit" class="btn btn-sm btn-primary">確定（在庫更新）</button>
-    `;
-    right.appendChild(wrap);
-
-    // Bind events
-    $('#st-diff-only')?.addEventListener('change', (e)=>{
-      const only = !!e.target.checked;
-      $$('#tbl-stocktake tr').forEach(tr => {
-        const diff = Number((tr.children[5]?.textContent || '0').replace(/,/g,''));
-        tr.style.display = (only && diff===0) ? 'none' : '';
-      });
-    });
-    $('#st-save')?.addEventListener('click', (e)=>{ e.preventDefault(); saveShelfDraft(); });
-    $('#st-load')?.addEventListener('click', (e)=>{ e.preventDefault(); loadShelfDraft(); });
-    $('#st-clear')?.addEventListener('click', (e)=>{ e.preventDefault(); if(confirm('下書きを削除しますか？')) clearShelfDraft(); });
-    $('#st-commit')?.addEventListener('click', async (e)=>{
-      e.preventDefault();
-      if (!isAdmin()) return toast('Akses ditolak (admin only)');
-      const who = getCurrentUser(); if (!who) return toast('ログイン情報がありません。');
-      const arr = [...ST.rows.values()].filter(r => Number(r.diff||0) !== 0);
-      if (arr.length === 0) return toast('差異がありません');
-      if (!confirm(`差異 ${arr.length} 件を確定します。よろしいですか？`)) return;
-      try{
-        setLoading(true, '確定中…');
-        for (const r of arr){
-          const diff = Number(r.diff||0);
-          const type = diff >= 0 ? 'IN' : 'OUT';
-          const qty  = Math.abs(diff);
-          const note = '棚卸確定 ' + new Date().toISOString().slice(0,10);
-          await api('log', { method:'POST', body: { userId: who.id, code: r.code, qty, unit: 'pcs', type, note }});
-        }
-        setLoading(false);
-        toast('棚卸を確定しました');
-        clearShelfDraft();
-        ST.rows.clear();
-        renderShelfTable();
-        try{ await renderDashboard(); }catch{}
-        try{ await renderItems(); }catch{}
-      }catch(err){
-        setLoading(false);
-        toast('確定失敗: ' + (err?.message || err));
-      }
-    });
-  }
 
   async function addOrUpdateStocktake(code, realQty) {
     if (!code) return;
@@ -1342,8 +1281,77 @@ function startLiveReload(){
       }
     };
   }
+  /* === Create toolbar controls dynamically on 棚卸 view === */
+  function ensureShelfControls(){
+    const view = $("#view-shelf"); if(!view) return;
+    const bars = view.querySelectorAll(".items-toolbar");
+    if(bars.length<2) return;
+    const right = bars[1].querySelector(".right");
+    if(!right) return;
+    if(right.dataset.enhanced==="1") return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "d-flex align-items-center gap-2 flex-wrap";
+    wrap.innerHTML = `
+      <div class="form-check form-switch m-0">
+        <input class="form-check-input" type="checkbox" id="st-diff-only">
+        <label class="form-check-label small" for="st-diff-only">差異のみ</label>
+      </div>
+      <button id="st-save"   class="btn btn-sm btn-outline-secondary">下書き保存</button>
+      <button id="st-load"   class="btn btn-sm btn-outline-secondary">読込</button>
+      <button id="st-clear"  class="btn btn-sm btn-outline-danger">クリア</button>
+      <button id="st-commit" class="btn btn-sm btn-primary">確定（在庫更新）</button>
+    `;
+    right.appendChild(wrap);
+    right.dataset.enhanced="1";
+
+    // listeners
+    $("#st-diff-only")?.addEventListener("change", (e) => {
+      const only = !!e.target.checked;
+      $$("#tbl-stocktake tr").forEach(tr => {
+        const diffTxt = (tr.children[5]?.textContent || "").replace(/,/g,"");
+        const diff = Number(diffTxt||0);
+        tr.style.display = (only && diff===0) ? "none" : "";
+      });
+    });
+    $("#st-save")?.addEventListener("click", (e)=>{ e.preventDefault(); saveShelfDraft(); });
+    $("#st-load")?.addEventListener("click", (e)=>{ e.preventDefault(); loadShelfDraft(); });
+    $("#st-clear")?.addEventListener("click", (e)=>{ e.preventDefault(); if(confirm("下書きを削除しますか？")) clearShelfDraft(); });
+
+    $("#st-commit")?.addEventListener("click", async (e)=>{
+      e.preventDefault();
+      if (!isAdmin()) return toast("Akses ditolak (admin only)");
+      const who = getCurrentUser(); if (!who) return toast("ログイン情報がありません。");
+      const arr = [...ST.rows.values()].filter(r => Number(r.diff||0) !== 0);
+      if (arr.length === 0) return toast("差異がありません");
+      if (!confirm(`差異 ${arr.length} 件を確定します。よろしいですか？`)) return;
+
+      try{
+        setLoading(true, "確定中…");
+        for(const r of arr){
+          const diff = Number(r.diff||0);
+          const type = diff >= 0 ? "IN" : "OUT";
+          const qty  = Math.abs(diff);
+          const note = "棚卸確定 " + new Date().toISOString().slice(0,10);
+          await api("log", { method:"POST", body: { userId: who.id, code: r.code, qty, unit: "pcs", type, note }});
+        }
+        setLoading(false);
+        toast("棚卸を確定しました");
+        clearShelfDraft();
+        ST.rows.clear();
+        renderShelfTable();
+        try{ await renderDashboard(); }catch{}
+        try{ await renderItems(); }catch{}
+      }catch(err){
+        setLoading(false);
+        toast("確定失敗: " + (err?.message || err));
+      }
+    });
+  }
+
 
   function bindShelf() {
+    ensureShelfControls();
     const btnStart = $("#btn-start-scan"), btnStop = $("#btn-stop-scan"), area = $("#scan-area");
     if (!btnStart || !btnStop || !area) return;
 
