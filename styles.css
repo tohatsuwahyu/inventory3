@@ -358,3 +358,22 @@ tr.row-low td { background: #fff5f5; }
 .diag-btn{ position: fixed; bottom: 18px; right: 14px; z-index: 2002; }
 td.inline-editing{ outline:2px solid #c7d2fe; background:#f8fafc; }
 td[data-editable]{ cursor:text; }
+/* === Items table alignment === */
+#view-items table { table-layout: fixed; }
+#view-items thead th,
+#view-items tbody td { vertical-align: middle; white-space: nowrap; }
+
+#view-items tbody td:nth-child(5),
+#view-items tbody td:nth-child(6),
+#view-items tbody td:nth-child(7) { /* 価格, 在庫, 最小 */
+  text-align: right;
+}
+
+#view-items .tbl-qr-box { width: 96px; }
+#view-items td:last-child .act-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 32px);
+  gap: 8px;
+  justify-content: end;
+  min-width: 200px;
+}
