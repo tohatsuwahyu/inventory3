@@ -482,4 +482,47 @@ td[data-editable]{ cursor:text; }
     display: inline-flex !important;
   }
 }
+/* === Smartphone 商品一覧: tampilkan QR + コード, rapikan tombol 操作 === */
+@media (max-width: 576px){
+
+  /* WAJIB TAMPIL: QR (col-2) & コード (col-3) */
+  .table-items th:nth-child(2),
+  .table-items td:nth-child(2),
+  .table-items th:nth-child(3),
+  .table-items td:nth-child(3){
+    display: table-cell !important;
+  }
+
+  /* Sembunyikan yang kurang prioritas di HP: 画像 (col-5) & 最小 (col-8) */
+  .table-items th:nth-child(5),
+  .table-items td:nth-child(5),
+  .table-items th:nth-child(8),
+  .table-items td:nth-child(8){
+    display: none !important;
+  }
+
+  /* Pastikan kolom 操作 (paling kanan) tetap terlihat */
+  .table-items th:last-child,
+  .table-items td:last-child{
+    display: table-cell !important;
+    white-space: nowrap;
+  }
+
+  /* Kecilkan QR agar muat */
+  .table-items .tbl-qr-box{
+    transform: scale(.8);
+    transform-origin: left top;
+    width: 52px;   /* area klik tetap */
+    height: 52px;
+    overflow: visible;
+  }
+
+  /* Hindari teks kode/nama kepotong */
+  .table-items td,
+  .table-items th{
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+}
 
