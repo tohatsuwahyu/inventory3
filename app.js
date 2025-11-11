@@ -11,7 +11,6 @@
   const isMobile = () => /Android|iPhone|iPad/i.test(navigator.userAgent);
   function toast(msg) { alert(msg); }
   function ensure(x, msg) { if (!x) throw new Error(msg || "Assertion failed"); return x; }
-  function debounce(fn, wait){ let t; return function(...a){ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a), wait); }; }
 
   // Escape
   function escapeHtml(s){ return String(s || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
@@ -24,7 +23,6 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = filename; a.click();
-    // setTimeout(() => URL.revokeObjectURL(url), 2000); // opsional
   }
 
   // File helpers
@@ -198,7 +196,7 @@
       if (!a) return; e.preventDefault();
 
       $$("aside nav a").forEach(n => n.classList.remove("active"));
-      a.addEventListener && a.classList.add("active");
+      a.classList.add("active");
 
       $$("main section").forEach(s => { s.classList.add("d-none"); s.classList.remove("active"); });
       const id = a.getAttribute("data-view");
@@ -275,7 +273,7 @@
     }
   }
 
-  // --- PASANG MENGGANTI fungsi lama updateWelcomeBanner ---
+  // --- GANTI fungsi lama updateWelcomeBanner ---
   function updateWelcomeBanner() {
     const who = getCurrentUser();
     const nama = who?.name || who?.id || "ユーザー";
@@ -287,12 +285,8 @@
       banner.innerHTML = `ようこそ、<b>${escapeHtml(nama)}</b> さん。<span class="badge-soft" style="margin-left:.4rem">${roleJP}</span>
         <span class="text-muted small">端末、電源、電波確認しましょう。</span>`;
     }
-
     const welName = document.getElementById("wel-name");
-    if (welName) {
-      welName.textContent = `${nama}（${roleJP}）`;
-    }
-
+    if (welName) { welName.textContent = `${nama}（${roleJP}）`; }
     const whoEl = document.getElementById("who");
     if (whoEl) {
       const id = who?.id || "";
@@ -304,17 +298,16 @@
   // === Live reload (user-configurable) ===
   const LIVE_KEY = "liveRefreshSec";
   let LIVE_TIMER = null;
-  let LIVE_SEC = Number(localStorage.getItem(LIVE_KEY) || "120"); // default 120s (lebih lambat)
+  let LIVE_SEC = Number(localStorage.getItem(LIVE_KEY) || "120");
 
   function setLiveRefresh(seconds){
     LIVE_SEC = Math.max(0, Number(seconds || 0));
     localStorage.setItem(LIVE_KEY, String(LIVE_SEC));
     startLiveReload();
   }
-
   function startLiveReload(){
     clearInterval(LIVE_TIMER);
-    if (LIVE_SEC <= 0) return; // Off
+    if (LIVE_SEC <= 0) return;
     LIVE_TIMER = setInterval(async () => {
       try {
         const active = document.querySelector("main section.active")?.id || "";
@@ -329,6 +322,12 @@
   }
 
   /* -------------------- Items -------------------- */
+  // ukuran tetap untuk tombol agar “操作” simetris
+  const ACT_GRID_STYLE = 'display:grid;grid-template-columns:repeat(5,32px);gap:8px;min-width:200px;justify-content:end;';
+
+  // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
+  async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
+
   function tplItemRow(it) {
     const qrid = `qr-${safeId(it.code)}`;
     return `<tr data-code="${escapeAttr(it.code)}">
@@ -342,10 +341,10 @@
       <td>${escapeHtml(it.department || "")}</td>
       <td>${escapeHtml(it.location || "")}</td>
       <td>
-        <div class="act-grid">
+        <div class="act-grid" style="${ACT_GRID_STYLE}">
           <button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>
-          <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ダウンロード"><i class="bi bi-download"></i></button>
+          <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>
           <button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>
           <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>
         </div>
@@ -364,22 +363,16 @@
       const listAll = await api("items", { method: "GET" });
       _ITEMS_CACHE = Array.isArray(listAll) ? listAll : (Array.isArray(listAll?.data) ? listAll.data : []);
 
-      // load QR lib sekali di awal render
-      await ensureQRCode();
-
-      // paginasi
-      var page = 0, size = 100;
+      let page = 0, size = 100;
       function renderPage(){
         const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
-        const html  = slice.map(tplItemRow).join("");
-        if (page === 0) tbody.innerHTML = html; else tbody.insertAdjacentHTML("beforeend", html);
+        if (page === 0) tbody.innerHTML = slice.map(tplItemRow).join("");
+        else tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
         page++;
 
-        // render QR utk batch baru
-        renderRowQRCodes(slice);
-
         // highlight low-stock
-        $$("#tbl-items tr").forEach(function(tr){
+        var rows = $$("#tbl-items tr");
+        rows.forEach(function(tr){
           var stock = Number((tr.children[5] && tr.children[5].textContent || "0").replace(/[,¥]/g, ""));
           var min   = Number((tr.children[6] && tr.children[6].textContent || "0").replace(/[,¥]/g, ""));
           tr.classList.toggle("row-low", stock <= min);
@@ -387,7 +380,6 @@
       }
       renderPage();
 
-      // tombol "Load more"
       if (_ITEMS_CACHE.length > size) {
         var more = document.createElement("div");
         more.className = "text-center my-3";
@@ -400,447 +392,73 @@
         });
       }
 
+      await ensureQRCode();
+      renderRowQRCodes(_ITEMS_CACHE.slice(0, Math.min(size, _ITEMS_CACHE.length)));
+
     } catch (e) {
       console.error("renderItems()", e);
       toast("商品一覧の読み込みに失敗しました。");
     }
 
-    // --- Area DI LUAR try: listener, bulk, inline edit, search, dsb ---
-
-    // BULK SELECT
-    var bulkWrap = document.getElementById("bulk-wrap");
-    var chkAll = document.getElementById("chk-all");
-    function sel(){
-      return [].slice.call(document.querySelectorAll("#tbl-items .row-chk:checked"))
-        .map(function(c){ var tr=c.closest("tr"); return tr && tr.getAttribute("data-code"); })
-        .filter(Boolean);
-    }
-    function toggleBulk(){ if (bulkWrap) bulkWrap.classList.toggle("d-none", sel().length === 0); }
-    if (chkAll){
-      chkAll.addEventListener("change", function(){
-        $$("#tbl-items .row-chk").forEach(function(c){ c.checked = chkAll.checked; });
-        toggleBulk();
-      });
-    }
-    var tbl = document.getElementById("tbl-items");
-    if (tbl){
-      tbl.addEventListener("change", function(e){
-        if (e.target && e.target.classList.contains("row-chk")) toggleBulk();
-      });
-    }
-
-    // BULK ACTION BUTTONS
-    var btnBulkExport = document.getElementById("bulk-export");
-    if (btnBulkExport){
-      btnBulkExport.addEventListener("click", function(){
-        var codes = sel(); if (!codes.length) return;
-        var rows = _ITEMS_CACHE.filter(function(i){ return codes.indexOf(String(i.code)) !== -1; });
-        var heads = ["コード","品名","価格","在庫","最小","置場","部門","画像"];
-        var csv = [heads.join(",")].concat(rows.map(function(i){
-          return [i.code,i.name||"",i.price||0,i.stock||0,i.min||0,(i.location||"").toUpperCase(),i.department||"",i.img||""].join(",");
-        })).join("\n");
-        downloadCSV_JP("選択商品.csv", csv);
-      });
-    }
-    var btnBulkPrint = document.getElementById("bulk-print");
-    if (btnBulkPrint){
-      btnBulkPrint.addEventListener("click", async function(){
-        var codes = sel(); if (!codes.length) return;
-        for (const it of _ITEMS_CACHE.filter(i => codes.indexOf(String(i.code)) !== -1)){
-          const url = await makeItemLabel62mmDataURL?.(it) || await makeItemLabelDataURL(it);
-          var a = document.createElement("a"); a.href = url; a.download = "label_"+String(it.code)+".png"; a.click();
-        }
-      });
-    }
-    var btnBulkAdjust = document.getElementById("bulk-adjust");
-    if (btnBulkAdjust){
-      btnBulkAdjust.addEventListener("click", function(){
+    // === Event delegation untuk kolom 「操作」
+    tbody?.addEventListener("click", async (ev)=>{
+      const btn = ev.target.closest("button"); if(!btn) return;
+      const code = btn.getAttribute("data-code"); if(!code) return;
+      const item = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+      if (btn.classList.contains("btn-edit")) { openEditItem(code); return; }
+      if (btn.classList.contains("btn-del")) {
         if (!isAdmin()) return toast("Akses ditolak (admin only)");
-        sel().forEach(function(c){ openEditItem(c); });
-      });
-    }
-
-    // INLINE EDIT
-    if (CONFIG.FEATURES && CONFIG.FEATURES.INLINE_EDIT && tbl){
-      var editableCols = { 2:"name", 6:"min", 8:"location" };
-      tbl.addEventListener("dblclick", function(e){
-        var td = e.target && e.target.closest ? e.target.closest("td") : null;
-        var tr = e.target && e.target.closest ? e.target.closest("tr") : null;
-        if (!td || !tr) return;
-        var idx = [].slice.call(td.parentNode.children).indexOf(td);
-        var field = editableCols[idx]; if (!field) return;
-        if (field !== "name" && !isAdmin()) return toast("Akses ditolak (admin only)");
-        if (td.querySelector("input")) return;
-
-        var code = tr.getAttribute("data-code");
-        var old  = (td.textContent || "").trim();
-        td.classList.add("inline-editing");
-        var inp = document.createElement("input");
-        inp.className = "form-control form-control-sm";
-        inp.value = old;
-        if (field === "min") inp.type = "number";
-        td.textContent = ""; td.appendChild(inp); inp.focus();
-
-        inp.addEventListener("keydown", function(ev){
-          if (ev.key === "Escape"){ td.classList.remove("inline-editing"); td.textContent = old; }
-        });
-        inp.addEventListener("blur", async function(){
-          var val = (inp.value || "").trim();
-          if (field === "min" && Number(val) < 0) { toast("最小在庫は0以上"); inp.focus(); return; }
-          td.classList.remove("inline-editing"); td.textContent = val;
-          try{
-            var body = { code: code, overwrite: true };
-            body[field] = (field === "min") ? Number(val||0) : (field === "location" ? val.toUpperCase() : val);
-            var r = await api("updateItem", { method: "POST", body: body });
-            if (!r || !r.ok) toast("保存失敗"); else {
-              var who = getCurrentUser();
-              api("log", { method:"POST", body:{ userId: (who && who.id)||"", code: code, qty:0, unit:"", type:"EDIT", note: field+" ← "+old+" → "+val } }).catch(function(){});
-              renderItems();
-            }
-          } catch(e){ toast("保存失敗: " + (e && e.message ? e.message : e)); }
-        });
-      });
-    }
-
-    // SEARCH + debounce
-    var _elSearch = $("#items-search");
-    if (_elSearch){
-      var _fnFilter = debounce(function(q){
-        var qq = (q || "").toLowerCase();
-        $$("#tbl-items tr").forEach(function(tr){
-          var name = ((tr.children[2] && tr.children[2].textContent) ? tr.children[2].textContent : "").toLowerCase();
-          var code = ((tr.children[1] && tr.children[1].textContent) ? tr.children[1].textContent : "").toLowerCase();
-          tr.style.display = (name.indexOf(qq) !== -1 || code.indexOf(qq) !== -1) ? "" : "none";
-        });
-      }, 320);
-      _elSearch.addEventListener("input", function(e){
-        _fnFilter(e && e.target ? e.target.value : "");
-      });
-    }
-
-    // link T I M E L I N E
-    if (tbl){
-      tbl.addEventListener("click", async function(e){
-        var a = e.target && e.target.closest ? e.target.closest(".link-timeline") : null;
-        if (!a) return;
-        e.preventDefault();
-        var code = a.getAttribute("data-code");
+        if (!confirm("削除してもよろしいですか？")) return;
         try{
-          var raw = await api("history", { method: "GET" });
-          var list = Array.isArray(raw) ? raw : (raw && (raw.history || raw.data) || []);
-          var rows = list.filter(function(h){ return String(h.code) === String(code); }).slice(-50).reverse();
-          var box = document.getElementById("timeline-body");
-          box.innerHTML = rows.map(function(h){
-            var t = (h.timestamp || h.date || "");
-            var u = (h.userId || "");
-            var ty = String(h.type || "").toUpperCase();
-            var q = fmt(h.qty || 0);
-            var un = (h.unit || "");
-            var nt = (h.note || "");
-            return '<div class="tl"><b>'+escapeHtml(t)+'</b> — '+escapeHtml(u)+'：<span class="'+(ty==='OUT'?'text-danger':'text-success')+'">'+escapeHtml(ty)+'</span> '+q+'<span class="text-muted"> '+escapeHtml(un)+'</span> <i>'+escapeHtml(nt)+'</i></div>';
-          }).join("");
-          new bootstrap.Modal(document.getElementById("timelineModal")).show();
-        } catch(e){ toast("履歴取得失敗"); }
-      });
-    }
-  }
-
-  /* ===== Auto-refresh controller (pakai tombol #btn-items-auto yang sudah ada) ===== */
-  function itemsAuto_refreshLabel(sec){
-    const btn = document.getElementById("btn-items-auto");
-    if (!btn) return;
-    if (!sec) btn.textContent = "Auto: Off";
-    else if (sec >= 60) btn.textContent = `Auto: ${Math.round(sec/60)}分`;
-    else btn.textContent = `Auto: ${sec}秒`;
-  }
-
-  function itemsAuto_extendMenu(){
-    const btn = document.getElementById("btn-items-auto");
-    const menu = btn?.parentElement?.querySelector(".dropdown-menu");
-    if (!menu) return;
-
-    if (!menu.querySelector('[data-autorefresh="180"]')) {
-      menu.insertAdjacentHTML("beforeend", `
-        <li><a class="dropdown-item" data-autorefresh="180">180秒</a></li>
-        <li><a class="dropdown-item" data-autorefresh="300">300秒（5分）</a></li>
-        <li><a class="dropdown-item" data-autorefresh="600">600秒（10分）</a></li>
-      `);
-    }
-
-    menu.querySelectorAll("[data-autorefresh]").forEach(a => {
-      a.addEventListener("click", (e) => {
-        e.preventDefault();
-        const sec = Number(a.getAttribute("data-autorefresh") || "0");
-        itemsAuto_refreshLabel(sec);
-        setLiveRefresh(sec);
-      });
-    });
-
-    const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
-    itemsAuto_refreshLabel(saved);
-  }
-  itemsAuto_extendMenu();
-
-  /* ===== Auto-refresh: injector untuk view lain (history & shelf-list) ===== */
-  function ensureViewAutoMenu(viewKey, toolbarRightSel){
-    const host = document.querySelector(toolbarRightSel); if (!host) return;
-
-    const BTN_ID = `btn-auto-${viewKey}`;
-    const WRAP_ID = `auto-wrap-${viewKey}`;
-
-    if (document.getElementById(BTN_ID)) {
-      const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
-      const btn = document.getElementById(BTN_ID);
-      if (btn) {
-        btn.textContent = !saved ? "Auto: Off" : (saved >= 60 ? `Auto: ${Math.round(saved/60)}分` : `Auto: ${saved}秒`);
+          const r = await api("deleteItem", { method:"POST", body:{ code }});
+          if (r?.ok) { toast("削除しました"); renderItems(); }
+          else toast(r?.error || "削除失敗");
+        }catch(e){ toast("削除失敗: " + (e?.message||e)); }
+        return;
       }
-      return;
-    }
-
-    const wrap = document.createElement("div");
-    wrap.id = WRAP_ID;
-    wrap.className = "btn-group";
-    wrap.innerHTML = `
-      <button id="${BTN_ID}" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-        Auto
-      </button>
-      <ul class="dropdown-menu dropdown-menu-end">
-        <li><a class="dropdown-item" data-autorefresh="0">Off</a></li>
-        <li><a class="dropdown-item" data-autorefresh="120">120秒（2分）</a></li>
-        <li><a class="dropdown-item" data-autorefresh="180">180秒（3分）</a></li>
-        <li><a class="dropdown-item" data-autorefresh="300">300秒（5分）</a></li>
-        <li><a class="dropdown-item" data-autorefresh="600">600秒（10分）</a></li>
-      </ul>
-    `;
-    host.appendChild(wrap);
-
-    wrap.querySelectorAll("[data-autorefresh]").forEach(a=>{
-      a.addEventListener("click",(e)=>{
-        e.preventDefault();
-        const sec = Number(a.getAttribute("data-autorefresh") || "0");
-        setLiveRefresh(sec);
-        const btn = document.getElementById(BTN_ID);
-        if (!btn) return;
-        btn.textContent = !sec ? "Auto: Off" : (sec >= 60 ? `Auto: ${Math.round(sec/60)}分` : `Auto: ${sec}秒`);
-      });
+      if (btn.classList.contains("btn-dl")) {
+        if (!item) return;
+        const url = await makeItemLabel62mmDataURL(item);
+        const a = document.createElement("a");
+        a.href = url; a.download = `label_${sanitizeFilename(item.code)}.png`; a.click();
+        return;
+      }
+      if (btn.classList.contains("btn-lotqr")) {
+        if (!item) return;
+        openLotQRModal(item);
+        return;
+      }
+      if (btn.classList.contains("btn-preview")) {
+        if (!item) return;
+        const url = await makeItemLabelDataURL(item);
+        openPreview(url);
+        return;
+      }
     });
 
-    const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
-    const btn = document.getElementById(BTN_ID);
-    if (btn) btn.textContent = !saved ? "Auto: Off" : (saved >= 60 ? `Auto: ${Math.round(saved/60)}分` : `Auto: ${saved}秒`);
+    // simetrikan header kolom terakhir (「操作」)
+    try{
+      const th = tbody?.closest("table")?.querySelector("thead tr th:last-child");
+      if (th) th.style.minWidth = "220px";
+    }catch{}
   }
 
-  function openEditItem(code) {
-    if (!isAdmin()) return toast("Akses ditolak (admin only)");
-    const it = _ITEMS_CACHE.find(x => String(x.code) === String(code)); if (!it) return;
-    const wrap = document.createElement("div");
-    wrap.className = "modal fade";
-    wrap.innerHTML = `
-<div class="modal-dialog">
-  <div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">商品編集</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">コード</label><input id="md-code" class="form-control" value="${escapeAttr(it.code)}" readonly></div>
-        <div class="col-md-6"><label class="form-label">名称</label><input id="md-name" class="form-control" value="${escapeAttr(it.name)}"></div>
-        <div class="col-md-4"><label class="form-label">価格</label><input id="md-price" type="number" class="form-control" value="${Number(it.price || 0)}"></div>
-        <div class="col-md-4"><label class="form-label">在庫</label><input id="md-stock" type="number" class="form-control" value="${Number(it.stock || 0)}"></div>
-        <div class="col-md-4"><label class="form-label">最小</label><input id="md-min" type="number" class="form-control" value="${Number(it.min || 0)}"></div>
-        <div class="col-md-8"><label class="form-label">画像URL</label><input id="md-img" class="form-control" value="${escapeAttr(it.img || "")}"></div>
-        <div class="col-md-4"><label class="form-label">置場</label>
-          <input id="md-location" class="form-control text-uppercase" value="${escapeAttr(it.location || "")}" placeholder="A-01-03"></div>
-        <div class="col-md-4"><label class="form-label">部門</label>
-          <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など"></div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-      <button class="btn btn-primary" id="md-save">保存</button>
-    </div>
-  </div>
-</div>`;
-    document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap); modal.show();
-
-    $("#md-location", wrap)?.addEventListener("input", (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""); });
-
-    $("#md-save", wrap)?.addEventListener("click", async () => {
+  // === render QR di tiap baris items ===
+  function renderRowQRCodes(items){
+    items = Array.isArray(items) ? items : [];
+    for (const it of items){
+      const qrid = 'qr-' + safeId(it.code);
+      const el = document.getElementById(qrid);
+      if (!el) continue;
+      el.innerHTML = '';
       try {
-        const payload = {
-          code: $("#md-code", wrap).value,
-          name: $("#md-name", wrap).value,
-          price: Number($("#md-price", wrap).value || 0),
-          stock: Number($("#md-stock", wrap).value || 0),
-          min: Number($("#md-min", wrap).value || 0),
-          img: $("#md-img", wrap).value,
-          location: ($("#md-location", wrap).value || "").toUpperCase().trim(),
-          department: ($("#md-department", wrap).value || "").trim(),
-          overwrite: true
-        };
-        const r = await api("updateItem", { method: "POST", body: payload });
-        if (r?.ok) { modal.hide(); wrap.remove(); renderItems(); renderShelfTable(); }
-        else toast(r?.error || "保存失敗");
-      } catch (e) { toast("保存失敗: " + (e?.message || e)); }
-    });
-
-    wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
-  }
-
-  // New Item (admin only)
-  function openNewItem() {
-    if (!isAdmin()) return toast("Akses ditolak (admin only)");
-    const wrap = document.createElement("div");
-    wrap.className = "modal fade";
-    wrap.innerHTML = `
-<div class="modal-dialog">
-  <div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">新規商品</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">コード</label><input id="nw-code" class="form-control" placeholder="SKU-001"></div>
-        <div class="col-md-6"><label class="form-label">名称</label><input id="nw-name" class="form-control"></div>
-        <div class="col-md-4"><label class="form-label">価格</label><input id="nw-price" type="number" class="form-control" value="0"></div>
-        <div class="col-md-4"><label class="form-label">在庫</label><input id="nw-stock" type="number" class="form-control" value="0"></div>
-        <div class="col-md-4"><label class="form-label">最小</label><input id="nw-min" type="number" class="form-control" value="0"></div>
-        <div class="col-md-8"><label class="form-label">画像URL</label><input id="nw-img" class="form-control"></div>
-        <div class="col-md-4"><label class="form-label">置場</label><input id="nw-location" class="form-control text-uppercase" placeholder="A-01-03"></div>
-        <div class="col-md-4"><label class="form-label">部門</label>
-          <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-      <button class="btn btn-primary" id="nw-save">作成</button>
-    </div>
-  </div>
-</div>`;
-    document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap); modal.show();
-    $("#nw-location", wrap)?.addEventListener("input", (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""); });
-    $("#nw-save", wrap)?.addEventListener("click", async () => {
-      try {
-        const payload = {
-          code: ($("#nw-code", wrap).value || "").trim(),
-          name: $("#nw-name", wrap).value,
-          price: Number($("#nw-price", wrap).value || 0),
-          stock: Number($("#nw-stock", wrap).value || 0),
-          min: Number($("#nw-min", wrap).value || 0),
-          img: $("#nw-img", wrap).value,
-          location: ($("#nw-location", wrap).value || "").toUpperCase().trim(),
-          department: ($("#nw-department", wrap).value || "").trim(),
-          overwrite: false
-        };
-        if (!payload.code) return toast("コードを入力してください。");
-        const r = await api("updateItem", { method: "POST", body: payload });
-        if (r?.ok) { modal.hide(); wrap.remove(); renderItems(); toast("作成しました"); }
-        else toast(r?.error || "作成失敗");
-      } catch (e) { toast("作成失敗: " + (e?.message || e)); }
-    });
-    wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
-  }
-
-  // === LOT QR modal ===
-  function openLotQRModal(item) {
-    if (!item) return;
-    const wrap = document.createElement("div");
-    wrap.className = "modal fade";
-    wrap.innerHTML = `
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">Lot/箱 QR ラベル</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <div class="row g-3">
-          <div class="col-md-6"><label class="form-label">コード</label><input class="form-control" value="${escapeAttr(item.code)}" readonly></div>
-          <div class="col-md-6"><label class="form-label">名称</label><input class="form-control" value="${escapeAttr(item.name || "")}" readonly></div>
-          <div class="col-md-4"><label class="form-label">1箱の数量</label><input id="lot-qty" type="number" min="1" class="form-control" value="10"></div>
-          <div class="col-md-8"><label class="form-label">ロットID（任意）</label><input id="lot-id" class="form-control" placeholder="LOT-2025-11-A"></div>
-        </div>
-        <div class="mt-3 d-flex align-items-center gap-3">
-          <div id="lotqr-box"></div>
-          <div class="small text-muted" id="lot-caption"></div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">閉じる</button>
-        <button class="btn btn-outline-primary" id="lot-preview">プレビュー</button>
-        <button class="btn btn-primary" id="lot-dl">DL</button>
-      </div>
-    </div>
-  </div>`;
-    document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap); modal.show();
-
-    const box = $("#lotqr-box", wrap);
-
-    async function renderQR() {
-      await ensureQRCode();
-      box.innerHTML = "";
-
-      const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
-      const lot = ($("#lot-id", wrap).value || "").trim();
-      const codeNorm = normalizeCodeDash(item.code);
-      const text = lot ? `LOT|${codeNorm}|${qty}|${lot}` : `LOT|${codeNorm}|${qty}`;
-
-      const cap = $("#lot-caption", wrap);
-      if (cap) cap.textContent = `コード: ${codeNorm} / 数量: ${qty}` + (lot ? ` / ロット: ${lot}` : "");
-
-      new QRCode(box, { text, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
+        new QRCode(el, {
+          text: 'ITEM|' + normalizeCodeDash(it.code),
+          width: 64, height: 64,
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch(e){}
     }
-
-    $("#lot-qty", wrap)?.addEventListener("input", renderQR);
-    $("#lot-id", wrap)?.addEventListener("input", renderQR);
-    renderQR();
-
-    $("#lot-preview", wrap)?.addEventListener("click", async ()=> {
-      const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
-      const lot = ($("#lot-id", wrap).value || "").trim();
-      const url = await makeLotLabelDataURL(item, qty, lot);
-      openPreview(url);
-    });
-
-    $("#lot-dl", wrap)?.addEventListener("click", async ()=>{
-      const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
-      const lot = ($("#lot-id", wrap).value || "").trim();
-      const url = await makeLotLabelDataURL(item, qty, lot);
-      const lotSafe  = lot ? `_${sanitizeFilename(lot)}` : "";
-      const codeSafe = sanitizeFilename(item.code);
-      const a = document.createElement("a");
-      a.href = url; a.download = `LOT_${codeSafe}${lotSafe}_${qty}.png`; a.click();
-    });
-
-    wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
-  }
-
-  function showItemDetail(it) {
-    const card = $("#card-item-detail"); if (!card) return;
-    const body = $("#item-detail-body", card);
-    body.innerHTML = `
-      <div class="d-flex gap-3">
-        <div style="width:160px;height:120px;background:#f3f6ff;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden">
-          ${it.img ? `<img src="${escapeAttr(it.img)}" style="max-width:100%;max-height:100%">` : '<span class="text-primary">画像</span>'}
-        </div>
-        <div class="flex-1">
-          <div><b>コード</b>：${escapeHtml(it.code)}</div>
-          <div><b>名称</b>：${escapeHtml(it.name)}</div>
-          <div><b>価格</b>：¥${fmt(it.price)}</div>
-          <div><b>在庫</b>：${fmt(it.stock)}</div>
-          <div><b>最小</b>：${fmt(it.min)}</div>
-          <div><b>部門</b>：${escapeHtml(it.department || "")}</div>
-          <div><b>置場</b>：<span class="badge text-bg-light border">${escapeHtml(it.location || "")}</span></div>
-        </div>
-      </div>`;
-    card.classList.remove("d-none");
-    $("#btn-close-detail")?.addEventListener("click", () => card.classList.add("d-none"), { once: true });
-  }
-
-  function openPreview(url) {
-    const w = window.open("", "_blank", "width=900,height=600");
-    if (!w || !w.document) { const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.download = ""; a.click(); return; }
-    w.document.write(`<img src="${url}" style="max-width:100%">`);
   }
 
   // ---------- LABEL CANVAS ----------
@@ -985,7 +603,7 @@
         if (y - yTop > maxH) break;
       }
     }
-  }
+  } // end makeItemLabelDataURL
 
   async function generateQrDataUrl(text, size) {
     await ensureQRCode();
@@ -1016,24 +634,6 @@
         tries++; setTimeout(waitRender, 30);
       })();
     });
-  }
-
-  // === PATCH: render QR di tiap baris items ===
-  function renderRowQRCodes(items){
-    items = Array.isArray(items) ? items : [];
-    for (const it of items){
-      const qrid = 'qr-' + safeId(it.code);
-      const el = document.getElementById(qrid);
-      if (!el) continue;
-      el.innerHTML = '';
-      try {
-        new QRCode(el, {
-          text: 'ITEM|' + normalizeCodeDash(it.code),
-          width: 64, height: 64,
-          correctLevel: QRCode.CorrectLevel.M
-        });
-      } catch(e){}
-    }
   }
 
   // === LOT label (pakai layout item, QR diganti LOT + caption) ===
@@ -1243,7 +843,6 @@
           area     = $("#io-scan-area");
     if (!btnStart || !btnStop || !area) return;
 
-    // auto-lookup saat ketik kode
     const ioCode = document.getElementById("io-code");
     if (ioCode) {
       let timer = null;
@@ -1320,7 +919,6 @@
       } catch (e) { toast(e?.message || String(e)); }
     });
 
-    // >>> FIX: bersihkan handler Stop (tidak tercampur kode棚卸)
     btnStop.addEventListener("click", async () => {
       try { await IO_SCANNER?.stop?.(); IO_SCANNER?.clear?.(); } catch (e) {}
       area.innerHTML = "カメラ待機中…";
@@ -1483,20 +1081,14 @@
       nameEl.value  = item.name || "";
       priceEl.value = Number(item.price || 0);
       stockEl.value = Number(item.stock || 0);
-    } else {
-      nameEl.value  = "";
-      priceEl.value = "";
-      stockEl.value = "";
     }
-
     return item;
   }
 
-  /* -------------------- Stocktake (棚卸) : scan & input saja -------------------- */
+  /* -------------------- Stocktake (棚卸) -------------------- */
   let SHELF_SCANNER = null;
   const ST = { rows: new Map() };
 
-  /* === Draft & Diff-only & Commit helpers (added) === */
   const ST_DRAFT_KEY = "shelfDraftV1";
   function saveShelfDraft(){
     try{
@@ -1512,7 +1104,7 @@
       if(!raw){ return toast("下書きがありません"); }
       const data = JSON.parse(raw||"{}");
       const map = new Map();
-      (data.rows||[]).forEach(r => {
+      (data.rows||[]).forEach(r => { 
         const book = Number(r.book||0), qty=Number(r.qty||0);
         map.set(String(r.code), { code:String(r.code), name:r.name, department:(r.department||""), book, qty, diff: qty - book });
       });
@@ -1595,18 +1187,18 @@
       tr.children[5].textContent = fmt(rec.diff);
       tr.children[5].classList.toggle("fw-bold", rec.diff !== 0);
 
-      const arr = [...ST.rows.values()];
-      const sumEl = $("#st-summary");
-      if (sumEl){
-        const diffRows = arr.filter(x => (x.diff||0) !== 0).length;
-        const diffSum  = arr.reduce((a,b)=>a+Number(b.diff||0),0);
-        const absSum   = arr.reduce((a,b)=>a+Math.abs(Number(b.diff||0)),0);
-        sumEl.textContent = `件数: ${arr.length} ／ 差異あり: ${diffRows} ／ 差異合計: ${fmt(diffSum)} ／ 絶対差異: ${fmt(absSum)}`;
+      const arr2 = [...ST.rows.values()];
+      const sumEl2 = $("#st-summary");
+      if (sumEl2){
+        const diffRows = arr2.filter(x => (x.diff||0) !== 0).length;
+        const diffSum  = arr2.reduce((a,b)=>a+Number(b.diff||0),0);
+        const absSum   = arr2.reduce((a,b)=>a+Math.abs(Number(b.diff||0)),0);
+        sumEl2.textContent = `件数: ${arr2.length} ／ 差異あり: ${diffRows} ／ 差異合計: ${fmt(diffSum)} ／ 絶対差異: ${fmt(absSum)}`;
       }
     };
 
     tbody.onclick = (e) => {
-      const tr = e.target.closest("tr"); if (!tr) return;
+      const tr = e.target.closest("tr"); if (!tr) return; 
       const code = tr.getAttribute("data-code"); const rec = ST.rows.get(code); if (!rec) return;
       if (e.target.closest(".btn-st-adjust")) { if (!isAdmin()) return toast("Akses ditolak (admin only)"); openEditItem(code); }
       if (e.target.closest(".btn-st-del")) {
@@ -1617,7 +1209,6 @@
   }
 
   function bindShelf() {
-    // Inject toolbar controls
     const toolbarRight = document.querySelector('#view-shelf .items-toolbar .right');
     if (toolbarRight && !toolbarRight.querySelector('.st-controls')) {
       const wrap = document.createElement('div');
@@ -1769,7 +1360,7 @@
     } catch (e) { alert("エクスポート失敗"); }
   });
 
-  // Items import (CSV)
+  // Items import (CSV) — dukung header JP atau EN
   $("#btn-items-import")?.addEventListener("click", () => $("#input-items-import")?.click());
   $("#input-items-import")?.addEventListener("change", async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -1980,6 +1571,265 @@
     }
   }
 
+  /* -------------------- Auto-refresh UI helpers -------------------- */
+  function itemsAuto_refreshLabel(sec){
+    const btn = document.getElementById("btn-items-auto");
+    if (!btn) return;
+    if (!sec) btn.textContent = "Auto: Off";
+    else if (sec >= 60) btn.textContent = `Auto: ${Math.round(sec/60)}分`;
+    else btn.textContent = `Auto: ${sec}秒`;
+  }
+  function itemsAuto_extendMenu(){
+    const btn = document.getElementById("btn-items-auto");
+    const menu = btn?.parentElement?.querySelector(".dropdown-menu");
+    if (!menu) return;
+    if (!menu.querySelector('[data-autorefresh="180"]')) {
+      menu.insertAdjacentHTML("beforeend", `
+        <li><a class="dropdown-item" data-autorefresh="180">180秒</a></li>
+        <li><a class="dropdown-item" data-autorefresh="300">300秒（5分）</a></li>
+        <li><a class="dropdown-item" data-autorefresh="600">600秒（10分）</a></li>
+      `);
+    }
+    menu.querySelectorAll("[data-autorefresh]").forEach(a => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const sec = Number(a.getAttribute("data-autorefresh") || "0");
+        itemsAuto_refreshLabel(sec);
+        setLiveRefresh(sec);
+      });
+    });
+    const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
+    itemsAuto_refreshLabel(saved);
+  }
+  itemsAuto_extendMenu();
+
+  function ensureViewAutoMenu(viewKey, toolbarRightSel){
+    const host = document.querySelector(toolbarRightSel); if (!host) return;
+    const BTN_ID = `btn-auto-${viewKey}`;
+    const WRAP_ID = `auto-wrap-${viewKey}`;
+    if (document.getElementById(BTN_ID)) {
+      const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
+      const btn = document.getElementById(BTN_ID);
+      if (btn) {
+        btn.textContent = !saved ? "Auto: Off" : (saved >= 60 ? `Auto: ${Math.round(saved/60)}分` : `Auto: ${saved}秒`);
+      }
+      return;
+    }
+    const wrap = document.createElement("div");
+    wrap.id = WRAP_ID;
+    wrap.className = "btn-group";
+    wrap.innerHTML = `
+      <button id="${BTN_ID}" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Auto</button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" data-autorefresh="0">Off</a></li>
+        <li><a class="dropdown-item" data-autorefresh="120">120秒（2分）</a></li>
+        <li><a class="dropdown-item" data-autorefresh="180">180秒（3分）</a></li>
+        <li><a class="dropdown-item" data-autorefresh="300">300秒（5分）</a></li>
+        <li><a class="dropdown-item" data-autorefresh="600">600秒（10分）</a></li>
+      </ul>`;
+    host.appendChild(wrap);
+    wrap.querySelectorAll("[data-autorefresh]").forEach(a=>{
+      a.addEventListener("click",(e)=>{
+        e.preventDefault();
+        const sec = Number(a.getAttribute("data-autorefresh") || "0");
+        setLiveRefresh(sec);
+        const btn = document.getElementById(BTN_ID);
+        if (!btn) return;
+        btn.textContent = !sec ? "Auto: Off" : (sec >= 60 ? `Auto: ${Math.round(sec/60)}分` : `Auto: ${sec}秒`);
+      });
+    });
+    const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
+    const btn = document.getElementById(BTN_ID);
+    if (btn) btn.textContent = !saved ? "Auto: Off" : (saved >= 60 ? `Auto: ${Math.round(saved/60)}分` : `Auto: ${saved}秒`);
+  }
+
+  function openEditItem(code) {
+    if (!isAdmin()) return toast("Akses ditolak (admin only)");
+    const it = _ITEMS_CACHE.find(x => String(x.code) === String(code)); if (!it) return;
+    const wrap = document.createElement("div");
+    wrap.className = "modal fade";
+    wrap.innerHTML = `
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">商品編集</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">コード</label><input id="md-code" class="form-control" value="${escapeAttr(it.code)}" readonly></div>
+        <div class="col-md-6"><label class="form-label">名称</label><input id="md-name" class="form-control" value="${escapeAttr(it.name)}"></div>
+        <div class="col-md-4"><label class="form-label">価格</label><input id="md-price" type="number" class="form-control" value="${Number(it.price || 0)}"></div>
+        <div class="col-md-4"><label class="form-label">在庫</label><input id="md-stock" type="number" class="form-control" value="${Number(it.stock || 0)}"></div>
+        <div class="col-md-4"><label class="form-label">最小</label><input id="md-min" type="number" class="form-control" value="${Number(it.min || 0)}"></div>
+        <div class="col-md-8"><label class="form-label">画像URL</label><input id="md-img" class="form-control" value="${escapeAttr(it.img || "")}"></div>
+        <div class="col-md-4"><label class="form-label">置場</label>
+          <input id="md-location" class="form-control text-uppercase" value="${escapeAttr(it.location || "")}" placeholder="A-01-03"></div>
+        <div class="col-md-4"><label class="form-label">部門</label>
+          <input id="md-department" class="form-control" value="${escapeAttr(it.department || "")}" placeholder="製造/品質/倉庫など"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+      <button class="btn btn-primary" id="md-save">保存</button>
+    </div>
+  </div>
+</div>`;
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap); modal.show();
+
+    $("#md-location", wrap)?.addEventListener("input", (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""); });
+
+    $("#md-save", wrap)?.addEventListener("click", async () => {
+      try {
+        const payload = {
+          code: $("#md-code", wrap).value,
+          name: $("#md-name", wrap).value,
+          price: Number($("#md-price", wrap).value || 0),
+          stock: Number($("#md-stock", wrap).value || 0),
+          min: Number($("#md-min", wrap).value || 0),
+          img: $("#md-img", wrap).value,
+          location: ($("#md-location", wrap).value || "").toUpperCase().trim(),
+          department: ($("#md-department", wrap).value || "").trim(),
+          overwrite: true
+        };
+        const r = await api("updateItem", { method: "POST", body: payload });
+        if (r?.ok) { modal.hide(); wrap.remove(); renderItems(); renderShelfTable(); }
+        else toast(r?.error || "保存失敗");
+      } catch (e) { toast("保存失敗: " + (e?.message || e)); }
+    });
+
+    wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
+  }
+
+  function openNewItem() {
+    if (!isAdmin()) return toast("Akses ditolak (admin only)");
+    const wrap = document.createElement("div");
+    wrap.className = "modal fade";
+    wrap.innerHTML = `
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">新規商品</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">コード</label><input id="nw-code" class="form-control" placeholder="SKU-001"></div>
+        <div class="col-md-6"><label class="form-label">名称</label><input id="nw-name" class="form-control"></div>
+        <div class="col-md-4"><label class="form-label">価格</label><input id="nw-price" type="number" class="form-control" value="0"></div>
+        <div class="col-md-4"><label class="form-label">在庫</label><input id="nw-stock" type="number" class="form-control" value="0"></div>
+        <div class="col-md-4"><label class="form-label">最小</label><input id="nw-min" type="number" class="form-control" value="0"></div>
+        <div class="col-md-8"><label class="form-label">画像URL</label><input id="nw-img" class="form-control"></div>
+        <div class="col-md-4"><label class="form-label">置場</label><input id="nw-location" class="form-control text-uppercase" placeholder="A-01-03"></div>
+        <div class="col-md-4"><label class="form-label">部門</label>
+          <input id="nw-department" class="form-control" placeholder="製造/品質/倉庫など">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+      <button class="btn btn-primary" id="nw-save">作成</button>
+    </div>
+  </div>
+</div>`;
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap); modal.show();
+    $("#nw-location", wrap)?.addEventListener("input", (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""); });
+    $("#nw-save", wrap)?.addEventListener("click", async () => {
+      try {
+        const payload = {
+          code: ($("#nw-code", wrap).value || "").trim(),
+          name: $("#nw-name", wrap).value,
+          price: Number($("#nw-price", wrap).value || 0),
+          stock: Number($("#nw-stock", wrap).value || 0),
+          min: Number($("#nw-min", wrap).value || 0),
+          img: $("#nw-img", wrap).value,
+          location: ($("#nw-location", wrap).value || "").toUpperCase().trim(),
+          department: ($("#nw-department", wrap).value || "").trim(),
+          overwrite: false
+        };
+        if (!payload.code) return toast("コードを入力してください。");
+        const r = await api("updateItem", { method: "POST", body: payload });
+        if (r?.ok) { modal.hide(); wrap.remove(); renderItems(); toast("作成しました"); }
+        else toast(r?.error || "作成失敗");
+      } catch (e) { toast("作成失敗: " + (e?.message || e)); }
+    });
+    wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
+  }
+
+  // === LOT QR modal ===
+  function openLotQRModal(item) {
+    if (!item) return;
+    const wrap = document.createElement("div");
+    wrap.className = "modal fade";
+    wrap.innerHTML = `
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Lot/箱 QR ラベル</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label">コード</label><input class="form-control" value="${escapeAttr(item.code)}" readonly></div>
+          <div class="col-md-6"><label class="form-label">名称</label><input class="form-control" value="${escapeAttr(item.name || "")}" readonly></div>
+          <div class="col-md-4"><label class="form-label">1箱の数量</label><input id="lot-qty" type="number" min="1" class="form-control" value="10"></div>
+          <div class="col-md-8"><label class="form-label">ロットID（任意）</label><input id="lot-id" class="form-control" placeholder="LOT-2025-11-A"></div>
+        </div>
+        <div class="mt-3 d-flex align-items-center gap-3">
+          <div id="lotqr-box"></div>
+          <div class="small text-muted" id="lot-caption"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button class="btn btn-outline-primary" id="lot-preview">プレビュー</button>
+        <button class="btn btn-primary" id="lot-dl">DL</button>
+      </div>
+    </div>
+  </div>`;
+    document.body.appendChild(wrap);
+    const modal = new bootstrap.Modal(wrap); modal.show();
+
+    const box = $("#lotqr-box", wrap);
+
+    async function renderQR() {
+      const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
+      const lot = ($("#lot-id", wrap).value || "").trim();
+      const codeNorm = normalizeCodeDash(item.code);
+      const text = lot ? `LOT|${codeNorm}|${qty}|${lot}` : `LOT|${codeNorm}|${qty}`;
+
+      const cap = $("#lot-caption", wrap);
+      if (cap) cap.textContent = `コード: ${codeNorm} / 数量: ${qty}` + (lot ? ` / ロット: ${lot}` : "");
+
+      box.innerHTML = "";
+      try {
+        await ensureQRCode();
+        new QRCode(box, { text, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
+      } catch {
+        box.textContent = text; // fallback teks
+      }
+    }
+
+    $("#lot-qty", wrap)?.addEventListener("input", renderQR);
+    $("#lot-id", wrap)?.addEventListener("input", renderQR);
+    renderQR();
+
+    $("#lot-preview", wrap)?.addEventListener("click", async ()=> {
+      const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
+      const lot = ($("#lot-id", wrap).value || "").trim();
+      const url = await makeLotLabelDataURL(item, qty, lot);
+      openPreview(url);
+    });
+
+    $("#lot-dl", wrap)?.addEventListener("click", async ()=>{
+      const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
+      const lot = ($("#lot-id", wrap).value || "").trim();
+      const url = await makeLotLabelDataURL(item, qty, lot);
+      const lotSafe  = lot ? `_${sanitizeFilename(lot)}` : "";
+      const codeSafe = sanitizeFilename(item.code);
+      const a = document.createElement("a");
+      a.href = url; a.download = `LOT_${codeSafe}${lotSafe}_${qty}.png`; a.click();
+    });
+
+    wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
+  }
+
   /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
     const logo = document.getElementById("brand-logo");
@@ -1999,7 +1849,9 @@
     updateWelcomeBanner();
     renderDashboard();
     $("#btn-logout")?.addEventListener("click", logout);
-    bindPrintAllLabels();
+
+    // Preload QR lib supaya Lot QR langsung tampil
+    ensureQRCode().catch(()=>{});
     startLiveReload();
   });
 
