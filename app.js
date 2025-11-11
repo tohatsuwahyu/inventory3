@@ -2019,21 +2019,20 @@ const qrBox = document.getElementById('pv-qr');
 qrBox.innerHTML = '';
 (async () => {
   try {
-    const content = d.code ? `ITEM|${String(d.code).trim()}` : (d.name || '');
-    const url = await generateQrDataUrl(content, 128);   // <- pakai helper yang sudah ada
+    const code = (d.code || '').trim();
+    const url  = await generateQrDataUrl(`ITEM|${code}`, 128); // ukurannya konsisten dengan label
     if (url) {
-      const img = new Image();
-      img.width = 128; img.height = 128;
-      img.alt = content;
-      img.src = url;
-      qrBox.appendChild(img);
+      const im = new Image();
+      im.src = url; im.width = 128; im.height = 128; im.alt = code;
+      qrBox.appendChild(im);
     } else {
-      qrBox.textContent = content || '(QR なし)';
+      qrBox.textContent = code || '(QR)';
     }
-  } catch (e) {
-    qrBox.textContent = d.code || d.name || '(QR 生成失敗)';
+  } catch {
+    qrBox.textContent = d.code || '(QR)';
   }
 })();
+
     const toEdit = document.getElementById('pv-edit');
     const toPrint = document.getElementById('pv-print');
     toEdit.onclick = ()=> document.querySelector(`.btn-edit[data-code="${CSS.escape(d.code)}"]`)?.click();
