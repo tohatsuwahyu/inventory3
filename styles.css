@@ -457,4 +457,29 @@ td[data-editable]{ cursor:text; }
   /* pastikan kontainer bisa geser kalau masih sempit */
   #items-table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
 }
+/* --- Keep ACTIONS (操作) visible on phones --- */
+@media (max-width: 576px){
+  /* Tampilkan kolom terakhir (biasanya 操作) */
+  .table-items th:last-child,
+  .table-items td:last-child{
+    display: table-cell !important;
+    white-space: nowrap;
+  }
+
+  /* Supaya nggak kepotong tombolnya */
+  .table-items td{ overflow: visible; }
+
+  /* Jika sebelumnya kita sembunyikan banyak kolom,
+     gantikan: sembunyikan kolom '部門' saja di HP (opsional) */
+  .table-items th:nth-child(3),
+  .table-items td:nth-child(3){
+    display: none !important;
+  }
+}
+@media (max-width: 576px){
+  .table-items .row-actions.d-none,
+  .table-items .row-actions.d-sm-inline-flex{
+    display: inline-flex !important;
+  }
+}
 
