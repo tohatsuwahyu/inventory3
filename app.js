@@ -131,12 +131,14 @@
   });
 
   // === PATCH: print semua label (A4 panjang, 1 label per "halaman") ===
-  function bindPrintAllLabels(){
-    const btn = document.getElementById('btn-print-all-labels')
-      || document.querySelector('[data-action="print-all-labels"]')
-      || Array.from(document.querySelectorAll('#view-items .items-toolbar button, #view-items .items-toolbar .btn'))
-           .find(b => /全件ラベルを印刷/.test((b.textContent||'').trim()));
-    if (!btn) return;
+ function bindPrintAllLabels(){
+  const btn =
+    document.getElementById('btn-items-print-all') ||              
+    document.getElementById('btn-print-all-labels') ||
+    document.querySelector('[data-action="print-all-labels"]') ||
+    Array.from(document.querySelectorAll('#view-items .items-toolbar button, #view-items .items-toolbar .btn'))
+         .find(b => /全件ラベルを印刷/.test((b.textContent||'').trim()));
+  if (!btn) return;
 
     btn.addEventListener('click', async ()=>{
       try{
@@ -1973,6 +1975,7 @@ window.addEventListener('resize', () => {
     bindShelf();
     updateWelcomeBanner();
     renderDashboard();
+    bindPrintAllLabels();
     $("#btn-logout")?.addEventListener("click", logout);
 
     // Preload QR lib supaya Lot QR langsung tampil
