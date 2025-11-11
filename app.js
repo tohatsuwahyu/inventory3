@@ -328,36 +328,46 @@
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
 
-  function tplItemRow(it) {
-  const qrid = `qr-${safeId(it.code)}`;
-  return `<tr data-code="${escapeAttr(it.code)}">
-      <td style="width:36px"><input type="checkbox" class="row-chk" data-code="${escapeAttr(it.code)}"></td>
-      <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
-      <td>${escapeHtml(it.code)}</td>
-      <td class="td-name"><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
-      <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ""}</td>
-      <td class="text-end">¥${fmt(it.price)}</td>
-      <td class="text-end">${fmt(it.stock)}
-        ${Number(it.stock) <= 0 ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
-           Number(it.stock) <= Number(it.min||0) ? '<span class="badge bg-danger ms-1">要補充</span>' :
-           '<span class="badge bg-success ms-1">OK</span>'}
-      </td>
-      <td class="text-end">${fmt(it.min)}</td>
-      <td>${it.department ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>`:''}</td>
-      <td>${it.location   ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>`:''}</td>
-      <td>
-        <div class="act-grid" style="${ACT_GRID_STYLE}">
-          <button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>
-          <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>
-          <button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>
-          <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>
-        </div>
-      </td>
-    </tr>`;
-}`;
-    
-  }
+  
+function tplItemRow(it){
+  const qrid  = `qr-${safeId(it.code)}`;
+  const stock = Number(it.stock || 0);
+  const min   = Number(it.min   || 0);
+
+  const badge =
+    (stock <= 0) ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
+    (stock <= min) ? '<span class="badge bg-danger ms-1">要補充</span>' :
+    '<span class="badge bg-success ms-1">OK</span>';
+
+  const dept = it.department
+    ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>` : '';
+  const loc  = it.location
+    ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>` : '';
+
+  const actions = [
+    `<button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil-square"></i></button>`,
+    `<button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash3"></i></button>`,
+    `<button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>`,
+    `<button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>`,
+    `<button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>`
+  ].join('');
+
+  return [
+    '<tr data-code="', escapeAttr(it.code), '">',
+      '<td style="width:36px"><input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '"></td>',
+      '<td style="width:110px"><div class="tbl-qr-box"><div id="', qrid, '" class="d-inline-block"></div></div></td>',
+      '<td>', escapeHtml(it.code), '</td>',
+      '<td class="td-name"><a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">', escapeHtml(it.name), '</a></td>',
+      '<td>', (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''), '</td>',
+      '<td class="text-end">¥', fmt(it.price), '</td>',
+      '<td class="text-end">', fmt(stock), badge, '</td>',
+      '<td class="text-end">', fmt(min), '</td>',
+      '<td>', dept, '</td>',
+      '<td>', loc, '</td>',
+      '<td><div class="act-grid" style="display:grid;grid-auto-flow:column;gap:.25rem;place-content:center">', actions, '</div></td>',
+    '</tr>'
+  ].join('');
+}
 
   async function renderItems(){
     const tbody = $("#tbl-items");
