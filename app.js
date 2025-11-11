@@ -356,26 +356,7 @@
       </td>
     </tr>`;
 }`;
-    return `<tr data-code="${escapeAttr(it.code)}">
-      <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
-      <td>${escapeHtml(it.code)}</td>
-      <td><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
-      <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ""}</td>
-      <td class="text-end">¥${fmt(it.price)}</td>
-      <td class="text-end">${fmt(it.stock)}</td>
-      <td class="text-end">${fmt(it.min)}</td>
-      <td>${escapeHtml(it.department || "")}</td>
-      <td>${escapeHtml(it.location || "")}</td>
-      <td>
-        <div class="act-grid" style="${ACT_GRID_STYLE}">
-          <button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>
-          <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>
-          <button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>
-          <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>
-        </div>
-      </td>
-    </tr>`;
+    
   }
 
   async function renderItems(){
