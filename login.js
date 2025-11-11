@@ -232,3 +232,10 @@
   bindTap($btnQR2, ()=>{ (scanner || nativeRunner) ? stopQR() : startQR(); });
 
 })();
+
+
+// === PATCH: audit log on login success ===
+async function _auditLoginSuccess(user){
+  try{ await api('log',{ method:'POST', body:{ userId: (user?.id||''), type:'LOGIN', note:'login success' } }); }catch(_){}
+}
+document.addEventListener('login-success', (e)=> _auditLoginSuccess(e.detail));
