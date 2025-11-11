@@ -328,13 +328,38 @@
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
 
-function tplItemRow(it) {
+  function tplItemRow(it) {
   const qrid = `qr-${safeId(it.code)}`;
   return `<tr data-code="${escapeAttr(it.code)}">
       <td style="width:36px"><input type="checkbox" class="row-chk" data-code="${escapeAttr(it.code)}"></td>
       <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
       <td>${escapeHtml(it.code)}</td>
       <td class="td-name"><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
+      <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ""}</td>
+      <td class="text-end">¥${fmt(it.price)}</td>
+      <td class="text-end">${fmt(it.stock)}
+        ${Number(it.stock) <= 0 ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
+           Number(it.stock) <= Number(it.min||0) ? '<span class="badge bg-danger ms-1">要補充</span>' :
+           '<span class="badge bg-success ms-1">OK</span>'}
+      </td>
+      <td class="text-end">${fmt(it.min)}</td>
+      <td>${it.department ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>`:''}</td>
+      <td>${it.location   ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>`:''}</td>
+      <td>
+        <div class="act-grid" style="${ACT_GRID_STYLE}">
+          <button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>
+          <button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>
+          <button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>
+        </div>
+      </td>
+    </tr>`;
+}`;
+    return `<tr data-code="${escapeAttr(it.code)}">
+      <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
+      <td>${escapeHtml(it.code)}</td>
+      <td><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
       <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ""}</td>
       <td class="text-end">¥${fmt(it.price)}</td>
       <td class="text-end">${fmt(it.stock)}</td>
@@ -351,8 +376,7 @@ function tplItemRow(it) {
         </div>
       </td>
     </tr>`;
-}
-
+  }
 
   async function renderItems(){
     const tbody = $("#tbl-items");
@@ -1460,23 +1484,22 @@ function ensureItemsColgroup(){
 
   const cg = document.createElement('colgroup');
   cg.innerHTML = `
-    <col style="width:36px">   <!-- チェック -->
-    <col style="width:110px">  <!-- QR -->
-    <col style="width:160px">  <!-- コード -->
-    <col>                      <!-- 名称 (fleksibel) -->
-    <col style="width:72px">   <!-- 画像 -->
-    <col style="width:110px">  <!-- 価格 -->
-    <col style="width:80px">   <!-- 在庫 -->
-    <col style="width:80px">   <!-- 最小 -->
-    <col style="width:100px">  <!-- 部門 -->
-    <col style="width:90px">   <!-- 置場 -->
-    <col style="width:220px">  <!-- 操作 -->
+    <col style="width:36px">
+    <col style="width:110px">
+    <col style="width:160px">
+    <col>
+    <col style="width:72px">
+    <col style="width:110px">
+    <col style="width:80px">
+    <col style="width:80px">
+    <col style="width:100px">
+    <col style="width:90px">
+    <col style="width:220px">
   `;
   table.insertBefore(cg, table.firstElementChild);
   table.style.tableLayout = 'fixed';
   table.__colgroupPatched = true;
 }
-
 
   /* -------------------- Tanaoroshi List (menu baru) -------------------- */
   const JP_TANA_MAP = {
@@ -1881,12 +1904,156 @@ function ensureItemsColgroup(){
     bindShelf();
     updateWelcomeBanner();
     renderDashboard();
-    bindPrintAllLabels();
     $("#btn-logout")?.addEventListener("click", logout);
 
     // Preload QR lib supaya Lot QR langsung tampil
-    ensureQRCode().catch(()=>{});
+    ensureQRCode().catch(()=>{
+  try{ bindPreviewButtons(); }catch(e){}
+});
     startLiveReload();
   });
 
 })();
+
+
+
+function ensurePreviewModal(){
+  if(document.getElementById('preview-modal')) return;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+  <div class="modal fade" id="preview-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-search me-2"></i>商品プレビュー</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-flex gap-3 align-items-start flex-wrap">
+            <div>
+              <div id="pv-qr" class="rounded p-2 border bg-light"></div>
+              <div class="small text-muted mt-1">QR を印刷ラベルと同一サイズ比で生成</div>
+            </div>
+            <div class="flex-grow-1">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span id="pv-name" class="fw-semibold fs-5"></span>
+                <span id="pv-status" class="badge"></span>
+              </div>
+              <div class="text-muted mt-1">
+                <span class="me-3">コード: <span id="pv-code"></span></span>
+                <span class="me-3">部門: <span id="pv-dept"></span></span>
+                <span>置場: <span id="pv-loc"></span></span>
+              </div>
+              <div class="mt-2">
+                <span class="me-3">価格: <span id="pv-price"></span></span>
+                <span class="me-3">在庫: <span id="pv-stock"></span></span>
+                <span>最小: <span id="pv-min"></span></span>
+              </div>
+            </div>
+            <div class="ms-auto">
+              <img id="pv-img" alt="" style="max-height:120px;max-width:180px;object-fit:contain;border:1px solid var(--bs-border-color);border-radius:.5rem;display:none">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="pv-edit" type="button" class="btn btn-primary btn-sm"><i class="bi bi-pencil me-1"></i>編集</button>
+          <button id="pv-print" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>ラベル印刷</button>
+          <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+}
+
+
+
+
+function extractRowData(tr){
+  const get = (sel)=> tr.querySelector(sel);
+  const code = tr.getAttribute('data-code') || (get('td:nth-child(3)')?.textContent||'').trim();
+  const name = (get('td.td-name')?.textContent || '').trim();
+  const imgEl = get('td:nth-child(5) img');
+  const price = (get('td:nth-child(6)')?.textContent||'').trim();
+  const stock = Number((get('td:nth-child(7)')?.textContent||'0').replace(/[^0-9.-]/g,''));
+  const min   = Number((get('td:nth-child(8)')?.textContent||'0').replace(/[^0-9.-]/g,''));
+  const dept  = (get('td:nth-child(9)')?.textContent||'').trim();
+  const loc   = (get('td:nth-child(10)')?.textContent||'').trim();
+  return { code, name, img: imgEl?.getAttribute('src')||'', price, stock, min, dept, loc };
+}
+
+
+
+
+function bindPreviewButtons(){
+  const tbl = document.getElementById('tbl-items');
+  if(!tbl) return;
+  ensurePreviewModal();
+
+  tbl.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('.btn-preview');
+    if(!btn) return;
+    ev.preventDefault();
+
+    const tr = btn.closest('tr');
+    const d = extractRowData(tr);
+
+    document.getElementById('pv-code').textContent  = d.code || '-';
+    document.getElementById('pv-name').textContent  = d.name || '(名称未設定)';
+    document.getElementById('pv-dept').textContent  = d.dept || '-';
+    document.getElementById('pv-loc').textContent   = d.loc  || '-';
+    document.getElementById('pv-price').textContent = d.price || '¥0';
+    document.getElementById('pv-stock').textContent = String(d.stock);
+    document.getElementById('pv-min').textContent   = String(d.min);
+
+    const st = document.getElementById('pv-status');
+    st.className = 'badge';
+    if(d.stock <= 0){
+      st.classList.add('bg-secondary'); st.textContent = '在庫ゼロ';
+    }else if(d.stock <= d.min){
+      st.classList.add('bg-danger'); st.textContent = '要補充';
+    }else{
+      st.classList.add('bg-success'); st.textContent = '十分';
+    }
+
+    const pvImg = document.getElementById('pv-img');
+    if(d.img){ pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
+
+    const qrBox = document.getElementById('pv-qr');
+    qrBox.innerHTML = '';
+    try{ window.qrlib?.draw(qrBox, d.code || d.name || ''); }catch(e){}
+
+    const toEdit = document.getElementById('pv-edit');
+    const toPrint = document.getElementById('pv-print');
+    toEdit.onclick = ()=> document.querySelector(`.btn-edit[data-code="${CSS.escape(d.code)}"]`)?.click();
+    toPrint.onclick = ()=> document.querySelector('#btn-print-all, #btnPrintAll')?.click();
+
+    const modalEl = document.getElementById('preview-modal');
+    let modal;
+    if (window.bootstrap && window.bootstrap.Modal){
+      modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.show();
+    }else{
+      // fallback simple show/hide
+      modalEl.style.display='block';
+    }
+  });
+}
+
+
+
+document.addEventListener('click',(e)=>{
+  const a = e.target.closest('.js-filter'); if(!a) return;
+  const f = a.dataset.f;
+  const rows = document.querySelectorAll('#tbl-items tr[data-code]');
+  rows.forEach(tr=>{
+    const d = extractRowData(tr);
+    let show = true;
+    if(f==='low')  show = d.stock>0 && d.stock<=d.min;
+    if(f==='zero') show = d.stock<=0;
+    if(f==='img')  show = !!d.img;
+    if(f==='all')  show = true;
+    tr.style.display = show ? '' : 'none';
+  });
+});
+
