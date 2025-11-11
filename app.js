@@ -2039,6 +2039,52 @@ function ensurePreviewModal(){
   </div>`;
   document.body.appendChild(wrap);
 }
+// === OPEN IMAGE PREVIEW (untuk dataURL dari Lot/箱 QR) ===
+function openPreview(url){
+  try{
+    ensurePreviewModal(); // pastikan modal ada
+    const modalEl = document.getElementById('preview-modal');
+    const imgEl   = modalEl.querySelector('#pv-img');
+    const qrBox   = modalEl.querySelector('#pv-qr');
+    const nameEl  = modalEl.querySelector('#pv-name');
+    const codeEl  = modalEl.querySelector('#pv-code');
+    const deptEl  = modalEl.querySelector('#pv-dept');
+    const locEl   = modalEl.querySelector('#pv-loc');
+    const priceEl = modalEl.querySelector('#pv-price');
+    const stockEl = modalEl.querySelector('#pv-stock');
+    const minEl   = modalEl.querySelector('#pv-min');
+
+    // Reset konten info (karena ini preview gambar mandiri, bukan item row)
+    if (nameEl)  nameEl.textContent  = '';
+    if (codeEl)  codeEl.textContent  = '';
+    if (deptEl)  deptEl.textContent  = '';
+    if (locEl)   locEl.textContent   = '';
+    if (priceEl) priceEl.textContent = '';
+    if (stockEl) stockEl.textContent = '';
+    if (minEl)   minEl.textContent   = '';
+
+    // Kosongkan kotak QR kecil di modal preview (kita pakai gambar jadi)
+    if (qrBox) qrBox.innerHTML = '';
+
+    // Tampilkan gambar hasil makeLotLabelDataURL()
+    if (imgEl){
+      imgEl.src = url || '';
+      imgEl.style.display = url ? 'block' : 'none';
+    }
+
+    // Munculkan modal
+    let modal;
+    if (window.bootstrap && window.bootstrap.Modal){
+      modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.show();
+    } else {
+      modalEl.style.display = 'block';
+    }
+  }catch(e){
+    console.error('openPreview failed:', e);
+    alert('プレビューを開けませんでした。');
+  }
+}
 
 
 
