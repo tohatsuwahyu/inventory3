@@ -326,66 +326,197 @@ function updateWelcomeBanner() {
     </tr>`;
   }
 
-  async function renderItems() {
-    try {
-      const list = await api("items", { method: "GET" });
-      _ITEMS_CACHE = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
-      const tbody = $("#tbl-items");
-      tbody.innerHTML = _ITEMS_CACHE.map(tplItemRow).join("");
+  async function renderItems(){
+  const tbody = $("#tbl-items");
 
-      await ensureQRCode();
-      for (const it of _ITEMS_CACHE) {
-        const holder = document.getElementById(`qr-${safeId(it.code)}`);
-        if (!holder) continue; holder.innerHTML = "";
-        new QRCode(holder, { text: `ITEM|${normalizeCodeDash(it.code)}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
-      }
-
-      tbody.onclick = async (e) => {
-        const btn = e.target.closest("button"); if (!btn) return;
-        const code = btn.getAttribute("data-code");
-        if (btn.classList.contains("btn-edit")) openEditItem(code);
-        else if (btn.classList.contains("btn-del")) {
-          if (!isAdmin()) return toast("Akses ditolak (admin only)");
-          if (!confirm("削除しますか？")) return;
-          const r = await api("deleteItem", { method: "POST", body: { code } });
-          r?.ok ? renderItems() : toast(r?.error || "削除失敗");
-        } else if (btn.classList.contains("btn-dl")) {
-          const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-          const url = await makeItemLabelDataURL(it);
-          const a = document.createElement("a"); a.href = url; a.download = `label_${it.code}.png`; a.click();
-        } else if (btn.classList.contains("btn-preview")) {
-          const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-          const url = await makeItemLabelDataURL(it); openPreview(url);
-        } else if (btn.classList.contains("btn-lotqr")) {
-          const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-          openLotQRModal(it);
-        }
-      };
-
-      $$("#tbl-items .link-item").forEach(a => {
-        a.addEventListener("click", (ev) => {
-          ev.preventDefault();
-          const code = a.getAttribute("data-code");
-          const it = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-          showItemDetail(it);
-        });
-      });
-
-      var _elSearch = $("#items-search");
-if (_elSearch) {
-  _elSearch.addEventListener("input", function(e){
-    var q = (e && e.target && e.target.value ? e.target.value : "").toLowerCase();
-    $$("#tbl-items tr").forEach(function(tr){
-      var name = ((tr.children[2] && tr.children[2].textContent) ? tr.children[2].textContent : "").toLowerCase();
-      var code = ((tr.children[1] && tr.children[1].textContent) ? tr.children[1].textContent : "").toLowerCase();
-      tr.style.display = (name.indexOf(q) !== -1 || code.indexOf(q) !== -1) ? "" : "none";
-    });
-  });
-}
-});
-
-    } catch (e) { toast("商品一覧の読み込みに失敗しました。"); }
+  // (opsional) skeleton
+  if (CONFIG.FEATURES && CONFIG.FEATURES.SKELETON) {
+    tbody.innerHTML = '<tr><td colspan="10"><div class="skel" style="height:120px"></div></td></tr>';
   }
+
+  try { // === OPEN TRY (PASTIKAN ADA PASANGANNYA!)
+    // muat data
+    const listAll = await api("items", { method: "GET" });
+    _ITEMS_CACHE = Array.isArray(listAll) ? listAll : (Array.isArray(listAll?.data) ? listAll.data : []);
+
+    // paginasi
+    var page = 0, size = 100;
+    function renderPage(){
+      const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
+      if (page === 0) tbody.innerHTML = slice.map(tplItemRow).join("");
+      else tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
+      page++;
+
+      // highlight low-stock
+      var rows = $$("#tbl-items tr");
+      rows.forEach(function(tr){
+        var stock = Number((tr.children[5] && tr.children[5].textContent || "0").replace(/[,¥]/g, ""));
+        var min   = Number((tr.children[6] && tr.children[6].textContent || "0").replace(/[,¥]/g, ""));
+        tr.classList.toggle("row-low", stock <= min);
+      });
+    }
+    renderPage();
+
+    // tombol "Load more"
+    if (_ITEMS_CACHE.length > size) {
+      var more = document.createElement("div");
+      more.className = "text-center my-3";
+      more.innerHTML = '<button id="btn-load-more" class="btn btn-outline-secondary btn-sm">Load more</button>';
+      tbody.parentElement.appendChild(more);
+      more.addEventListener("click", function(e){
+        e.preventDefault();
+        renderPage();
+        if (page*size >= _ITEMS_CACHE.length) more.remove();
+      });
+    }
+
+    // QR render (kalau ada)
+    await ensureQRCode();
+
+  } catch (e) { // === CLOSE TRY
+    console.error("renderItems()", e);
+    toast("商品一覧の読み込みに失敗しました。");
+  } // <— penting: jangan hapus
+
+  // --- Area DI LUAR try: listener, bulk, inline edit, search, dsb ---
+
+  // BULK SELECT
+  var bulkWrap = document.getElementById("bulk-wrap");
+  var chkAll = document.getElementById("chk-all");
+  function sel(){
+    return [].slice.call(document.querySelectorAll("#tbl-items .row-chk:checked"))
+      .map(function(c){ var tr=c.closest("tr"); return tr && tr.getAttribute("data-code"); })
+      .filter(Boolean);
+  }
+  function toggleBulk(){ if (bulkWrap) bulkWrap.classList.toggle("d-none", sel().length === 0); }
+  if (chkAll){
+    chkAll.addEventListener("change", function(){
+      $$("#tbl-items .row-chk").forEach(function(c){ c.checked = chkAll.checked; });
+      toggleBulk();
+    });
+  }
+  var tbl = document.getElementById("tbl-items");
+  if (tbl){
+    tbl.addEventListener("change", function(e){
+      if (e.target && e.target.classList.contains("row-chk")) toggleBulk();
+    });
+  }
+
+  // BULK ACTION BUTTONS
+  var btnBulkExport = document.getElementById("bulk-export");
+  if (btnBulkExport){
+    btnBulkExport.addEventListener("click", function(){
+      var codes = sel(); if (!codes.length) return;
+      var rows = _ITEMS_CACHE.filter(function(i){ return codes.indexOf(String(i.code)) !== -1; });
+      var heads = ["コード","品名","価格","在庫","最小","置場","部門","画像"];
+      var csv = [heads.join(",")].concat(rows.map(function(i){
+        return [i.code,i.name||"",i.price||0,i.stock||0,i.min||0,(i.location||"").toUpperCase(),i.department||"",i.img||""].join(",");
+      })).join("\n");
+      downloadCSV_JP("選択商品.csv", csv);
+    });
+  }
+  var btnBulkPrint = document.getElementById("bulk-print");
+  if (btnBulkPrint){
+    btnBulkPrint.addEventListener("click", async function(){
+      var codes = sel(); if (!codes.length) return;
+      for (const it of _ITEMS_CACHE.filter(i => codes.indexOf(String(i.code)) !== -1)){
+        const url = await makeItemLabel62mmDataURL(it); // pakai 62mm; ganti ke A4 bila perlu
+        var a = document.createElement("a"); a.href = url; a.download = "label_"+String(it.code)+".png"; a.click();
+      }
+    });
+  }
+  var btnBulkAdjust = document.getElementById("bulk-adjust");
+  if (btnBulkAdjust){
+    btnBulkAdjust.addEventListener("click", function(){
+      if (!can("admin")) return toast("Akses ditolak (admin only)");
+      sel().forEach(function(c){ openEditItem(c); });
+    });
+  }
+
+  // INLINE EDIT (tanpa optional chaining)
+  if (CONFIG.FEATURES && CONFIG.FEATURES.INLINE_EDIT && tbl){
+    var editableCols = { 2:"name", 6:"min", 8:"location" };
+    tbl.addEventListener("dblclick", function(e){
+      var td = e.target && e.target.closest ? e.target.closest("td") : null;
+      var tr = e.target && e.target.closest ? e.target.closest("tr") : null;
+      if (!td || !tr) return;
+      var idx = [].slice.call(td.parentNode.children).indexOf(td);
+      var field = editableCols[idx]; if (!field) return;
+      if (field !== "name" && !can("admin")) return toast("Akses ditolak (admin only)");
+      if (td.querySelector("input")) return;
+
+      var code = tr.getAttribute("data-code");
+      var old  = (td.textContent || "").trim();
+      td.classList.add("inline-editing");
+      var inp = document.createElement("input");
+      inp.className = "form-control form-control-sm";
+      inp.value = old;
+      if (field === "min") inp.type = "number";
+      td.textContent = ""; td.appendChild(inp); inp.focus();
+
+      inp.addEventListener("keydown", function(ev){
+        if (ev.key === "Escape"){ td.classList.remove("inline-editing"); td.textContent = old; }
+      });
+      inp.addEventListener("blur", async function(){
+        var val = (inp.value || "").trim();
+        if (field === "min" && Number(val) < 0) { toast("最小在庫は0以上"); inp.focus(); return; }
+        td.classList.remove("inline-editing"); td.textContent = val;
+        try{
+          var body = { code: code, overwrite: true }; 
+          body[field] = (field === "min") ? Number(val||0) : (field === "location" ? val.toUpperCase() : val);
+          var r = await api("updateItem", { method: "POST", body: body });
+          if (!r || !r.ok) toast("保存失敗"); else {
+            var who = getCurrentUser();
+            api("log", { method:"POST", body:{ userId: (who && who.id)||"", code: code, qty:0, unit:"", type:"EDIT", note: field+" ← "+old+" → "+val } }).catch(function(){});
+            renderItems();
+          }
+        } catch(e){ toast("保存失敗: " + (e && e.message ? e.message : e)); }
+      });
+    });
+  }
+
+  // SEARCH (tanpa optional chaining + debounce)
+  var _elSearch = $("#items-search");
+  if (_elSearch){
+    var _fnFilter = debounce(function(q){
+      var qq = (q || "").toLowerCase();
+      $$("#tbl-items tr").forEach(function(tr){
+        var name = ((tr.children[2] && tr.children[2].textContent) ? tr.children[2].textContent : "").toLowerCase();
+        var code = ((tr.children[1] && tr.children[1].textContent) ? tr.children[1].textContent : "").toLowerCase();
+        tr.style.display = (name.indexOf(qq) !== -1 || code.indexOf(qq) !== -1) ? "" : "none";
+      });
+    }, 320);
+    _elSearch.addEventListener("input", function(e){
+      _fnFilter(e && e.target ? e.target.value : "");
+    });
+  }
+
+  // link T I M E L I N E
+  if (tbl){
+    tbl.addEventListener("click", async function(e){
+      var a = e.target && e.target.closest ? e.target.closest(".link-timeline") : null;
+      if (!a) return;
+      e.preventDefault();
+      var code = a.getAttribute("data-code");
+      try{
+        var raw = await api("history", { method: "GET" });
+        var list = Array.isArray(raw) ? raw : (raw && (raw.history || raw.data) || []);
+        var rows = list.filter(function(h){ return String(h.code) === String(code); }).slice(-50).reverse();
+        var box = document.getElementById("timeline-body");
+        box.innerHTML = rows.map(function(h){
+          var t = (h.timestamp || h.date || "");
+          var u = (h.userId || "");
+          var ty = String(h.type || "").toUpperCase();
+          var q = fmt(h.qty || 0);
+          var un = (h.unit || "");
+          var nt = (h.note || "");
+          return '<div class="tl"><b>'+escapeHtml(t)+'</b> — '+escapeHtml(u)+'：<span class="'+(ty==='OUT'?'text-danger':'text-success')+'">'+escapeHtml(ty)+'</span> '+q+'<span class="text-muted"> '+escapeHtml(un)+'</span> <i>'+escapeHtml(nt)+'</i></div>';
+        }).join("");
+        new bootstrap.Modal(document.getElementById("timelineModal")).show();
+      } catch(e){ toast("履歴取得失敗"); }
+    });
+  }
+}
 
   /* ===== Auto-refresh controller (pakai tombol #btn-items-auto yang sudah ada) ===== */
   function itemsAuto_refreshLabel(sec){
