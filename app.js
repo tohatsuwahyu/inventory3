@@ -463,6 +463,8 @@ function tplItemRow(it){
       const th = tbody?.closest("table")?.querySelector("thead tr th:last-child");
       if (th) th.style.minWidth = "220px";
     }catch{}
+    try { bindPreviewButtons(); } catch(e) {}
+
   }
 
   // === render QR di tiap baris items ===
@@ -1898,9 +1900,11 @@ function ensureItemsColgroup(){
     $("#btn-logout")?.addEventListener("click", logout);
 
     // Preload QR lib supaya Lot QR langsung tampil
-    ensureQRCode().catch(()=>{
-  try{ bindPreviewButtons(); }catch(e){}
-});
+   // Preload QR lib & aktifkan Preview
+ensureQRCode()
+  .catch(()=>{})                // QR lib gagal? nggak apa-apa (Preview tetap jalan tanpa QR box)
+  .finally(()=>{ try{ bindPreviewButtons(); }catch(e){} });
+
     startLiveReload();
   });
 
