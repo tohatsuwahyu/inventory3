@@ -501,12 +501,12 @@ function ensureMobileActions(){
         openLotQRModal(item);
         return;
       }
-      if (btn.classList.contains("btn-preview")) {
-        if (!item) return;
-        const url = await makeItemLabelDataURL(item);
-        openPreview(url);
-        return;
-      }
+     if (btn.classList.contains("btn-preview")) {
+  if (!item) return;
+  showItemPreview(item);
+  return;
+}
+
     });
 
     // simetrikan header kolom terakhir (「操作」)
@@ -955,11 +955,10 @@ function ensureMobileActions(){
           if (parsed.kind === "item") {
             const code = parsed.code;
             $("#io-code").value = code;
-            await findItemIntoIO(code);
-            if (confirm("この商品を追加してもよろしいですか？")) {
-              // user isi qty lalu submit manual
-            }
-            return;
+await findItemIntoIO(code);
+// Tidak ada confirm di 入出荷. User isi qty → klik 登録.
+return;
+
           }
 
           if (parsed.kind === "lot") {
@@ -972,14 +971,23 @@ function ensureMobileActions(){
             const who  = getCurrentUser();
             if (!who) return toast("ログイン情報がありません。");
 
-            if (confirm("この商品を追加してもよろしいですか？")) {
-              try {
-                const r = await api("log", { method: "POST", body: {
-                  userId: who.id, code, qty: Number(qty || 0), unit, type,
-                  note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
-                }});
-                if (r?.ok) {
-                  toast("登録しました");
+           try {
+  const r = await api("log", { method: "POST", body: {
+    userId: who.id, code, qty: Number(qty || 0), unit, type,
+    note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
+  }});
+  if (r?.ok) {
+    const msgType = (type === "IN") ? "入庫" : "出庫";
+    toast(`${msgType}として登録しました（${code} × ${qty} ${unit} / ${lot || 'LOT' }）`);
+    $("#io-qty").value = "";
+    await findItemIntoIO(code);
+    renderDashboard();
+  } else {
+    toast(r?.error || "登録失敗");
+  }
+} catch(e){ toast("登録失敗: " + (e?.message || e)); }
+return;
+
                   $("#io-qty").value = "";
                   await findItemIntoIO(code);
                   renderDashboard();
@@ -1012,7 +1020,14 @@ function ensureMobileActions(){
       const unit = $("#io-unit").value, type = $("#io-type").value;
       try {
         const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
-        if (r?.ok) { toast("登録しました"); $("#io-qty").value = ""; await findItemIntoIO(code); renderDashboard(); }
+       if (r?.ok) {
+  const msgType = (type === "IN") ? "入庫" : "出庫";
+  toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
+  $("#io-qty").value = "";
+  await findItemIntoIO(code);
+  renderDashboard();
+}
+
         else toast(r?.error || "登録失敗");
       } catch (e2) { toast("登録失敗: " + (e2?.message || e2)); }
     });
@@ -2039,6 +2054,77 @@ function ensurePreviewModal(){
   </div>`;
   document.body.appendChild(wrap);
 }
+// === 商品プレビュー（情報 + QR + tombol di modal） ===
+function showItemPreview(item){
+  try{
+    ensurePreviewModal();
+
+    // normalisasi data yang dibutuhkan
+    const d = {
+      code: String(item?.code||'').trim(),
+      name: String(item?.name||'').trim(),
+      dept: String(item?.department||'').trim(),
+      loc : String(item?.location||'').trim(),
+      price: (item?.price!=null) ? `¥${fmt(item.price)}` : '',
+      stock: Number(item?.stock||0),
+      min  : Number(item?.min||0),
+      img  : item?.img||''
+    };
+
+    // isi teks
+    $('#pv-code').textContent  = d.code || '-';
+    $('#pv-name').textContent  = d.name || '(名称未設定)';
+    $('#pv-dept').textContent  = d.dept || '-';
+    $('#pv-loc').textContent   = d.loc  || '-';
+    $('#pv-price').textContent = d.price || '¥0';
+    $('#pv-stock').textContent = String(d.stock);
+    $('#pv-min').textContent   = String(d.min);
+
+    // badge stok
+    const st = $('#pv-status'); st.className = 'badge';
+    if (d.stock <= 0) { st.classList.add('bg-secondary'); st.textContent = '在庫ゼロ'; }
+    else if (d.stock <= d.min) { st.classList.add('bg-danger'); st.textContent = '要補充'; }
+    else { st.classList.add('bg-success'); st.textContent = '十分'; }
+
+    // gambar produk (bukan label)
+    const pvImg = $('#pv-img');
+    if (d.img) { pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
+
+    // QR sesuai ukuran label
+    const qrBox = $('#pv-qr'); qrBox.innerHTML = '';
+    (async ()=>{
+      try{
+        const url = await generateQrDataUrl(`ITEM|${d.code}`, 128);
+        if (url) { const im=new Image(); im.src=url; im.width=128; im.height=128; im.alt=d.code; qrBox.appendChild(im); }
+        else qrBox.textContent = d.code || '(QR)';
+      }catch{ qrBox.textContent = d.code || '(QR)'; }
+    })();
+
+    // wiring tombol
+    $('#pv-edit').onclick  = ()=> { try{ openEditItem(d.code); }catch(e){ alert('編集を開けませんでした'); } };
+    $('#pv-print').onclick = async ()=>{
+      try{
+        const url = await makeItemLabelDataURL(item);        // label 1 item
+        const w = window.open('', '_blank', 'width=900,height=700');
+        if(!w){ alert('ポップアップがブロックされました。'); return; }
+        w.document.write('<meta charset="utf-8"><title>ラベル印刷</title>');
+        w.document.write('<style>body{margin:0;padding:16px;font-family:sans-serif} img{max-width:100%;display:block;margin:0 auto} @media print{img{page-break-inside:avoid;}}</style>');
+        w.document.write(`<img src="${url}" alt="${d.code}">`);
+        w.document.close(); w.focus(); setTimeout(()=>{ try{ w.print(); }catch(_){ } }, 500);
+      }catch(e){ alert('ラベル生成に失敗しました'); }
+    };
+
+    // tampilkan modal
+    const modalEl = document.getElementById('preview-modal');
+    if (window.bootstrap?.Modal) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    else modalEl.style.display='block';
+
+  }catch(e){
+    console.error('showItemPreview()', e);
+    alert('プレビューを開けませんでした。');
+  }
+}
+
 // === OPEN IMAGE PREVIEW (untuk dataURL dari Lot/箱 QR) ===
 function openPreview(url){
   try{
