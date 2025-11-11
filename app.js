@@ -1469,18 +1469,34 @@ function tplItemRow(it){
     } catch (e) { alert("エクスポート失敗"); }
   });
 // === Fix lebar kolom: sejajarkan dengan header ==================
+// === Fix lebar kolom: sejajarkan dengan header (tanpa memaksa di HP) ===
 function ensureItemsColgroup(){
   const tb = document.getElementById('tbl-items');
   if(!tb) return;
   const table = tb.closest('table');
-  if(!table || table.__colgroupPatched) return;
+  if(!table) return;
 
+  const isSmall = window.matchMedia('(max-width: 576px)').matches;
+
+  // Di HP kecil: jangan pakai fixed table-layout & colgroup — biar CSS responsif bekerja
+  if (isSmall){
+    table.style.tableLayout = 'auto';
+    // Lepas colgroup bila pernah dipasang
+    if (table.__colgroupPatched && table.querySelector('colgroup')) {
+      table.querySelector('colgroup').remove();
+      table.__colgroupPatched = false;
+    }
+    return;
+  }
+
+  // Desktop/tablet: pasang colgroup sekali saja
+  if (table.__colgroupPatched) return;
   const cg = document.createElement('colgroup');
   cg.innerHTML = `
     <col style="width:36px">
     <col style="width:110px">
     <col style="width:160px">
-    <col>
+    <col> <!-- nama fleksibel -->
     <col style="width:72px">
     <col style="width:110px">
     <col style="width:80px">
@@ -1493,6 +1509,17 @@ function ensureItemsColgroup(){
   table.style.tableLayout = 'fixed';
   table.__colgroupPatched = true;
 }
+
+// Respons ke perubahan ukuran layar
+window.addEventListener('resize', () => {
+  const tb = document.getElementById('tbl-items');
+  if (!tb) return;
+  // Paksa evaluasi ulang
+  const table = tb.closest('table');
+  if (table) { table.__colgroupPatched = false; }
+  ensureItemsColgroup();
+});
+
 
   /* -------------------- Tanaoroshi List (menu baru) -------------------- */
   const JP_TANA_MAP = {
@@ -1986,7 +2013,26 @@ function bindPreviewButtons(){
   ensurePreviewModal();
 
   tbl.addEventListener('click', (ev)=>{
-    const btn = ev.target.closest('.btn-preview');
+    const btn = ev.target.closest('.btn-preview');  // Tambah: klik pada nama item juga membuka Preview yang sama
+  tbl.addEventListener('click', (ev)=>{
+    const a = ev.target.closest('.link-item');
+    if(!a) return;
+    ev.preventDefault();
+    const tr = a.closest('tr');
+    const fakeBtn = tr?.querySelector('.btn-preview');
+    if (fakeBtn) fakeBtn.click();
+  });
+
+  // (Opsional) jika kamu punya hasil "detail search" lain:
+  tbl.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('[data-action="detail"], [data-role="preview"]');
+    if(!btn) return;
+    ev.preventDefault();
+    const tr = btn.closest('tr');
+    const fake = tr?.querySelector('.btn-preview');
+    if (fake) fake.click();
+  });
+
     if(!btn) return;
     ev.preventDefault();
 
