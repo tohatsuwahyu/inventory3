@@ -368,6 +368,54 @@ function tplItemRow(it){
     '</tr>'
   ].join('');
 }
+// === Mobile mini "操作" button renderer (HP only) ===
+function ensureMobileActions(){
+  // Hanya untuk HP
+  if (window.matchMedia('(min-width:577px)').matches) return;
+
+  document.querySelectorAll('#tbl-items tr[data-code]').forEach(tr=>{
+    // idempotent: jangan dobel
+    if (tr.querySelector('.mobile-ops')) return;
+
+    const firstCell = tr.querySelector('td');               if (!firstCell) return;
+    const opsCell   = tr.querySelector('td:last-child');    if (!opsCell) return;
+    const opsGroup  = opsCell.querySelector('.row-actions, .btn-group, .act-grid') || opsCell;
+
+    // Tombol kecil di sel pertama
+    const wrap = document.createElement('div');
+    wrap.className = 'mobile-ops d-inline-block ms-1';
+    wrap.innerHTML = '<button type="button" class="btn btn-sm btn-primary">操作</button>';
+
+    // Toggle menu aksi (ditampilkan di kanan sebagai popover sederhana)
+    const btn = wrap.querySelector('button');
+    btn.addEventListener('click', ()=>{
+      const open = opsGroup.classList.toggle('show');
+      if (open){
+        // gaya ringan biar muncul seperti popover
+        opsGroup.style.position   = 'absolute';
+        opsGroup.style.right      = '8px';
+        opsGroup.style.top        = '50%';
+        opsGroup.style.transform  = 'translateY(-50%)';
+        opsGroup.style.background = '#fff';
+        opsGroup.style.padding    = '6px';
+        opsGroup.style.border     = '1px solid var(--bs-border-color)';
+        opsGroup.style.borderRadius = '.5rem';
+        opsGroup.style.boxShadow  = '0 8px 26px rgba(15,23,42,.06)';
+        opsGroup.style.zIndex     = '5';
+        opsGroup.classList.add('d-inline-flex');
+        opsGroup.style.gap = '.25rem';
+      }else{
+        // kembalikan gaya default
+        opsGroup.removeAttribute('style');
+        opsGroup.classList.add('d-inline-flex');
+      }
+    });
+
+    // supaya popover bisa menempel rapih
+    firstCell.style.position = 'relative';
+    firstCell.appendChild(wrap);
+  });
+}
 
   async function renderItems(){
     const tbody = $("#tbl-items");
@@ -410,6 +458,7 @@ function tplItemRow(it){
         more.addEventListener("click", function(e){
           e.preventDefault();
           renderPage();
+          ensureMobileActions();
           if (page*size >= _ITEMS_CACHE.length) more.remove();
         });
       }
