@@ -102,19 +102,6 @@ input[readonly], .form-control[readonly]{ background:#f8fafc; }
 .table tr + tr td{ border-top:1px solid #eef2f7; }
 .table-responsive{ overflow-x:auto; } /* jaga-jaga HP sangat sempit */
 .table-responsive thead th{ position: sticky; top: 0; z-index: 1; }
-/* Kolom nama stabil (tidak tergantung urutan kolom) */
-.table-items td.td-name{
-  max-width: 360px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-/* Mobile: nama boleh lebih lebar */
-@media (max-width: 480px){
-  #view-items td.td-name{ max-width: 55vw; }
-}
-
-/* Header kolom ceklis kecil */
-.table-items thead th:first-child{ width:36px; }
 
 /* ---------- Badges/Chips ---------- */
 .badge{ display:inline-block; padding:.25rem .5rem; border-radius:999px; font-size:.78rem; }
@@ -390,3 +377,9 @@ td[data-editable]{ cursor:text; }
   justify-content: end;
   min-width: 200px;
 }
+
+
+/* === Preview Modal Helpers === */
+#preview-modal .modal-body .badge{ font-weight:600; }
+.tbl-qr-box{ display:inline-block; padding:.25rem; border-radius:.5rem; background:var(--bs-gray-100, #f5f5f5); }
+
