@@ -328,12 +328,13 @@
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
 
-  function tplItemRow(it) {
-    const qrid = `qr-${safeId(it.code)}`;
-    return `<tr data-code="${escapeAttr(it.code)}">
+function tplItemRow(it) {
+  const qrid = `qr-${safeId(it.code)}`;
+  return `<tr data-code="${escapeAttr(it.code)}">
+      <td style="width:36px"><input type="checkbox" class="row-chk" data-code="${escapeAttr(it.code)}"></td>
       <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
       <td>${escapeHtml(it.code)}</td>
-      <td><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
+      <td class="td-name"><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
       <td>${it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ""}</td>
       <td class="text-end">¥${fmt(it.price)}</td>
       <td class="text-end">${fmt(it.stock)}</td>
@@ -350,7 +351,8 @@
         </div>
       </td>
     </tr>`;
-  }
+}
+
 
   async function renderItems(){
     const tbody = $("#tbl-items");
@@ -1458,6 +1460,7 @@ function ensureItemsColgroup(){
 
   const cg = document.createElement('colgroup');
   cg.innerHTML = `
+    <col style="width:36px">   <!-- チェック -->
     <col style="width:110px">  <!-- QR -->
     <col style="width:160px">  <!-- コード -->
     <col>                      <!-- 名称 (fleksibel) -->
@@ -1473,6 +1476,7 @@ function ensureItemsColgroup(){
   table.style.tableLayout = 'fixed';
   table.__colgroupPatched = true;
 }
+
 
   /* -------------------- Tanaoroshi List (menu baru) -------------------- */
   const JP_TANA_MAP = {
@@ -1877,6 +1881,7 @@ function ensureItemsColgroup(){
     bindShelf();
     updateWelcomeBanner();
     renderDashboard();
+    bindPrintAllLabels();
     $("#btn-logout")?.addEventListener("click", logout);
 
     // Preload QR lib supaya Lot QR langsung tampil
