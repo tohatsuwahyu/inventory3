@@ -2014,9 +2014,24 @@ function bindPreviewButtons(){
     const pvImg = document.getElementById('pv-img');
     if(d.img){ pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
 
-    const qrBox = document.getElementById('pv-qr');
-    qrBox.innerHTML = '';
-    try{ window.qrlib?.draw(qrBox, d.code || d.name || ''); }catch(e){}
+  const qrBox = document.getElementById('pv-qr');
+qrBox.innerHTML = '';
+(async () => {
+  try {
+    await ensureQRCode();
+    const text = d.code || d.name || '';
+    if (window.QRCode) {
+      new QRCode(qrBox, { text, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M });
+    } else if (window.qrlib?.draw) {
+      window.qrlib.draw(qrBox, text);
+    } else {
+      qrBox.textContent = text; // fallback teks
+    }
+  } catch(e){
+    qrBox.textContent = d.code || d.name || '';
+  }
+})();
+
 
     const toEdit = document.getElementById('pv-edit');
     const toPrint = document.getElementById('pv-print');
