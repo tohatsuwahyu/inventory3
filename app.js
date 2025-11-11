@@ -11,6 +11,7 @@
   const isMobile = () => /Android|iPhone|iPad/i.test(navigator.userAgent);
   function toast(msg) { alert(msg); }
   function ensure(x, msg) { if (!x) throw new Error(msg || "Assertion failed"); return x; }
+  function debounce(fn, wait){ let t; return function(...a){ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a), wait); }; }
 
   // Escape
   function escapeHtml(s){ return String(s || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
@@ -102,44 +103,78 @@
   function setCurrentUser(u) { localStorage.setItem("currentUser", JSON.stringify(u || null)); }
   function logout() { setCurrentUser(null); location.href = "index.html"; }
   function isAdmin() { return (getCurrentUser()?.role || "user").toLowerCase() === "admin"; }
-// --- User hydrator & sync ---
-function readCookie(name){
-  const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g,'\\$1') + '=([^;]*)'));
-  try { return m ? decodeURIComponent(m[1]) : null; } catch (e) { return null; }
-}
 
-/** Coba ambil identitas user dari berbagai sumber, lalu simpan ke localStorage jika belum ada */
-function hydrateCurrentUser(){
-  // 1) localStorage (kunci lain yang mungkin dipakai halaman login lama)
-  const keys = ["currentUser","authUser","user","loggedInUser","me"];
-  for (const k of keys){
-    const v = localStorage.getItem(k);
-    if (v){ try { const o = JSON.parse(v); if (o && o.id){ setCurrentUser(o); return o; } } catch (e) {} }
+  // --- User hydrator & sync ---
+  function readCookie(name){
+    const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g,'\\$1') + '=([^;]*)'));
+    try { return m ? decodeURIComponent(m[1]) : null; } catch (e) { return null; }
   }
-  // 2) sessionStorage
-  for (const k of keys){
-    const v = sessionStorage.getItem(k);
-    if (v){ try { const o = JSON.parse(v); if (o && o.id){ setCurrentUser(o); return o; } } catch (e) {} }
+  function hydrateCurrentUser(){
+    const keys = ["currentUser","authUser","user","loggedInUser","me"];
+    for (const k of keys){
+      const v = localStorage.getItem(k);
+      if (v){ try { const o = JSON.parse(v); if (o && o.id){ setCurrentUser(o); return o; } } catch (e) {} }
+    }
+    for (const k of keys){
+      const v = sessionStorage.getItem(k);
+      if (v){ try { const o = JSON.parse(v); if (o && o.id){ setCurrentUser(o); return o; } } catch (e) {} }
+    }
+    const ck = readCookie("currentUser");
+    if (ck){ try { const o = JSON.parse(ck); if (o && o.id){ setCurrentUser(o); return o; } } catch (e) {} }
+    if (window.CURRENT_USER && window.CURRENT_USER.id){ setCurrentUser(window.CURRENT_USER); return window.CURRENT_USER; }
+    if (window.CONFIG && CONFIG.DEFAULT_USER && CONFIG.DEFAULT_USER.id){
+      setCurrentUser(CONFIG.DEFAULT_USER);
+      return CONFIG.DEFAULT_USER;
+    }
+    return null;
   }
-  // 3) cookie `currentUser`
-  const ck = readCookie("currentUser");
-  if (ck){ try { const o = JSON.parse(ck); if (o && o.id){ setCurrentUser(o); return o; } } catch (e) {} }
+  window.addEventListener("storage", (e) => {
+    if (e.key === "currentUser") { updateWelcomeBanner(); }
+  });
 
-  // 4) global var yang mungkin diisi server-side
-  if (window.CURRENT_USER && window.CURRENT_USER.id){ setCurrentUser(window.CURRENT_USER); return window.CURRENT_USER; }
+  // === PATCH: print semua label (A4 panjang, 1 label per "halaman") ===
+  function bindPrintAllLabels(){
+    const btn = document.getElementById('btn-print-all-labels')
+      || document.querySelector('[data-action="print-all-labels"]')
+      || Array.from(document.querySelectorAll('#view-items .items-toolbar button, #view-items .items-toolbar .btn'))
+           .find(b => /全件ラベルを印刷/.test((b.textContent||'').trim()));
+    if (!btn) return;
 
-  // 5) fallback opsional dari config
-  if (window.CONFIG && CONFIG.DEFAULT_USER && CONFIG.DEFAULT_USER.id){
-    setCurrentUser(CONFIG.DEFAULT_USER);
-    return CONFIG.DEFAULT_USER;
+    btn.addEventListener('click', async ()=>{
+      try{
+        btn.disabled = true;
+        const orig = btn.textContent;
+        btn.textContent = '生成中...';
+
+        if (!_ITEMS_CACHE.length) {
+          const listAll = await api('items', { method:'GET' });
+          _ITEMS_CACHE = Array.isArray(listAll) ? listAll : (listAll?.data || []);
+        }
+
+        const w = window.open('', '_blank', 'width=1024,height=700');
+        if (!w) { alert('ポップアップがブロックされました。'); btn.disabled=false; btn.textContent=orig; return; }
+
+        w.document.write('<meta charset="utf-8">');
+        w.document.write('<title>全件ラベル</title>');
+        w.document.write('<style>body{font-family:sans-serif;padding:8mm;} img{width:100%;max-width:100%;display:block;margin:6mm auto;} @media print{img{page-break-inside:avoid;}}</style>');
+        w.document.write('<h3>全件ラベル</h3>');
+
+        for (const it of _ITEMS_CACHE){
+          const url = await makeItemLabelDataURL(it);
+          w.document.write(`<img src="${url}" alt="${(it.code||'')}" />`);
+        }
+        w.document.close();
+        w.focus();
+        setTimeout(()=>{ try{ w.print(); }catch(e){} }, 600);
+
+        btn.textContent = orig;
+        btn.disabled = false;
+      }catch(e){
+        alert('印刷用ラベルの生成に失敗しました。');
+        try{ btn.disabled=false; }catch(_){}
+      }
+    }, { once:true });
   }
-  return null;
-}
-
-// Jika tab/login lain mengubah user → refresh banner di sini juga
-window.addEventListener("storage", (e) => {
-  if (e.key === "currentUser") { updateWelcomeBanner(); }
-});
 
   /* -------------------- Sidebar + Router -------------------- */
   (function navHandler() {
@@ -163,7 +198,7 @@ window.addEventListener("storage", (e) => {
       if (!a) return; e.preventDefault();
 
       $$("aside nav a").forEach(n => n.classList.remove("active"));
-      a.classList.add("active");
+      a.addEventListener && a.classList.add("active");
 
       $$("main section").forEach(s => { s.classList.add("d-none"); s.classList.remove("active"); });
       const id = a.getAttribute("data-view");
@@ -239,37 +274,32 @@ window.addEventListener("storage", (e) => {
       toast("ダッシュボードの読み込みに失敗しました。");
     }
   }
-  // --- PASANG DI SINI: tepat setelah } penutup renderDashboard() ---
+
   // --- PASANG MENGGANTI fungsi lama updateWelcomeBanner ---
-function updateWelcomeBanner() {
-  const who = getCurrentUser();
-  const nama = who?.name || who?.id || "ユーザー";
-  const roleRaw = (who?.role || "user").toLowerCase();
-  const roleJP  = roleRaw === "admin" ? "管理者" : "ユーザー";
+  function updateWelcomeBanner() {
+    const who = getCurrentUser();
+    const nama = who?.name || who?.id || "ユーザー";
+    const roleRaw = (who?.role || "user").toLowerCase();
+    const roleJP  = roleRaw === "admin" ? "管理者" : "ユーザー";
 
-  // 1) Jika dashboard pakai kontainer khusus (rencana baru)
-  const banner = document.getElementById("welcome-banner");
-  if (banner) {
-    banner.innerHTML = `ようこそ、<b>${escapeHtml(nama)}</b> さん。<span class="badge-soft" style="margin-left:.4rem">${roleJP}</span>
-      <span class="text-muted small">端末、電源、電波確認しましょう。</span>`;
+    const banner = document.getElementById("welcome-banner");
+    if (banner) {
+      banner.innerHTML = `ようこそ、<b>${escapeHtml(nama)}</b> さん。<span class="badge-soft" style="margin-left:.4rem">${roleJP}</span>
+        <span class="text-muted small">端末、電源、電波確認しましょう。</span>`;
+    }
+
+    const welName = document.getElementById("wel-name");
+    if (welName) {
+      welName.textContent = `${nama}（${roleJP}）`;
+    }
+
+    const whoEl = document.getElementById("who");
+    if (whoEl) {
+      const id = who?.id || "";
+      const role = who?.role || "user";
+      whoEl.textContent = `${nama} (${id} | ${role})`;
+    }
   }
-
-  // 2) Kompatibel dengan struktur lama: cuma ada <b id="wel-name">
-  const welName = document.getElementById("wel-name");
-  if (welName) {
-    // Tampilkan nama + peran agar “Admin” tidak lagi terbaca “User”
-    welName.textContent = `${nama}（${roleJP}）`;
-  }
-
-  // 3) Header kecil di kanan (info ringkas)
-  const whoEl = document.getElementById("who");
-  if (whoEl) {
-    const id = who?.id || "";
-    const role = who?.role || "user";
-    whoEl.textContent = `${nama} (${id} | ${role})`;
-  }
-}
-
 
   // === Live reload (user-configurable) ===
   const LIVE_KEY = "liveRefreshSec";
@@ -288,15 +318,12 @@ function updateWelcomeBanner() {
     LIVE_TIMER = setInterval(async () => {
       try {
         const active = document.querySelector("main section.active")?.id || "";
-        // refresh cache item supaya stok/nama terbaru
         api("items", { method: "GET", silent: true }).then(list => {
           _ITEMS_CACHE = Array.isArray(list) ? list : (list?.data || []);
         }).catch(()=>{});
-        // per layar aktif:
         if (active === "view-dashboard")    renderDashboard();
         if (active === "view-history")      renderHistory();
-        if (active === "view-shelf-list")   loadTanaList();  // 棚卸一覧
-        // if (active === "view-shelf")     renderShelfTable(); // opsional
+        if (active === "view-shelf-list")   loadTanaList();
       } catch (e) {}
     }, LIVE_SEC * 1000);
   }
@@ -304,7 +331,7 @@ function updateWelcomeBanner() {
   /* -------------------- Items -------------------- */
   function tplItemRow(it) {
     const qrid = `qr-${safeId(it.code)}`;
-    return `<tr>
+    return `<tr data-code="${escapeAttr(it.code)}">
       <td style="width:110px"><div class="tbl-qr-box"><div id="${qrid}" class="d-inline-block"></div></div></td>
       <td>${escapeHtml(it.code)}</td>
       <td><a href="#" class="link-underline link-item" data-code="${escapeAttr(it.code)}">${escapeHtml(it.name)}</a></td>
@@ -327,196 +354,196 @@ function updateWelcomeBanner() {
   }
 
   async function renderItems(){
-  const tbody = $("#tbl-items");
+    const tbody = $("#tbl-items");
 
-  // (opsional) skeleton
-  if (CONFIG.FEATURES && CONFIG.FEATURES.SKELETON) {
-    tbody.innerHTML = '<tr><td colspan="10"><div class="skel" style="height:120px"></div></td></tr>';
-  }
-
-  try { // === OPEN TRY (PASTIKAN ADA PASANGANNYA!)
-    // muat data
-    const listAll = await api("items", { method: "GET" });
-    _ITEMS_CACHE = Array.isArray(listAll) ? listAll : (Array.isArray(listAll?.data) ? listAll.data : []);
-
-    // paginasi
-    var page = 0, size = 100;
-    function renderPage(){
-      const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
-      if (page === 0) tbody.innerHTML = slice.map(tplItemRow).join("");
-      else tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
-      page++;
-
-      // highlight low-stock
-      var rows = $$("#tbl-items tr");
-      rows.forEach(function(tr){
-        var stock = Number((tr.children[5] && tr.children[5].textContent || "0").replace(/[,¥]/g, ""));
-        var min   = Number((tr.children[6] && tr.children[6].textContent || "0").replace(/[,¥]/g, ""));
-        tr.classList.toggle("row-low", stock <= min);
-      });
-    }
-    renderPage();
-
-    // tombol "Load more"
-    if (_ITEMS_CACHE.length > size) {
-      var more = document.createElement("div");
-      more.className = "text-center my-3";
-      more.innerHTML = '<button id="btn-load-more" class="btn btn-outline-secondary btn-sm">Load more</button>';
-      tbody.parentElement.appendChild(more);
-      more.addEventListener("click", function(e){
-        e.preventDefault();
-        renderPage();
-        if (page*size >= _ITEMS_CACHE.length) more.remove();
-      });
+    if (CONFIG.FEATURES && CONFIG.FEATURES.SKELETON) {
+      tbody.innerHTML = '<tr><td colspan="10"><div class="skel" style="height:120px"></div></td></tr>';
     }
 
-    // QR render (kalau ada)
-    await ensureQRCode();
+    try {
+      const listAll = await api("items", { method: "GET" });
+      _ITEMS_CACHE = Array.isArray(listAll) ? listAll : (Array.isArray(listAll?.data) ? listAll.data : []);
 
-  } catch (e) { // === CLOSE TRY
-    console.error("renderItems()", e);
-    toast("商品一覧の読み込みに失敗しました。");
-  } // <— penting: jangan hapus
+      // load QR lib sekali di awal render
+      await ensureQRCode();
 
-  // --- Area DI LUAR try: listener, bulk, inline edit, search, dsb ---
+      // paginasi
+      var page = 0, size = 100;
+      function renderPage(){
+        const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
+        const html  = slice.map(tplItemRow).join("");
+        if (page === 0) tbody.innerHTML = html; else tbody.insertAdjacentHTML("beforeend", html);
+        page++;
 
-  // BULK SELECT
-  var bulkWrap = document.getElementById("bulk-wrap");
-  var chkAll = document.getElementById("chk-all");
-  function sel(){
-    return [].slice.call(document.querySelectorAll("#tbl-items .row-chk:checked"))
-      .map(function(c){ var tr=c.closest("tr"); return tr && tr.getAttribute("data-code"); })
-      .filter(Boolean);
-  }
-  function toggleBulk(){ if (bulkWrap) bulkWrap.classList.toggle("d-none", sel().length === 0); }
-  if (chkAll){
-    chkAll.addEventListener("change", function(){
-      $$("#tbl-items .row-chk").forEach(function(c){ c.checked = chkAll.checked; });
-      toggleBulk();
-    });
-  }
-  var tbl = document.getElementById("tbl-items");
-  if (tbl){
-    tbl.addEventListener("change", function(e){
-      if (e.target && e.target.classList.contains("row-chk")) toggleBulk();
-    });
-  }
+        // render QR utk batch baru
+        renderRowQRCodes(slice);
 
-  // BULK ACTION BUTTONS
-  var btnBulkExport = document.getElementById("bulk-export");
-  if (btnBulkExport){
-    btnBulkExport.addEventListener("click", function(){
-      var codes = sel(); if (!codes.length) return;
-      var rows = _ITEMS_CACHE.filter(function(i){ return codes.indexOf(String(i.code)) !== -1; });
-      var heads = ["コード","品名","価格","在庫","最小","置場","部門","画像"];
-      var csv = [heads.join(",")].concat(rows.map(function(i){
-        return [i.code,i.name||"",i.price||0,i.stock||0,i.min||0,(i.location||"").toUpperCase(),i.department||"",i.img||""].join(",");
-      })).join("\n");
-      downloadCSV_JP("選択商品.csv", csv);
-    });
-  }
-  var btnBulkPrint = document.getElementById("bulk-print");
-  if (btnBulkPrint){
-    btnBulkPrint.addEventListener("click", async function(){
-      var codes = sel(); if (!codes.length) return;
-      for (const it of _ITEMS_CACHE.filter(i => codes.indexOf(String(i.code)) !== -1)){
-        const url = await makeItemLabel62mmDataURL(it); // pakai 62mm; ganti ke A4 bila perlu
-        var a = document.createElement("a"); a.href = url; a.download = "label_"+String(it.code)+".png"; a.click();
+        // highlight low-stock
+        $$("#tbl-items tr").forEach(function(tr){
+          var stock = Number((tr.children[5] && tr.children[5].textContent || "0").replace(/[,¥]/g, ""));
+          var min   = Number((tr.children[6] && tr.children[6].textContent || "0").replace(/[,¥]/g, ""));
+          tr.classList.toggle("row-low", stock <= min);
+        });
       }
-    });
-  }
-  var btnBulkAdjust = document.getElementById("bulk-adjust");
-  if (btnBulkAdjust){
-    btnBulkAdjust.addEventListener("click", function(){
-      if (!can("admin")) return toast("Akses ditolak (admin only)");
-      sel().forEach(function(c){ openEditItem(c); });
-    });
-  }
+      renderPage();
 
-  // INLINE EDIT (tanpa optional chaining)
-  if (CONFIG.FEATURES && CONFIG.FEATURES.INLINE_EDIT && tbl){
-    var editableCols = { 2:"name", 6:"min", 8:"location" };
-    tbl.addEventListener("dblclick", function(e){
-      var td = e.target && e.target.closest ? e.target.closest("td") : null;
-      var tr = e.target && e.target.closest ? e.target.closest("tr") : null;
-      if (!td || !tr) return;
-      var idx = [].slice.call(td.parentNode.children).indexOf(td);
-      var field = editableCols[idx]; if (!field) return;
-      if (field !== "name" && !can("admin")) return toast("Akses ditolak (admin only)");
-      if (td.querySelector("input")) return;
+      // tombol "Load more"
+      if (_ITEMS_CACHE.length > size) {
+        var more = document.createElement("div");
+        more.className = "text-center my-3";
+        more.innerHTML = '<button id="btn-load-more" class="btn btn-outline-secondary btn-sm">Load more</button>';
+        tbody.parentElement.appendChild(more);
+        more.addEventListener("click", function(e){
+          e.preventDefault();
+          renderPage();
+          if (page*size >= _ITEMS_CACHE.length) more.remove();
+        });
+      }
 
-      var code = tr.getAttribute("data-code");
-      var old  = (td.textContent || "").trim();
-      td.classList.add("inline-editing");
-      var inp = document.createElement("input");
-      inp.className = "form-control form-control-sm";
-      inp.value = old;
-      if (field === "min") inp.type = "number";
-      td.textContent = ""; td.appendChild(inp); inp.focus();
+    } catch (e) {
+      console.error("renderItems()", e);
+      toast("商品一覧の読み込みに失敗しました。");
+    }
 
-      inp.addEventListener("keydown", function(ev){
-        if (ev.key === "Escape"){ td.classList.remove("inline-editing"); td.textContent = old; }
+    // --- Area DI LUAR try: listener, bulk, inline edit, search, dsb ---
+
+    // BULK SELECT
+    var bulkWrap = document.getElementById("bulk-wrap");
+    var chkAll = document.getElementById("chk-all");
+    function sel(){
+      return [].slice.call(document.querySelectorAll("#tbl-items .row-chk:checked"))
+        .map(function(c){ var tr=c.closest("tr"); return tr && tr.getAttribute("data-code"); })
+        .filter(Boolean);
+    }
+    function toggleBulk(){ if (bulkWrap) bulkWrap.classList.toggle("d-none", sel().length === 0); }
+    if (chkAll){
+      chkAll.addEventListener("change", function(){
+        $$("#tbl-items .row-chk").forEach(function(c){ c.checked = chkAll.checked; });
+        toggleBulk();
       });
-      inp.addEventListener("blur", async function(){
-        var val = (inp.value || "").trim();
-        if (field === "min" && Number(val) < 0) { toast("最小在庫は0以上"); inp.focus(); return; }
-        td.classList.remove("inline-editing"); td.textContent = val;
+    }
+    var tbl = document.getElementById("tbl-items");
+    if (tbl){
+      tbl.addEventListener("change", function(e){
+        if (e.target && e.target.classList.contains("row-chk")) toggleBulk();
+      });
+    }
+
+    // BULK ACTION BUTTONS
+    var btnBulkExport = document.getElementById("bulk-export");
+    if (btnBulkExport){
+      btnBulkExport.addEventListener("click", function(){
+        var codes = sel(); if (!codes.length) return;
+        var rows = _ITEMS_CACHE.filter(function(i){ return codes.indexOf(String(i.code)) !== -1; });
+        var heads = ["コード","品名","価格","在庫","最小","置場","部門","画像"];
+        var csv = [heads.join(",")].concat(rows.map(function(i){
+          return [i.code,i.name||"",i.price||0,i.stock||0,i.min||0,(i.location||"").toUpperCase(),i.department||"",i.img||""].join(",");
+        })).join("\n");
+        downloadCSV_JP("選択商品.csv", csv);
+      });
+    }
+    var btnBulkPrint = document.getElementById("bulk-print");
+    if (btnBulkPrint){
+      btnBulkPrint.addEventListener("click", async function(){
+        var codes = sel(); if (!codes.length) return;
+        for (const it of _ITEMS_CACHE.filter(i => codes.indexOf(String(i.code)) !== -1)){
+          const url = await makeItemLabel62mmDataURL?.(it) || await makeItemLabelDataURL(it);
+          var a = document.createElement("a"); a.href = url; a.download = "label_"+String(it.code)+".png"; a.click();
+        }
+      });
+    }
+    var btnBulkAdjust = document.getElementById("bulk-adjust");
+    if (btnBulkAdjust){
+      btnBulkAdjust.addEventListener("click", function(){
+        if (!isAdmin()) return toast("Akses ditolak (admin only)");
+        sel().forEach(function(c){ openEditItem(c); });
+      });
+    }
+
+    // INLINE EDIT
+    if (CONFIG.FEATURES && CONFIG.FEATURES.INLINE_EDIT && tbl){
+      var editableCols = { 2:"name", 6:"min", 8:"location" };
+      tbl.addEventListener("dblclick", function(e){
+        var td = e.target && e.target.closest ? e.target.closest("td") : null;
+        var tr = e.target && e.target.closest ? e.target.closest("tr") : null;
+        if (!td || !tr) return;
+        var idx = [].slice.call(td.parentNode.children).indexOf(td);
+        var field = editableCols[idx]; if (!field) return;
+        if (field !== "name" && !isAdmin()) return toast("Akses ditolak (admin only)");
+        if (td.querySelector("input")) return;
+
+        var code = tr.getAttribute("data-code");
+        var old  = (td.textContent || "").trim();
+        td.classList.add("inline-editing");
+        var inp = document.createElement("input");
+        inp.className = "form-control form-control-sm";
+        inp.value = old;
+        if (field === "min") inp.type = "number";
+        td.textContent = ""; td.appendChild(inp); inp.focus();
+
+        inp.addEventListener("keydown", function(ev){
+          if (ev.key === "Escape"){ td.classList.remove("inline-editing"); td.textContent = old; }
+        });
+        inp.addEventListener("blur", async function(){
+          var val = (inp.value || "").trim();
+          if (field === "min" && Number(val) < 0) { toast("最小在庫は0以上"); inp.focus(); return; }
+          td.classList.remove("inline-editing"); td.textContent = val;
+          try{
+            var body = { code: code, overwrite: true };
+            body[field] = (field === "min") ? Number(val||0) : (field === "location" ? val.toUpperCase() : val);
+            var r = await api("updateItem", { method: "POST", body: body });
+            if (!r || !r.ok) toast("保存失敗"); else {
+              var who = getCurrentUser();
+              api("log", { method:"POST", body:{ userId: (who && who.id)||"", code: code, qty:0, unit:"", type:"EDIT", note: field+" ← "+old+" → "+val } }).catch(function(){});
+              renderItems();
+            }
+          } catch(e){ toast("保存失敗: " + (e && e.message ? e.message : e)); }
+        });
+      });
+    }
+
+    // SEARCH + debounce
+    var _elSearch = $("#items-search");
+    if (_elSearch){
+      var _fnFilter = debounce(function(q){
+        var qq = (q || "").toLowerCase();
+        $$("#tbl-items tr").forEach(function(tr){
+          var name = ((tr.children[2] && tr.children[2].textContent) ? tr.children[2].textContent : "").toLowerCase();
+          var code = ((tr.children[1] && tr.children[1].textContent) ? tr.children[1].textContent : "").toLowerCase();
+          tr.style.display = (name.indexOf(qq) !== -1 || code.indexOf(qq) !== -1) ? "" : "none";
+        });
+      }, 320);
+      _elSearch.addEventListener("input", function(e){
+        _fnFilter(e && e.target ? e.target.value : "");
+      });
+    }
+
+    // link T I M E L I N E
+    if (tbl){
+      tbl.addEventListener("click", async function(e){
+        var a = e.target && e.target.closest ? e.target.closest(".link-timeline") : null;
+        if (!a) return;
+        e.preventDefault();
+        var code = a.getAttribute("data-code");
         try{
-          var body = { code: code, overwrite: true }; 
-          body[field] = (field === "min") ? Number(val||0) : (field === "location" ? val.toUpperCase() : val);
-          var r = await api("updateItem", { method: "POST", body: body });
-          if (!r || !r.ok) toast("保存失敗"); else {
-            var who = getCurrentUser();
-            api("log", { method:"POST", body:{ userId: (who && who.id)||"", code: code, qty:0, unit:"", type:"EDIT", note: field+" ← "+old+" → "+val } }).catch(function(){});
-            renderItems();
-          }
-        } catch(e){ toast("保存失敗: " + (e && e.message ? e.message : e)); }
+          var raw = await api("history", { method: "GET" });
+          var list = Array.isArray(raw) ? raw : (raw && (raw.history || raw.data) || []);
+          var rows = list.filter(function(h){ return String(h.code) === String(code); }).slice(-50).reverse();
+          var box = document.getElementById("timeline-body");
+          box.innerHTML = rows.map(function(h){
+            var t = (h.timestamp || h.date || "");
+            var u = (h.userId || "");
+            var ty = String(h.type || "").toUpperCase();
+            var q = fmt(h.qty || 0);
+            var un = (h.unit || "");
+            var nt = (h.note || "");
+            return '<div class="tl"><b>'+escapeHtml(t)+'</b> — '+escapeHtml(u)+'：<span class="'+(ty==='OUT'?'text-danger':'text-success')+'">'+escapeHtml(ty)+'</span> '+q+'<span class="text-muted"> '+escapeHtml(un)+'</span> <i>'+escapeHtml(nt)+'</i></div>';
+          }).join("");
+          new bootstrap.Modal(document.getElementById("timelineModal")).show();
+        } catch(e){ toast("履歴取得失敗"); }
       });
-    });
+    }
   }
-
-  // SEARCH (tanpa optional chaining + debounce)
-  var _elSearch = $("#items-search");
-  if (_elSearch){
-    var _fnFilter = debounce(function(q){
-      var qq = (q || "").toLowerCase();
-      $$("#tbl-items tr").forEach(function(tr){
-        var name = ((tr.children[2] && tr.children[2].textContent) ? tr.children[2].textContent : "").toLowerCase();
-        var code = ((tr.children[1] && tr.children[1].textContent) ? tr.children[1].textContent : "").toLowerCase();
-        tr.style.display = (name.indexOf(qq) !== -1 || code.indexOf(qq) !== -1) ? "" : "none";
-      });
-    }, 320);
-    _elSearch.addEventListener("input", function(e){
-      _fnFilter(e && e.target ? e.target.value : "");
-    });
-  }
-
-  // link T I M E L I N E
-  if (tbl){
-    tbl.addEventListener("click", async function(e){
-      var a = e.target && e.target.closest ? e.target.closest(".link-timeline") : null;
-      if (!a) return;
-      e.preventDefault();
-      var code = a.getAttribute("data-code");
-      try{
-        var raw = await api("history", { method: "GET" });
-        var list = Array.isArray(raw) ? raw : (raw && (raw.history || raw.data) || []);
-        var rows = list.filter(function(h){ return String(h.code) === String(code); }).slice(-50).reverse();
-        var box = document.getElementById("timeline-body");
-        box.innerHTML = rows.map(function(h){
-          var t = (h.timestamp || h.date || "");
-          var u = (h.userId || "");
-          var ty = String(h.type || "").toUpperCase();
-          var q = fmt(h.qty || 0);
-          var un = (h.unit || "");
-          var nt = (h.note || "");
-          return '<div class="tl"><b>'+escapeHtml(t)+'</b> — '+escapeHtml(u)+'：<span class="'+(ty==='OUT'?'text-danger':'text-success')+'">'+escapeHtml(ty)+'</span> '+q+'<span class="text-muted"> '+escapeHtml(un)+'</span> <i>'+escapeHtml(nt)+'</i></div>';
-        }).join("");
-        new bootstrap.Modal(document.getElementById("timelineModal")).show();
-      } catch(e){ toast("履歴取得失敗"); }
-    });
-  }
-}
 
   /* ===== Auto-refresh controller (pakai tombol #btn-items-auto yang sudah ada) ===== */
   function itemsAuto_refreshLabel(sec){
@@ -552,7 +579,7 @@ function updateWelcomeBanner() {
     const saved = Number(localStorage.getItem("liveRefreshSec") || "120");
     itemsAuto_refreshLabel(saved);
   }
-      itemsAuto_extendMenu();
+  itemsAuto_extendMenu();
 
   /* ===== Auto-refresh: injector untuk view lain (history & shelf-list) ===== */
   function ensureViewAutoMenu(viewKey, toolbarRightSel){
@@ -958,7 +985,7 @@ function updateWelcomeBanner() {
         if (y - yTop > maxH) break;
       }
     }
-  } // end makeItemLabelDataURL
+  }
 
   async function generateQrDataUrl(text, size) {
     await ensureQRCode();
@@ -989,6 +1016,24 @@ function updateWelcomeBanner() {
         tries++; setTimeout(waitRender, 30);
       })();
     });
+  }
+
+  // === PATCH: render QR di tiap baris items ===
+  function renderRowQRCodes(items){
+    items = Array.isArray(items) ? items : [];
+    for (const it of items){
+      const qrid = 'qr-' + safeId(it.code);
+      const el = document.getElementById(qrid);
+      if (!el) continue;
+      el.innerHTML = '';
+      try {
+        new QRCode(el, {
+          text: 'ITEM|' + normalizeCodeDash(it.code),
+          width: 64, height: 64,
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch(e){}
+    }
   }
 
   // === LOT label (pakai layout item, QR diganti LOT + caption) ===
@@ -1082,7 +1127,7 @@ function updateWelcomeBanner() {
 
       await ensureQRCode();
       for (const u of arr) {
-        const el = document.getElementById(`uqr-${safeId(u.id)}`); // konsisten safeId
+        const el = document.getElementById(`uqr-${safeId(u.id)}`);
         if (!el) continue;
         el.innerHTML = ""; new QRCode(el, { text: `USER|${u.id}`, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
       }
@@ -1467,7 +1512,7 @@ function updateWelcomeBanner() {
       if(!raw){ return toast("下書きがありません"); }
       const data = JSON.parse(raw||"{}");
       const map = new Map();
-      (data.rows||[]).forEach(r => { 
+      (data.rows||[]).forEach(r => {
         const book = Number(r.book||0), qty=Number(r.qty||0);
         map.set(String(r.code), { code:String(r.code), name:r.name, department:(r.department||""), book, qty, diff: qty - book });
       });
@@ -1561,7 +1606,7 @@ function updateWelcomeBanner() {
     };
 
     tbody.onclick = (e) => {
-      const tr = e.target.closest("tr"); if (!tr) return; 
+      const tr = e.target.closest("tr"); if (!tr) return;
       const code = tr.getAttribute("data-code"); const rec = ST.rows.get(code); if (!rec) return;
       if (e.target.closest(".btn-st-adjust")) { if (!isAdmin()) return toast("Akses ditolak (admin only)"); openEditItem(code); }
       if (e.target.closest(".btn-st-del")) {
@@ -1724,7 +1769,7 @@ function updateWelcomeBanner() {
     } catch (e) { alert("エクスポート失敗"); }
   });
 
-  // Items import (CSV) — dukung header JP atau EN
+  // Items import (CSV)
   $("#btn-items-import")?.addEventListener("click", () => $("#input-items-import")?.click());
   $("#input-items-import")?.addEventListener("change", async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -1846,7 +1891,6 @@ function updateWelcomeBanner() {
       if (!rowsRaw.length){
         tbl.insertAdjacentHTML('beforeend',
           '<tbody><tr><td colspan="'+heads.length+'" class="text-muted py-4">データはありません</td></tr></tbody>');
-        // pastikan tombol auto selalu tersedia
         ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
         return;
       }
@@ -1857,7 +1901,6 @@ function updateWelcomeBanner() {
           heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('')
         }</tr>`).join('') + '</tbody>');
 
-      // tombol auto juga muncul saat ada data
       ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
     }catch (e) {
       const tbl = document.getElementById('tbl-tana');
@@ -1931,10 +1974,8 @@ function updateWelcomeBanner() {
         downloadCSV_JP("棚卸まとめ.csv", csv);
       }, { once:true });
 
-      // >>> injector tombol Auto di recap view
       ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
     } catch (e) {
-      // tetap injeksi menu auto walau gagal data
       ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
     }
   }
@@ -1951,12 +1992,14 @@ function updateWelcomeBanner() {
     const newUserBtn = $("#btn-open-new-user");
     if (newItemBtn) { newItemBtn.classList.toggle("d-none", !isAdmin()); newItemBtn.addEventListener("click", openNewItem); }
     if (newUserBtn) { newUserBtn.classList.toggle("d-none", !isAdmin()); newUserBtn.addEventListener("click", openNewUser); }
-hydrateCurrentUser();
+
+    hydrateCurrentUser();
     bindIO();
     bindShelf();
-    updateWelcomeBanner(); 
+    updateWelcomeBanner();
     renderDashboard();
     $("#btn-logout")?.addEventListener("click", logout);
+    bindPrintAllLabels();
     startLiveReload();
   });
 
