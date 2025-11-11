@@ -59,7 +59,12 @@
         </div>
       </div>
     </div>
-  </header>
+  
+<span id="health-dot" class="health-dot" title="Backend health"></span>
+<span id="low-badge" class="badge badge-danger d-none">Low-stock!</span>
+
+<div id="toast-area" class="toast-area"></div>
+</header>
 
   <div class="layout">
     <!-- Sidebar -->
@@ -282,6 +287,7 @@
               <table class="table table-hover align-middle table-items">
                 <thead>
                   <tr>
+                    <th style="width:36px"><input id="chk-all" type="checkbox"></th>
                     <th class="th-qr">QR</th>
                     <th class="th-code">コード</th>
                     <th class="th-name">名称</th>
@@ -550,5 +556,20 @@
   </section>
 </div>
 
+
+<div class="modal fade" id="timelineModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">履歴</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><div id="timeline-body" class="timeline"></div></div>
+    </div>
+  </div>
+</div>
+<audio id="beep-ok" preload="auto">
+  <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA" type="audio/wav">
+</audio>
+<button id="btn-copy-diagnostics" class="btn btn-sm btn-outline-secondary diag-btn"
+        title="Salin info teknis untuk troubleshooting">Salin info teknis</button>
 </body>
 </html>
