@@ -1,4 +1,4 @@
-/* =========================================================
+  /* =========================================================
  * app.js — Inventory (GAS backend)
  * =======================================================*/
 (function () {
@@ -2014,25 +2014,26 @@ function bindPreviewButtons(){
     const pvImg = document.getElementById('pv-img');
     if(d.img){ pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
 
-  const qrBox = document.getElementById('pv-qr');
+// --- QR di modal preview: pakai dataURL agar selalu muncul ---
+const qrBox = document.getElementById('pv-qr');
 qrBox.innerHTML = '';
 (async () => {
   try {
-    await ensureQRCode();
-    const text = d.code || d.name || '';
-    if (window.QRCode) {
-      new QRCode(qrBox, { text, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M });
-    } else if (window.qrlib?.draw) {
-      window.qrlib.draw(qrBox, text);
+    const content = d.code ? `ITEM|${String(d.code).trim()}` : (d.name || '');
+    const url = await generateQrDataUrl(content, 128);   // <- pakai helper yang sudah ada
+    if (url) {
+      const img = new Image();
+      img.width = 128; img.height = 128;
+      img.alt = content;
+      img.src = url;
+      qrBox.appendChild(img);
     } else {
-      qrBox.textContent = text; // fallback teks
+      qrBox.textContent = content || '(QR なし)';
     }
-  } catch(e){
-    qrBox.textContent = d.code || d.name || '';
+  } catch (e) {
+    qrBox.textContent = d.code || d.name || '(QR 生成失敗)';
   }
 })();
-
-
     const toEdit = document.getElementById('pv-edit');
     const toPrint = document.getElementById('pv-print');
     toEdit.onclick = ()=> document.querySelector(`.btn-edit[data-code="${CSS.escape(d.code)}"]`)?.click();
