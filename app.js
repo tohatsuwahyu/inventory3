@@ -366,8 +366,13 @@
       let page = 0, size = 100;
       function renderPage(){
         const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
-        if (page === 0) tbody.innerHTML = slice.map(tplItemRow).join("");ensureItemsColgroup(); 
-        else tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
+       if (page === 0) {
+  tbody.innerHTML = slice.map(tplItemRow).join("");
+  ensureItemsColgroup();
+} else {
+  tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
+}
+
         page++;
 
         // highlight low-stock
