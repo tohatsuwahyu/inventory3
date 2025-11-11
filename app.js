@@ -366,7 +366,7 @@
       let page = 0, size = 100;
       function renderPage(){
         const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
-        if (page === 0) tbody.innerHTML = slice.map(tplItemRow).join("");
+        if (page === 0) tbody.innerHTML = slice.map(tplItemRow).join("");ensureItemsColgroup(); 
         else tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
         page++;
 
@@ -1444,6 +1444,30 @@
       downloadCSV_JP("履歴.csv", csv);
     } catch (e) { alert("エクスポート失敗"); }
   });
+// === Fix lebar kolom: sejajarkan dengan header ==================
+function ensureItemsColgroup(){
+  const tb = document.getElementById('tbl-items');
+  if(!tb) return;
+  const table = tb.closest('table');
+  if(!table || table.__colgroupPatched) return;
+
+  const cg = document.createElement('colgroup');
+  cg.innerHTML = `
+    <col style="width:110px">  <!-- QR -->
+    <col style="width:160px">  <!-- コード -->
+    <col>                      <!-- 名称 (fleksibel) -->
+    <col style="width:72px">   <!-- 画像 -->
+    <col style="width:110px">  <!-- 価格 -->
+    <col style="width:80px">   <!-- 在庫 -->
+    <col style="width:80px">   <!-- 最小 -->
+    <col style="width:100px">  <!-- 部門 -->
+    <col style="width:90px">   <!-- 置場 -->
+    <col style="width:220px">  <!-- 操作 -->
+  `;
+  table.insertBefore(cg, table.firstElementChild);
+  table.style.tableLayout = 'fixed';
+  table.__colgroupPatched = true;
+}
 
   /* -------------------- Tanaoroshi List (menu baru) -------------------- */
   const JP_TANA_MAP = {
