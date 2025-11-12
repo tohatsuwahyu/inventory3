@@ -2265,7 +2265,8 @@ function openPreview(url, meta){
 
     // Tampilkan modal
     if (window.bootstrap && window.bootstrap.Modal){
-      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      const modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+
       modal.show();
     } else {
       modalEl.style.display = 'block';
