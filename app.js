@@ -324,45 +324,56 @@
 
   /* -------------------- Items -------------------- */
 
-  function tplItemRow(it){
-    const qrid  = `qr-${safeId(it.code)}`;
-    const stock = Number(it.stock || 0);
-    const min   = Number(it.min   || 0);
+ function tplItemRow(it){
+  const qrid  = `qr-${safeId(it.code)}`;
+  const stock = Number(it.stock || 0);
+  const min   = Number(it.min   || 0);
 
-    const badge =
-      (stock <= 0) ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
-      (stock <= min) ? '<span class="badge bg-danger ms-1">要補充</span>' :
-      '<span class="badge bg-success ms-1">OK</span>';
+  const badge =
+    (stock <= 0) ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
+    (stock <= min) ? '<span class="badge bg-danger ms-1">要補充</span>' :
+    '<span class="badge bg-success ms-1">OK</span>';
 
-    const dept = it.department ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>` : '';
-    const loc  = it.location   ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>` : '';
+  const dept = it.department ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>` : '';
+  const loc  = it.location   ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>` : '';
 
-    const actions = [
-      `<button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil-square"></i></button>`,
-      `<button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash3"></i></button>`,
-      `<button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>`,
-      `<button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>`,
-      `<button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>`
-    ].join('');
+  return [
+    '<tr data-code="', escapeAttr(it.code), '">',
+      // 1) checkbox
+      '<td style="width:36px"><input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '"></td>',
+      // 2) QR
+      '<td style="width:86px"><div class="tbl-qr-box"><div id="', qrid, '"></div></div></td>',
+      // 3) コード + 名称
+      '<td class="col-name">',
+        '<div class="fw-semibold">', escapeHtml(it.code), '</div>',
+        '<div class="small text-truncate"><a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">', escapeHtml(it.name || ''), '</a></div>',
+      '</td>',
+      // 4) 画像
+      '<td style="width:72px">', (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''), '</td>',
+      // 5) 価格
+      '<td class="td-num">¥', fmt(it.price), '</td>',
+      // 6) 在庫
+      '<td class="td-num">', fmt(stock), badge, '</td>',
+      // 7) 最小
+      '<td class="td-num">', fmt(min), '</td>',
+      // 8) 部門
+      '<td>', dept, '</td>',
+      // 9) 置場
+      '<td>', loc, '</td>',
+      // 10) 操作
+      '<td>',
+        '<div class="act-grid">',
+          '<button class="btn btn-sm btn-primary btn-edit"   title="編集"   data-code="', escapeAttr(it.code), '"><i class="bi bi-pencil-square"></i></button>',
+          '<button class="btn btn-sm btn-danger  btn-del"    title="削除"   data-code="', escapeAttr(it.code), '"><i class="bi bi-trash3"></i></button>',
+          '<button class="btn btn-sm btn-outline-success btn-dl"     title="ラベルDL" data-code="', escapeAttr(it.code), '"><i class="bi bi-download"></i></button>',
+          '<button class="btn btn-sm btn-outline-warning btn-lotqr"  title="Lot QR"  data-code="', escapeAttr(it.code), '"><i class="bi bi-qr-code"></i></button>',
+          '<button class="btn btn-sm btn-outline-secondary btn-preview" title="プレビュー" data-code="', escapeAttr(it.code), '"><i class="bi bi-search"></i></button>',
+        '</div>',
+      '</td>',
+    '</tr>'
+  ].join('');
+}
 
-    return [
-      '<tr data-code="', escapeAttr(it.code), '">',
-        '<td style="width:36px"><input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '"></td>',
-        '<td style="width:110px"><div class="tbl-qr-box"><div id="', qrid, '" class="d-inline-block"></div></div></td>',
-        '<td>',
-          '<div class="fw-semibold">', escapeHtml(it.code), '</div>',
-          '<div class="small text-truncate"><a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">', escapeHtml(it.name || ''), '</a></div>',
-        '</td>',
-        '<td>', (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''), '</td>',
-        '<td class="text-end">¥', fmt(it.price), '</td>',
-        '<td class="text-end">', fmt(stock), badge, '</td>',
-        '<td class="text-end">', fmt(min), '</td>',
-        '<td>', dept, '</td>',
-        '<td>', loc, '</td>',
-        '<td><div class="act-grid d-inline-flex" style="gap:.25rem">', actions, '</div></td>',
-      '</tr>'
-    ].join('');
-  }
 
   function ensureMobileActions(){
     if (window.matchMedia('(min-width:577px)').matches) return;
@@ -1535,20 +1546,46 @@
 
   // === Sinkron header/body lebar kolom (desktop) ===
   function ensureItemsColgroup(){
-    const tb = document.getElementById('tbl-items');
-    if(!tb) return;
-    const table = tb.closest('table');
-    if(!table) return;
+  const tb = document.getElementById('tbl-items');
+  if(!tb) return;
+  const table = tb.closest('table');
+  if(!table) return;
 
-    const isSmall = window.matchMedia('(max-width: 576px)').matches;
-    if (isSmall){
-      table.style.tableLayout = 'auto';
-      if (table.__colgroupPatched && table.querySelector('colgroup')) {
-        table.querySelector('colgroup').remove();
-        table.__colgroupPatched = false;
-      }
-      return;
-    }
+  const isSmall = window.matchMedia('(max-width: 576px)').matches;
+  if (isSmall){
+    table.style.tableLayout = 'auto';
+    const old = table.querySelector('colgroup');
+    if (old) old.remove();
+    table.__colgroupPatched = false;
+    return;
+  }
+
+  // sudah dipasang? skip
+  if (table.__colgroupPatched) return;
+
+  const cg = document.createElement('colgroup');
+  cg.innerHTML = `
+    <col style="width:36px">   <!-- checkbox -->
+    <col style="width:86px">   <!-- QR -->
+    <col style="width:280px">  <!-- コード/名称 -->
+    <col style="width:72px">   <!-- 画像 -->
+    <col style="width:110px">  <!-- 価格 -->
+    <col style="width:90px">   <!-- 在庫 -->
+    <col style="width:80px">   <!-- 最小 -->
+    <col style="width:120px">  <!-- 部門 -->
+    <col style="width:100px">  <!-- 置場 -->
+    <col style="width:220px">  <!-- 操作 -->
+  `;
+  table.insertBefore(cg, table.firstElementChild);
+  table.style.tableLayout = 'fixed';
+
+  // header terakhir diberi class untuk min-width CSS
+  const lastTh = table.querySelector('thead tr th:last-child');
+  if (lastTh) lastTh.classList.add('th-actions');
+
+  table.__colgroupPatched = true;
+}
+
 
     if (table.__colgroupPatched && table.querySelector('colgroup')) return;
     const cg = document.createElement('colgroup');
