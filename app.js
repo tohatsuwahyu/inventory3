@@ -1,4 +1,4 @@
-  /* =========================================================
+/* =========================================================
  * app.js — Inventory (GAS backend)
  * =======================================================*/
 (function () {
@@ -131,14 +131,14 @@
   });
 
   // === PATCH: print semua label (A4 panjang, 1 label per "halaman") ===
- function bindPrintAllLabels(){
-  const btn =
-    document.getElementById('btn-items-print-all') ||              
-    document.getElementById('btn-print-all-labels') ||
-    document.querySelector('[data-action="print-all-labels"]') ||
-    Array.from(document.querySelectorAll('#view-items .items-toolbar button, #view-items .items-toolbar .btn'))
-         .find(b => /全件ラベルを印刷/.test((b.textContent||'').trim()));
-  if (!btn) return;
+  function bindPrintAllLabels(){
+    const btn =
+      document.getElementById('btn-items-print-all') ||
+      document.getElementById('btn-print-all-labels') ||
+      document.querySelector('[data-action="print-all-labels"]') ||
+      Array.from(document.querySelectorAll('#view-items .items-toolbar button, #view-items .items-toolbar .btn'))
+           .find(b => /全件ラベルを印刷/.test((b.textContent||'').trim()));
+    if (!btn) return;
 
     btn.addEventListener('click', async ()=>{
       try{
@@ -330,94 +330,87 @@
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
 
-  
-function tplItemRow(it){
-  const qrid  = `qr-${safeId(it.code)}`;
-  const stock = Number(it.stock || 0);
-  const min   = Number(it.min   || 0);
+  function tplItemRow(it){
+    const qrid  = `qr-${safeId(it.code)}`;
+    const stock = Number(it.stock || 0);
+    const min   = Number(it.min   || 0);
 
-  const badge =
-    (stock <= 0) ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
-    (stock <= min) ? '<span class="badge bg-danger ms-1">要補充</span>' :
-    '<span class="badge bg-success ms-1">OK</span>';
+    const badge =
+      (stock <= 0) ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
+      (stock <= min) ? '<span class="badge bg-danger ms-1">要補充</span>' :
+      '<span class="badge bg-success ms-1">OK</span>';
 
-  const dept = it.department
-    ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>` : '';
-  const loc  = it.location
-    ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>` : '';
+    const dept = it.department
+      ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>` : '';
+    const loc  = it.location
+      ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>` : '';
 
-  const actions = [
-    `<button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil-square"></i></button>`,
-    `<button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash3"></i></button>`,
-    `<button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>`,
-    `<button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>`,
-    `<button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>`
-  ].join('');
+    const actions = [
+      `<button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil-square"></i></button>`,
+      `<button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash3"></i></button>`,
+      `<button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>`,
+      `<button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>`,
+      `<button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>`
+    ].join('');
 
-  return [
-    '<tr data-code="', escapeAttr(it.code), '">',
-      '<td style="width:36px"><input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '"></td>',
-      '<td style="width:110px"><div class="tbl-qr-box"><div id="', qrid, '" class="d-inline-block"></div></div></td>',
-      '<td>', escapeHtml(it.code), '</td>',
-      '<td class="td-name"><a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">', escapeHtml(it.name), '</a></td>',
-      '<td>', (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''), '</td>',
-      '<td class="text-end">¥', fmt(it.price), '</td>',
-      '<td class="text-end">', fmt(stock), badge, '</td>',
-      '<td class="text-end">', fmt(min), '</td>',
-      '<td>', dept, '</td>',
-      '<td>', loc, '</td>',
-      '<td><div class="act-grid" style="display:grid;grid-auto-flow:column;gap:.25rem;place-content:center">', actions, '</div></td>',
-    '</tr>'
-  ].join('');
-}
-// === Mobile mini "操作" button renderer (HP only) ===
-function ensureMobileActions(){
-  // Hanya untuk HP
-  if (window.matchMedia('(min-width:577px)').matches) return;
+    return [
+      '<tr data-code="', escapeAttr(it.code), '">',
+        '<td style="width:36px"><input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '"></td>',
+        '<td style="width:110px"><div class="tbl-qr-box"><div id="', qrid, '" class="d-inline-block"></div></div></td>',
+        '<td>', escapeHtml(it.code), '</td>',
+        '<td class="td-name"><a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">', escapeHtml(it.name), '</a></td>',
+        '<td>', (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''), '</td>',
+        '<td class="text-end">¥', fmt(it.price), '</td>',
+        '<td class="text-end">', fmt(stock), badge, '</td>',
+        '<td class="text-end">', fmt(min), '</td>',
+        '<td>', dept, '</td>',
+        '<td>', loc, '</td>',
+        '<td><div class="act-grid" style="display:grid;grid-auto-flow:column;gap:.25rem;place-content:center">', actions, '</div></td>',
+      '</tr>'
+    ].join('');
+  }
 
-  document.querySelectorAll('#tbl-items tr[data-code]').forEach(tr=>{
-    // idempotent: jangan dobel
-    if (tr.querySelector('.mobile-ops')) return;
+  // === Mobile mini "操作" button renderer (HP only) ===
+  function ensureMobileActions(){
+    if (window.matchMedia('(min-width:577px)').matches) return;
 
-    const firstCell = tr.querySelector('td');               if (!firstCell) return;
-    const opsCell   = tr.querySelector('td:last-child');    if (!opsCell) return;
-    const opsGroup  = opsCell.querySelector('.row-actions, .btn-group, .act-grid') || opsCell;
+    document.querySelectorAll('#tbl-items tr[data-code]').forEach(tr=>{
+      if (tr.querySelector('.mobile-ops')) return;
 
-    // Tombol kecil di sel pertama
-    const wrap = document.createElement('div');
-    wrap.className = 'mobile-ops d-inline-block ms-1';
-    wrap.innerHTML = '<button type="button" class="btn btn-sm btn-primary">操作</button>';
+      const firstCell = tr.querySelector('td'); if (!firstCell) return;
+      const opsCell   = tr.querySelector('td:last-child'); if (!opsCell) return;
+      const opsGroup  = opsCell.querySelector('.row-actions, .btn-group, .act-grid') || opsCell;
 
-    // Toggle menu aksi (ditampilkan di kanan sebagai popover sederhana)
-    const btn = wrap.querySelector('button');
-    btn.addEventListener('click', ()=>{
-      const open = opsGroup.classList.toggle('show');
-      if (open){
-        // gaya ringan biar muncul seperti popover
-        opsGroup.style.position   = 'absolute';
-        opsGroup.style.right      = '8px';
-        opsGroup.style.top        = '50%';
-        opsGroup.style.transform  = 'translateY(-50%)';
-        opsGroup.style.background = '#fff';
-        opsGroup.style.padding    = '6px';
-        opsGroup.style.border     = '1px solid var(--bs-border-color)';
-        opsGroup.style.borderRadius = '.5rem';
-        opsGroup.style.boxShadow  = '0 8px 26px rgba(15,23,42,.06)';
-        opsGroup.style.zIndex     = '5';
-        opsGroup.classList.add('d-inline-flex');
-        opsGroup.style.gap = '.25rem';
-      }else{
-        // kembalikan gaya default
-        opsGroup.removeAttribute('style');
-        opsGroup.classList.add('d-inline-flex');
-      }
+      const wrap = document.createElement('div');
+      wrap.className = 'mobile-ops d-inline-block ms-1';
+      wrap.innerHTML = '<button type="button" class="btn btn-sm btn-primary">操作</button>';
+
+      const btn = wrap.querySelector('button');
+      btn.addEventListener('click', ()=>{
+        const open = opsGroup.classList.toggle('show');
+        if (open){
+          opsGroup.style.position   = 'absolute';
+          opsGroup.style.right      = '8px';
+          opsGroup.style.top        = '50%';
+          opsGroup.style.transform  = 'translateY(-50%)';
+          opsGroup.style.background = '#fff';
+          opsGroup.style.padding    = '6px';
+          opsGroup.style.border     = '1px solid var(--bs-border-color)';
+          opsGroup.style.borderRadius = '.5rem';
+          opsGroup.style.boxShadow  = '0 8px 26px rgba(15,23,42,.06)';
+          opsGroup.style.zIndex     = '5';
+          opsGroup.classList.add('d-inline-flex');
+          opsGroup.style.gap = '.25rem';
+        }else{
+          opsGroup.removeAttribute('style');
+          opsGroup.classList.add('d-inline-flex');
+        }
+      });
+
+      firstCell.style.position = 'relative';
+      firstCell.appendChild(wrap);
     });
-
-    // supaya popover bisa menempel rapih
-    firstCell.style.position = 'relative';
-    firstCell.appendChild(wrap);
-  });
-}
+  }
 
   async function renderItems(){
     const tbody = $("#tbl-items");
@@ -433,12 +426,12 @@ function ensureMobileActions(){
       let page = 0, size = 100;
       function renderPage(){
         const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
-       if (page === 0) {
-  tbody.innerHTML = slice.map(tplItemRow).join("");
-  ensureItemsColgroup();
-} else {
-  tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
-}
+        if (page === 0) {
+          tbody.innerHTML = slice.map(tplItemRow).join("");
+          ensureItemsColgroup();
+        } else {
+          tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
+        }
 
         page++;
 
@@ -501,12 +494,11 @@ function ensureMobileActions(){
         openLotQRModal(item);
         return;
       }
-     if (btn.classList.contains("btn-preview")) {
-  if (!item) return;
-  showItemPreview(item);
-  return;
-}
-
+      if (btn.classList.contains("btn-preview")) {
+        if (!item) return;
+        showItemPreview(item);
+        return;
+      }
     });
 
     // simetrikan header kolom terakhir (「操作」)
@@ -515,7 +507,6 @@ function ensureMobileActions(){
       if (th) th.style.minWidth = "220px";
     }catch{}
     try { bindPreviewButtons(); } catch(e) {}
-
   }
 
   // === render QR di tiap baris items ===
@@ -955,10 +946,9 @@ function ensureMobileActions(){
           if (parsed.kind === "item") {
             const code = parsed.code;
             $("#io-code").value = code;
-await findItemIntoIO(code);
-// Tidak ada confirm di 入出荷. User isi qty → klik 登録.
-return;
-
+            await findItemIntoIO(code);
+            // Tidak ada confirm di 入出荷. User isi qty → klik 登録.
+            return;
           }
 
           if (parsed.kind === "lot") {
@@ -971,32 +961,24 @@ return;
             const who  = getCurrentUser();
             if (!who) return toast("ログイン情報がありません。");
 
-           try {
-  const r = await api("log", { method: "POST", body: {
-    userId: who.id, code, qty: Number(qty || 0), unit, type,
-    note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
-  }});
-  if (r?.ok) {
-    const msgType = (type === "IN") ? "入庫" : "出庫";
-    toast(`${msgType}として登録しました（${code} × ${qty} ${unit} / ${lot || 'LOT' }）`);
-    $("#io-qty").value = "";
-    await findItemIntoIO(code);
-    renderDashboard();
-  } else {
-    toast(r?.error || "登録失敗");
-  }
-} catch(e){ toast("登録失敗: " + (e?.message || e)); }
-return;
-
-                  $("#io-qty").value = "";
-                  await findItemIntoIO(code);
-                  renderDashboard();
-                } else {
-                  toast(r?.error || "登録失敗");
-                }
-              } catch(e){ toast("登録失敗: " + (e?.message || e)); }
+            try {
+              const r = await api("log", { method: "POST", body: {
+                userId: who.id, code, qty: Number(qty || 0), unit, type,
+                note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
+              }});
+              if (r?.ok) {
+                const msgType = (type === "IN") ? "入庫" : "出庫";
+                toast(`${msgType}として登録しました（${code} × ${qty} ${unit} / ${lot || 'LOT'}）`);
+                $("#io-qty").value = "";
+                await findItemIntoIO(code);
+                renderDashboard();
+              } else {
+                toast(r?.error || "登録失敗");
+              }
+            } catch(e){
+              toast("登録失敗: " + (e?.message || e));
             }
-            return;
+            return; // <— selesai; tidak ada kode sisa setelah ini
           }
         });
       } catch (e) { toast(e?.message || String(e)); }
@@ -1020,15 +1002,13 @@ return;
       const unit = $("#io-unit").value, type = $("#io-type").value;
       try {
         const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
-       if (r?.ok) {
-  const msgType = (type === "IN") ? "入庫" : "出庫";
-  toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
-  $("#io-qty").value = "";
-  await findItemIntoIO(code);
-  renderDashboard();
-}
-
-        else toast(r?.error || "登録失敗");
+        if (r?.ok) {
+          const msgType = (type === "IN") ? "入庫" : "出庫";
+          toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
+          $("#io-qty").value = "";
+          await findItemIntoIO(code);
+          renderDashboard();
+        } else toast(r?.error || "登録失敗");
       } catch (e2) { toast("登録失敗: " + (e2?.message || e2)); }
     });
   }
@@ -1534,58 +1514,52 @@ return;
       downloadCSV_JP("履歴.csv", csv);
     } catch (e) { alert("エクスポート失敗"); }
   });
-// === Fix lebar kolom: sejajarkan dengan header ==================
-// === Fix lebar kolom: sejajarkan dengan header (tanpa memaksa di HP) ===
-function ensureItemsColgroup(){
-  const tb = document.getElementById('tbl-items');
-  if(!tb) return;
-  const table = tb.closest('table');
-  if(!table) return;
 
-  const isSmall = window.matchMedia('(max-width: 576px)').matches;
+  // === Fix lebar kolom: sejajarkan dengan header ==================
+  function ensureItemsColgroup(){
+    const tb = document.getElementById('tbl-items');
+    if(!tb) return;
+    const table = tb.closest('table');
+    if(!table) return;
 
-  // Di HP kecil: jangan pakai fixed table-layout & colgroup — biar CSS responsif bekerja
-  if (isSmall){
-    table.style.tableLayout = 'auto';
-    // Lepas colgroup bila pernah dipasang
-    if (table.__colgroupPatched && table.querySelector('colgroup')) {
-      table.querySelector('colgroup').remove();
-      table.__colgroupPatched = false;
+    const isSmall = window.matchMedia('(max-width: 576px)').matches;
+
+    if (isSmall){
+      table.style.tableLayout = 'auto';
+      if (table.__colgroupPatched && table.querySelector('colgroup')) {
+        table.querySelector('colgroup').remove();
+        table.__colgroupPatched = false;
+      }
+      return;
     }
-    return;
+
+    if (table.__colgroupPatched) return;
+    const cg = document.createElement('colgroup');
+    cg.innerHTML = `
+      <col style="width:36px">
+      <col style="width:110px">
+      <col style="width:160px">
+      <col>
+      <col style="width:72px">
+      <col style="width:110px">
+      <col style="width:80px">
+      <col style="width:80px">
+      <col style="width:100px">
+      <col style="width:90px">
+      <col style="width:220px">
+    `;
+    table.insertBefore(cg, table.firstElementChild);
+    table.style.tableLayout = 'fixed';
+    table.__colgroupPatched = true;
   }
 
-  // Desktop/tablet: pasang colgroup sekali saja
-  if (table.__colgroupPatched) return;
-  const cg = document.createElement('colgroup');
-  cg.innerHTML = `
-    <col style="width:36px">
-    <col style="width:110px">
-    <col style="width:160px">
-    <col> <!-- nama fleksibel -->
-    <col style="width:72px">
-    <col style="width:110px">
-    <col style="width:80px">
-    <col style="width:80px">
-    <col style="width:100px">
-    <col style="width:90px">
-    <col style="width:220px">
-  `;
-  table.insertBefore(cg, table.firstElementChild);
-  table.style.tableLayout = 'fixed';
-  table.__colgroupPatched = true;
-}
-
-// Respons ke perubahan ukuran layar
-window.addEventListener('resize', () => {
-  const tb = document.getElementById('tbl-items');
-  if (!tb) return;
-  // Paksa evaluasi ulang
-  const table = tb.closest('table');
-  if (table) { table.__colgroupPatched = false; }
-  ensureItemsColgroup();
-});
-
+  window.addEventListener('resize', () => {
+    const tb = document.getElementById('tbl-items');
+    if (!tb) return;
+    const table = tb.closest('table');
+    if (table) { table.__colgroupPatched = false; }
+    ensureItemsColgroup();
+  });
 
   /* -------------------- Tanaoroshi List (menu baru) -------------------- */
   const JP_TANA_MAP = {
@@ -1993,18 +1967,17 @@ window.addEventListener('resize', () => {
     bindPrintAllLabels();
     $("#btn-logout")?.addEventListener("click", logout);
 
-    // Preload QR lib supaya Lot QR langsung tampil
-   // Preload QR lib & aktifkan Preview
-ensureQRCode()
-  .catch(()=>{})                // QR lib gagal? nggak apa-apa (Preview tetap jalan tanpa QR box)
-  .finally(()=>{ try{ bindPreviewButtons(); }catch(e){} });
+    // Preload QR lib & aktifkan Preview
+    ensureQRCode()
+      .catch(()=>{})
+      .finally(()=>{ try{ bindPreviewButtons(); }catch(e){} });
 
     startLiveReload();
   });
 
 })();
 
-
+/* -------------------- Preview Modal & Preview helpers -------------------- */
 
 function ensurePreviewModal(){
   if(document.getElementById('preview-modal')) return;
@@ -2054,12 +2027,12 @@ function ensurePreviewModal(){
   </div>`;
   document.body.appendChild(wrap);
 }
+
 // === 商品プレビュー（情報 + QR + tombol di modal） ===
 function showItemPreview(item){
   try{
     ensurePreviewModal();
 
-    // normalisasi data yang dibutuhkan
     const d = {
       code: String(item?.code||'').trim(),
       name: String(item?.name||'').trim(),
@@ -2071,7 +2044,6 @@ function showItemPreview(item){
       img  : item?.img||''
     };
 
-    // isi teks
     $('#pv-code').textContent  = d.code || '-';
     $('#pv-name').textContent  = d.name || '(名称未設定)';
     $('#pv-dept').textContent  = d.dept || '-';
@@ -2080,17 +2052,14 @@ function showItemPreview(item){
     $('#pv-stock').textContent = String(d.stock);
     $('#pv-min').textContent   = String(d.min);
 
-    // badge stok
     const st = $('#pv-status'); st.className = 'badge';
     if (d.stock <= 0) { st.classList.add('bg-secondary'); st.textContent = '在庫ゼロ'; }
     else if (d.stock <= d.min) { st.classList.add('bg-danger'); st.textContent = '要補充'; }
     else { st.classList.add('bg-success'); st.textContent = '十分'; }
 
-    // gambar produk (bukan label)
     const pvImg = $('#pv-img');
     if (d.img) { pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
 
-    // QR sesuai ukuran label
     const qrBox = $('#pv-qr'); qrBox.innerHTML = '';
     (async ()=>{
       try{
@@ -2100,11 +2069,10 @@ function showItemPreview(item){
       }catch{ qrBox.textContent = d.code || '(QR)'; }
     })();
 
-    // wiring tombol
     $('#pv-edit').onclick  = ()=> { try{ openEditItem(d.code); }catch(e){ alert('編集を開けませんでした'); } };
     $('#pv-print').onclick = async ()=>{
       try{
-        const url = await makeItemLabelDataURL(item);        // label 1 item
+        const url = await makeItemLabelDataURL(item);
         const w = window.open('', '_blank', 'width=900,height=700');
         if(!w){ alert('ポップアップがブロックされました。'); return; }
         w.document.write('<meta charset="utf-8"><title>ラベル印刷</title>');
@@ -2114,7 +2082,6 @@ function showItemPreview(item){
       }catch(e){ alert('ラベル生成に失敗しました'); }
     };
 
-    // tampilkan modal
     const modalEl = document.getElementById('preview-modal');
     if (window.bootstrap?.Modal) bootstrap.Modal.getOrCreateInstance(modalEl).show();
     else modalEl.style.display='block';
@@ -2128,7 +2095,7 @@ function showItemPreview(item){
 // === OPEN IMAGE PREVIEW (untuk dataURL dari Lot/箱 QR) ===
 function openPreview(url){
   try{
-    ensurePreviewModal(); // pastikan modal ada
+    ensurePreviewModal();
     const modalEl = document.getElementById('preview-modal');
     const imgEl   = modalEl.querySelector('#pv-img');
     const qrBox   = modalEl.querySelector('#pv-qr');
@@ -2140,7 +2107,6 @@ function openPreview(url){
     const stockEl = modalEl.querySelector('#pv-stock');
     const minEl   = modalEl.querySelector('#pv-min');
 
-    // Reset konten info (karena ini preview gambar mandiri, bukan item row)
     if (nameEl)  nameEl.textContent  = '';
     if (codeEl)  codeEl.textContent  = '';
     if (deptEl)  deptEl.textContent  = '';
@@ -2149,16 +2115,13 @@ function openPreview(url){
     if (stockEl) stockEl.textContent = '';
     if (minEl)   minEl.textContent   = '';
 
-    // Kosongkan kotak QR kecil di modal preview (kita pakai gambar jadi)
     if (qrBox) qrBox.innerHTML = '';
 
-    // Tampilkan gambar hasil makeLotLabelDataURL()
     if (imgEl){
       imgEl.src = url || '';
       imgEl.style.display = url ? 'block' : 'none';
     }
 
-    // Munculkan modal
     let modal;
     if (window.bootstrap && window.bootstrap.Modal){
       modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -2172,9 +2135,7 @@ function openPreview(url){
   }
 }
 
-
-
-
+// ===== Fixed clean version: bindPreviewButtons (no nested listeners) =====
 function extractRowData(tr){
   const get = (sel)=> tr.querySelector(sel);
   const code = tr.getAttribute('data-code') || (get('td:nth-child(3)')?.textContent||'').trim();
@@ -2188,99 +2149,40 @@ function extractRowData(tr){
   return { code, name, img: imgEl?.getAttribute('src')||'', price, stock, min, dept, loc };
 }
 
-
-
-
 function bindPreviewButtons(){
   const tbl = document.getElementById('tbl-items');
   if(!tbl) return;
   ensurePreviewModal();
 
+  // Klik tombol プレビュー
   tbl.addEventListener('click', (ev)=>{
-    const btn = ev.target.closest('.btn-preview');  // Tambah: klik pada nama item juga membuka Preview yang sama
+    const btn = ev.target.closest('.btn-preview');
+    if(!btn) return;
+    ev.preventDefault();
+    const tr = btn.closest('tr');
+    const code = tr?.getAttribute('data-code') || '';
+    const item = _ITEMS_CACHE.find(x => String(x.code) === String(code)) || extractRowData(tr);
+    showItemPreview(item);
+  });
+
+  // Klik nama item → trigger プレビュー
   tbl.addEventListener('click', (ev)=>{
     const a = ev.target.closest('.link-item');
     if(!a) return;
     ev.preventDefault();
     const tr = a.closest('tr');
-    const fakeBtn = tr?.querySelector('.btn-preview');
-    if (fakeBtn) fakeBtn.click();
+    tr?.querySelector('.btn-preview')?.click();
   });
 
-  // (Opsional) jika kamu punya hasil "detail search" lain:
+  // Alias lain
   tbl.addEventListener('click', (ev)=>{
     const btn = ev.target.closest('[data-action="detail"], [data-role="preview"]');
     if(!btn) return;
     ev.preventDefault();
     const tr = btn.closest('tr');
-    const fake = tr?.querySelector('.btn-preview');
-    if (fake) fake.click();
-  });
-
-    if(!btn) return;
-    ev.preventDefault();
-
-    const tr = btn.closest('tr');
-    const d = extractRowData(tr);
-
-    document.getElementById('pv-code').textContent  = d.code || '-';
-    document.getElementById('pv-name').textContent  = d.name || '(名称未設定)';
-    document.getElementById('pv-dept').textContent  = d.dept || '-';
-    document.getElementById('pv-loc').textContent   = d.loc  || '-';
-    document.getElementById('pv-price').textContent = d.price || '¥0';
-    document.getElementById('pv-stock').textContent = String(d.stock);
-    document.getElementById('pv-min').textContent   = String(d.min);
-
-    const st = document.getElementById('pv-status');
-    st.className = 'badge';
-    if(d.stock <= 0){
-      st.classList.add('bg-secondary'); st.textContent = '在庫ゼロ';
-    }else if(d.stock <= d.min){
-      st.classList.add('bg-danger'); st.textContent = '要補充';
-    }else{
-      st.classList.add('bg-success'); st.textContent = '十分';
-    }
-
-    const pvImg = document.getElementById('pv-img');
-    if(d.img){ pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
-
-// --- QR di modal preview: pakai dataURL agar selalu muncul ---
-const qrBox = document.getElementById('pv-qr');
-qrBox.innerHTML = '';
-(async () => {
-  try {
-    const code = (d.code || '').trim();
-    const url  = await generateQrDataUrl(`ITEM|${code}`, 128); // ukurannya konsisten dengan label
-    if (url) {
-      const im = new Image();
-      im.src = url; im.width = 128; im.height = 128; im.alt = code;
-      qrBox.appendChild(im);
-    } else {
-      qrBox.textContent = code || '(QR)';
-    }
-  } catch {
-    qrBox.textContent = d.code || '(QR)';
-  }
-})();
-
-    const toEdit = document.getElementById('pv-edit');
-    const toPrint = document.getElementById('pv-print');
-    toEdit.onclick = ()=> document.querySelector(`.btn-edit[data-code="${CSS.escape(d.code)}"]`)?.click();
-    toPrint.onclick = ()=> document.querySelector('#btn-print-all, #btnPrintAll')?.click();
-
-    const modalEl = document.getElementById('preview-modal');
-    let modal;
-    if (window.bootstrap && window.bootstrap.Modal){
-      modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-      modal.show();
-    }else{
-      // fallback simple show/hide
-      modalEl.style.display='block';
-    }
+    tr?.querySelector('.btn-preview')?.click();
   });
 }
-
-
 
 document.addEventListener('click',(e)=>{
   const a = e.target.closest('.js-filter'); if(!a) return;
@@ -2296,4 +2198,3 @@ document.addEventListener('click',(e)=>{
     tr.style.display = show ? '' : 'none';
   });
 });
-
