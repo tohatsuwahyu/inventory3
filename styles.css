@@ -525,4 +525,13 @@ td[data-editable]{ cursor:text; }
     white-space: normal;
   }
 }
+/* ===== 入出庫: highlight field manual ===== */
+.manual-required input#io-qty:not(.from-qr),
+.manual-required select#io-type:not(.from-qr){
+  outline: 2px solid #f59e0b;              /* amber */
+  box-shadow: 0 0 0 4px rgba(245,158,11,.15);
+}
+.manual-required .form-label::after{
+  content:" *"; color:#f59e0b; font-weight:700;
+}
 
