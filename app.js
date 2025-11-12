@@ -996,21 +996,42 @@
     });
 
     $("#form-io")?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const who = getCurrentUser(); if (!who) return toast("ログイン情報がありません。");
-      const code = $("#io-code").value, qty = Number($("#io-qty").value || 0);
-      const unit = $("#io-unit").value, type = $("#io-type").value;
-      try {
-        const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
-        if (r?.ok) {
-          const msgType = (type === "IN") ? "入庫" : "出庫";
-          toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
-          $("#io-qty").value = "";
-          await findItemIntoIO(code);
-          renderDashboard();
-        } else toast(r?.error || "登録失敗");
-      } catch (e2) { toast("登録失敗: " + (e2?.message || e2)); }
-    });
+  e.preventDefault();
+
+  const who = getCurrentUser();
+  if (!who) return toast("ログイン情報がありません。");
+
+  const code = ($("#io-code").value || "").trim();
+  const qty  = Number($("#io-qty").value || 0);
+  const unit = $("#io-unit").value || "pcs";
+  const type = $("#io-type").value || "IN";
+
+  if (!code) return toast("コードを入力またはスキャンしてください。");
+  if (!Number.isFinite(qty) || qty <= 0) return toast("数量を入力してください。");
+
+  // anti double submit
+  const btn = $("#form-io button[type=submit]") || $("#btn-io-submit");
+  if (btn?.__busy) return;
+  if (btn) { btn.__busy = true; btn.disabled = true; }
+
+  try {
+    const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
+    if (r?.ok) {
+      const msgType = (type === "IN") ? "入庫" : "出庫";
+      toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
+      $("#io-qty").value = "";
+      await findItemIntoIO(code);
+      renderDashboard();
+    } else {
+      toast(r?.error || "登録失敗");
+    }
+  } catch (err) {
+    toast("登録失敗: " + (err?.message || err));
+  } finally {
+    if (btn) { btn.disabled = false; btn.__busy = false; }
+  }
+});
+
   }
 
   async function startBackCameraScan(mountId, onScan, boxSize) {
