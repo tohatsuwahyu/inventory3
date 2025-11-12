@@ -2345,6 +2345,30 @@ function bindPreviewButtons(){
     tr?.querySelector('.btn-preview')?.click();
   });
 }
+// === Image Preview (dipakai tombol Preview item & LOT) ===
+function openPreview(url){
+  try{
+    const w = window.open('', '_blank', 'width=980,height=680');
+    if(!w){ alert('ポップアップがブロックされました。'); return; }
+    w.document.write(`
+      <meta charset="utf-8">
+      <title>プレビュー</title>
+      <style>
+        html,body{height:100%;margin:0}
+        body{display:flex;align-items:center;justify-content:center;background:#111}
+        img{max-width:100%;max-height:100%;display:block}
+        .bar{position:fixed;top:10px;right:10px}
+        .bar button{padding:8px 12px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer}
+      </style>
+      <div class="bar"><button onclick="print()">印刷</button></div>
+      <img src="${url}" alt="preview">
+    `);
+    w.document.close();
+    w.focus();
+  }catch(e){
+    alert('プレビューを開けませんでした。');
+  }
+}
 
 document.addEventListener('click',(e)=>{
   const a = e.target.closest('.js-filter'); if(!a) return;
