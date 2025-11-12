@@ -1,5 +1,5 @@
 /* =========================================================
- * app.js — Inventory (GAS backend) — FIXED 2025-11
+ * app.js — Inventory (GAS backend)
  * =======================================================*/
 (function () {
   "use strict";
@@ -16,7 +16,7 @@
   function escapeHtml(s){ return String(s || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
   function escapeAttr(s){ return escapeHtml(s); }
 
-  // CSV helper
+  // CSV helper: paksa Excel baca UTF-8 + JP header OK
   function downloadCSV_JP(filename, csv){
     const bom = "\uFEFF";
     const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
@@ -102,7 +102,7 @@
   function logout() { setCurrentUser(null); location.href = "index.html"; }
   function isAdmin() { return (getCurrentUser()?.role || "user").toLowerCase() === "admin"; }
 
-  // User hydrator
+  // --- User hydrator & sync ---
   function readCookie(name){
     const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g,'\\$1') + '=([^;]*)'));
     try { return m ? decodeURIComponent(m[1]) : null; } catch (e) { return null; }
@@ -130,7 +130,7 @@
     if (e.key === "currentUser") { updateWelcomeBanner(); }
   });
 
-  // Print Semua Label
+  // === PATCH: print semua label (A4 panjang, 1 label per "halaman") ===
   function bindPrintAllLabels(){
     const btn =
       document.getElementById('btn-items-print-all') ||
@@ -275,7 +275,7 @@
     }
   }
 
-  // Welcome
+  // --- GANTI fungsi lama updateWelcomeBanner ---
   function updateWelcomeBanner() {
     const who = getCurrentUser();
     const nama = who?.name || who?.id || "ユーザー";
@@ -297,10 +297,11 @@
     }
   }
 
-  // Live reload
+  // === Live reload (user-configurable) ===
   const LIVE_KEY = "liveRefreshSec";
   let LIVE_TIMER = null;
   let LIVE_SEC = Number(localStorage.getItem(LIVE_KEY) || "120");
+
   function setLiveRefresh(seconds){
     LIVE_SEC = Math.max(0, Number(seconds || 0));
     localStorage.setItem(LIVE_KEY, String(LIVE_SEC));
@@ -323,68 +324,67 @@
   }
 
   /* -------------------- Items -------------------- */
+  // ukuran tetap untuk tombol agar “操作” simetris
+  const ACT_GRID_STYLE = 'display:grid;grid-template-columns:repeat(5,32px);gap:8px;min-width:200px;justify-content:end;';
 
- function tplItemRow(it){
-  const qrid  = `qr-${safeId(it.code)}`;
-  const stock = Number(it.stock || 0);
-  const min   = Number(it.min   || 0);
+  // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
+  async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
 
-  const badge =
-    (stock <= 0) ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
-    (stock <= min) ? '<span class="badge bg-danger ms-1">要補充</span>' :
-    '<span class="badge bg-success ms-1">OK</span>';
+  function tplItemRow(it){
+    const qrid  = `qr-${safeId(it.code)}`;
+    const stock = Number(it.stock || 0);
+    const min   = Number(it.min   || 0);
 
-  const dept = it.department ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>` : '';
-  const loc  = it.location   ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>` : '';
+    const badge =
+      (stock <= 0) ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
+      (stock <= min) ? '<span class="badge bg-danger ms-1">要補充</span>' :
+      '<span class="badge bg-success ms-1">OK</span>';
 
-  return [
-    '<tr data-code="', escapeAttr(it.code), '">',
-      // 1) checkbox
-      '<td style="width:36px"><input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '"></td>',
-      // 2) QR
-      '<td style="width:86px"><div class="tbl-qr-box"><div id="', qrid, '"></div></div></td>',
-      // 3) コード + 名称
-      '<td class="col-name">',
-        '<div class="fw-semibold">', escapeHtml(it.code), '</div>',
-        '<div class="small text-truncate"><a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">', escapeHtml(it.name || ''), '</a></div>',
-      '</td>',
-      // 4) 画像
-      '<td style="width:72px">', (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''), '</td>',
-      // 5) 価格
-      '<td class="td-num">¥', fmt(it.price), '</td>',
-      // 6) 在庫
-      '<td class="td-num">', fmt(stock), badge, '</td>',
-      // 7) 最小
-      '<td class="td-num">', fmt(min), '</td>',
-      // 8) 部門
-      '<td>', dept, '</td>',
-      // 9) 置場
-      '<td>', loc, '</td>',
-      // 10) 操作
-      '<td>',
-        '<div class="act-grid">',
-          '<button class="btn btn-sm btn-primary btn-edit"   title="編集"   data-code="', escapeAttr(it.code), '"><i class="bi bi-pencil-square"></i></button>',
-          '<button class="btn btn-sm btn-danger  btn-del"    title="削除"   data-code="', escapeAttr(it.code), '"><i class="bi bi-trash3"></i></button>',
-          '<button class="btn btn-sm btn-outline-success btn-dl"     title="ラベルDL" data-code="', escapeAttr(it.code), '"><i class="bi bi-download"></i></button>',
-          '<button class="btn btn-sm btn-outline-warning btn-lotqr"  title="Lot QR"  data-code="', escapeAttr(it.code), '"><i class="bi bi-qr-code"></i></button>',
-          '<button class="btn btn-sm btn-outline-secondary btn-preview" title="プレビュー" data-code="', escapeAttr(it.code), '"><i class="bi bi-search"></i></button>',
-        '</div>',
-      '</td>',
-    '</tr>'
-  ].join('');
-}
+    const dept = it.department
+      ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>` : '';
+    const loc  = it.location
+      ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>` : '';
 
+    const actions = [
+      `<button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil-square"></i></button>`,
+      `<button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash3"></i></button>`,
+      `<button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>`,
+      `<button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>`,
+      `<button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>`
+    ].join('');
 
+    return [
+      '<tr data-code="', escapeAttr(it.code), '">',
+        '<td style="width:36px"><input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '"></td>',
+        '<td style="width:110px"><div class="tbl-qr-box"><div id="', qrid, '" class="d-inline-block"></div></div></td>',
+        '<td>', escapeHtml(it.code), '</td>',
+        '<td class="td-name"><a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">', escapeHtml(it.name), '</a></td>',
+        '<td>', (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''), '</td>',
+        '<td class="text-end">¥', fmt(it.price), '</td>',
+        '<td class="text-end">', fmt(stock), badge, '</td>',
+        '<td class="text-end">', fmt(min), '</td>',
+        '<td>', dept, '</td>',
+        '<td>', loc, '</td>',
+        '<td><div class="act-grid" style="display:grid;grid-auto-flow:column;gap:.25rem;place-content:center">', actions, '</div></td>',
+      '</tr>'
+    ].join('');
+  }
+
+  // === Mobile mini "操作" button renderer (HP only) ===
   function ensureMobileActions(){
     if (window.matchMedia('(min-width:577px)').matches) return;
+
     document.querySelectorAll('#tbl-items tr[data-code]').forEach(tr=>{
       if (tr.querySelector('.mobile-ops')) return;
+
       const firstCell = tr.querySelector('td'); if (!firstCell) return;
       const opsCell   = tr.querySelector('td:last-child'); if (!opsCell) return;
       const opsGroup  = opsCell.querySelector('.row-actions, .btn-group, .act-grid') || opsCell;
+
       const wrap = document.createElement('div');
       wrap.className = 'mobile-ops d-inline-block ms-1';
       wrap.innerHTML = '<button type="button" class="btn btn-sm btn-primary">操作</button>';
+
       const btn = wrap.querySelector('button');
       btn.addEventListener('click', ()=>{
         const open = opsGroup.classList.toggle('show');
@@ -406,6 +406,7 @@
           opsGroup.classList.add('d-inline-flex');
         }
       });
+
       firstCell.style.position = 'relative';
       firstCell.appendChild(wrap);
     });
@@ -413,6 +414,7 @@
 
   async function renderItems(){
     const tbody = $("#tbl-items");
+
     if (CONFIG.FEATURES && CONFIG.FEATURES.SKELETON) {
       tbody.innerHTML = '<tr><td colspan="10"><div class="skel" style="height:120px"></div></td></tr>';
     }
@@ -430,6 +432,7 @@
         } else {
           tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
         }
+
         page++;
 
         // highlight low-stock
@@ -463,7 +466,7 @@
       toast("商品一覧の読み込みに失敗しました。");
     }
 
-    // 操作
+    // === Event delegation untuk kolom 「操作」
     tbody?.addEventListener("click", async (ev)=>{
       const btn = ev.target.closest("button"); if(!btn) return;
       const code = btn.getAttribute("data-code"); if(!code) return;
@@ -498,7 +501,7 @@
       }
     });
 
-    // header kolom terakhir
+    // simetrikan header kolom terakhir (「操作」)
     try{
       const th = tbody?.closest("table")?.querySelector("thead tr th:last-child");
       if (th) th.style.minWidth = "220px";
@@ -506,6 +509,7 @@
     try { bindPreviewButtons(); } catch(e) {}
   }
 
+  // === render QR di tiap baris items ===
   function renderRowQRCodes(items){
     items = Array.isArray(items) ? items : [];
     for (const it of items){
@@ -622,6 +626,7 @@
         ctx.drawImage(im, ix, iy, iw, ih); ctx.restore();
       } catch (e) {}
     }
+
     function measureLines(ctx, text, maxW){
       const tokens = String(text ?? "").split(/(\s+)/);
       const lines = []; let line = "";
@@ -642,6 +647,7 @@
       if (line) lines.push(line.trim());
       return lines;
     }
+
     function drawWrapBoxVCenter(ctx, text, x, yTop, maxW, maxH, opt={}){
       const base = opt.base || 18, min = opt.min || 12, gap = opt.lineGap || 4;
       const fam  = '"Noto Sans JP", system-ui';
@@ -663,7 +669,7 @@
         if (y - yTop > maxH) break;
       }
     }
-  }
+  } // end makeItemLabelDataURL
 
   async function generateQrDataUrl(text, size) {
     await ensureQRCode();
@@ -696,7 +702,7 @@
     });
   }
 
-  // LOT label
+  // === LOT label (pakai layout item, QR diganti LOT + caption) ===
   async function makeLotLabelDataURL(item, qtyPerBox, lotId) {
     const base = await makeItemLabelDataURL(item);
     const im = new Image(); im.src = base;
@@ -824,7 +830,7 @@
     } catch (e) { toast("ユーザーQRの読み込みに失敗しました。"); }
   }
 
-  // New User
+  // New User (admin only)
   function openNewUser() {
     if (!isAdmin()) return toast("Akses ditolak (admin only)");
     const wrap = document.createElement("div");
@@ -894,23 +900,23 @@
     } catch (e) { toast("履歴の読み込みに失敗しました。"); }
   }
 
-  // --- Hint visual IO ---
-  function setManualHints({ autoFromLot } = { autoFromLot:false }){
-    const qty  = document.getElementById('io-qty');
-    const type = document.getElementById('io-type');
-    if (!qty || !type) return;
-    if (autoFromLot){
-      qty.classList.remove('needs-manual');
-      type.classList.remove('needs-manual');
-      qty.dataset.autofill = '1';
-    }else{
-      qty.classList.add('needs-manual');
-      type.classList.add('needs-manual');
-      delete qty.dataset.autofill;
-    }
+  
+// --- Tambahan: hint visual untuk input manual di 入出荷 ---
+function setManualHints({ autoFromLot } = { autoFromLot:false }){
+  const qty  = document.getElementById('io-qty');
+  const type = document.getElementById('io-type');
+  if (!qty || !type) return;
+  if (autoFromLot){
+    qty.classList.remove('needs-manual');
+    type.classList.remove('needs-manual');
+    qty.dataset.autofill = '1';
+  }else{
+    qty.classList.add('needs-manual');
+    type.classList.add('needs-manual');
+    delete qty.dataset.autofill;
   }
-
-  /* -------------------- IO Scanner -------------------- */
+}
+/* -------------------- IO Scanner -------------------- */
   let IO_SCANNER = null;
 
   function bindIO() {
@@ -960,6 +966,7 @@
             $("#io-code").value = code;
             await findItemIntoIO(code);
             setManualHints({ autoFromLot:false });
+            // Tidak ada confirm di 入出荷. User isi qty → klik 登録.
             return;
           }
 
@@ -983,10 +990,10 @@
               }});
               if (r?.ok) {
                 const msgType = (type === "IN") ? "入庫" : "出庫";
-                toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
-                const form = document.getElementById('form-io');
-                if (form) form.reset();
-                setManualHints({ autoFromLot:false });
+                toast(`${msgType}として登録しました（${code} × ${qty} ${unit} / ${lot || 'LOT'}）`);
+                $("#io-qty").value = "";
+                await findItemIntoIO(code);
+            setManualHints({ autoFromLot:false });
                 renderDashboard();
               } else {
                 toast(r?.error || "登録失敗");
@@ -994,7 +1001,7 @@
             } catch(e){
               toast("登録失敗: " + (e?.message || e));
             }
-            return;
+            return; // <— selesai; tidak ada kode sisa setelah ini
           }
         });
       } catch (e) { toast(e?.message || String(e)); }
@@ -1011,42 +1018,44 @@
       if (code) findItemIntoIO(code);
     });
 
-    // FIX: hapus variabel lot yang tidak ada
     $("#form-io")?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const who = getCurrentUser();
-      if (!who) return toast("ログイン情報がありません。");
+  e.preventDefault();
 
-      const code = ($("#io-code").value || "").trim();
-      const qty  = Number($("#io-qty").value || 0);
-      const unit = $("#io-unit").value || "pcs";
-      const type = $("#io-type").value || "IN";
+  const who = getCurrentUser();
+  if (!who) return toast("ログイン情報がありません。");
 
-      if (!code) return toast("コードを入力またはスキャンしてください。");
-      if (!Number.isFinite(qty) || qty <= 0) return toast("数量を入力してください。");
+  const code = ($("#io-code").value || "").trim();
+  const qty  = Number($("#io-qty").value || 0);
+  const unit = $("#io-unit").value || "pcs";
+  const type = $("#io-type").value || "IN";
 
-      const btn = $("#form-io button[type=submit]") || $("#btn-io-submit");
-      if (btn?.__busy) return;
-      if (btn) { btn.__busy = true; btn.disabled = true; }
+  if (!code) return toast("コードを入力またはスキャンしてください。");
+  if (!Number.isFinite(qty) || qty <= 0) return toast("数量を入力してください。");
 
-      try {
-        const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
-        if (r?.ok) {
-          const msgType = (type === "IN") ? "入庫" : "出庫";
-          toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
-          const form = document.getElementById('form-io');
-          if (form) form.reset();
-          setManualHints({ autoFromLot:false });
-          renderDashboard();
-        } else {
-          toast(r?.error || "登録失敗");
-        }
-      } catch (err) {
-        toast("登録失敗: " + (err?.message || err));
-      } finally {
-        if (btn) { btn.disabled = false; btn.__busy = false; }
-      }
-    });
+  // anti double submit
+  const btn = $("#form-io button[type=submit]") || $("#btn-io-submit");
+  if (btn?.__busy) return;
+  if (btn) { btn.__busy = true; btn.disabled = true; }
+
+  try {
+    const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
+    if (r?.ok) {
+      const msgType = (type === "IN") ? "入庫" : "出庫";
+      toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
+      $("#io-qty").value = "";
+      await findItemIntoIO(code);
+            setManualHints({ autoFromLot:false });
+      renderDashboard();
+    } else {
+      toast(r?.error || "登録失敗");
+    }
+  } catch (err) {
+    toast("登録失敗: " + (err?.message || err));
+  } finally {
+    if (btn) { btn.disabled = false; btn.__busy = false; }
+  }
+});
+
   }
 
   async function startBackCameraScan(mountId, onScan, boxSize) {
@@ -1139,6 +1148,7 @@
   // Parser QR
   function parseScanText(txt) {
     const s = String(txt || "").trim();
+
     if (/^ITEM\|/i.test(s)) {
       const code = normalizeCodeDash((s.split("|")[1] || "").trim());
       return { kind: "item", code };
@@ -1382,8 +1392,10 @@
 
   /* -------------------- Export / Import (JP) -------------------- */
 
+  // Users print
   $("#btn-print-qr-users")?.addEventListener("click", () => window.print());
 
+  // Users export/import (JP headers)
   $("#btn-users-export")?.addEventListener("click", async () => {
     try {
       const list = await api("users", { method: "GET" });
@@ -1418,6 +1430,7 @@
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderUsers();
   });
 
+  // Items export (CSV) + Excel (JP)
   $("#btn-items-export")?.addEventListener("click", async (e) => {
     e.preventDefault();
     try {
@@ -1462,6 +1475,7 @@
     } catch (e) { alert("エクスポート失敗"); }
   });
 
+  // Items import (CSV) — dukung header JP atau EN
   $("#btn-items-import")?.addEventListener("click", () => $("#input-items-import")?.click());
   $("#input-items-import")?.addEventListener("change", async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -1491,6 +1505,7 @@
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderItems();
   });
 
+  // IO export/import (CSV JP)
   $("#btn-io-export")?.addEventListener("click", async (e) => {
     e.preventDefault();
     try {
@@ -1523,6 +1538,7 @@
     alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = "";
   });
 
+  // 履歴 CSV (JP)
   $("#btn-history-export")?.addEventListener("click", async () => {
     try {
       const raw = await api("history", { method: "GET" });
@@ -1544,62 +1560,39 @@
     } catch (e) { alert("エクスポート失敗"); }
   });
 
-  // === Sinkron header/body lebar kolom (desktop) ===
+  // === Fix lebar kolom: sejajarkan dengan header ==================
   function ensureItemsColgroup(){
-  const tb = document.getElementById('tbl-items');
-  if(!tb) return;
-  const table = tb.closest('table');
-  if(!table) return;
+    const tb = document.getElementById('tbl-items');
+    if(!tb) return;
+    const table = tb.closest('table');
+    if(!table) return;
 
-  const isSmall = window.matchMedia('(max-width: 576px)').matches;
-  if (isSmall){
-    table.style.tableLayout = 'auto';
-    const old = table.querySelector('colgroup');
-    if (old) old.remove();
-    table.__colgroupPatched = false;
-    return;
-  }
+    const isSmall = window.matchMedia('(max-width: 576px)').matches;
 
-  // sudah dipasang? skip
-  if (table.__colgroupPatched) return;
+    if (isSmall){
+      table.style.tableLayout = 'auto';
+      if (table.__colgroupPatched && table.querySelector('colgroup')) {
+        table.querySelector('colgroup').remove();
+        table.__colgroupPatched = false;
+      }
+      return;
+    }
 
-  const cg = document.createElement('colgroup');
-  cg.innerHTML = `
-    <col style="width:36px">   <!-- checkbox -->
-    <col style="width:86px">   <!-- QR -->
-    <col style="width:280px">  <!-- コード/名称 -->
-    <col style="width:72px">   <!-- 画像 -->
-    <col style="width:110px">  <!-- 価格 -->
-    <col style="width:90px">   <!-- 在庫 -->
-    <col style="width:80px">   <!-- 最小 -->
-    <col style="width:120px">  <!-- 部門 -->
-    <col style="width:100px">  <!-- 置場 -->
-    <col style="width:220px">  <!-- 操作 -->
-  `;
-  table.insertBefore(cg, table.firstElementChild);
-  table.style.tableLayout = 'fixed';
-
-  // header terakhir diberi class untuk min-width CSS
-  const lastTh = table.querySelector('thead tr th:last-child');
-  if (lastTh) lastTh.classList.add('th-actions');
-
-  table.__colgroupPatched = true;
-}
-
-
-    if (table.__colgroupPatched && table.querySelector('colgroup')) return;
+    if (table.__colgroupPatched) return;
     const cg = document.createElement('colgroup');
     cg.innerHTML = `
-  <col style="width:36px">
-  <col style="width:110px">
-  <col style="width:220px">
-  <col style="width:72px">
-  <col style="width:110px">
-  <col style="width:90px">
-  <col style="width:80px">
-  <col style="width:110px">
-  <col style="width:100px">
-  <col style="width:220px">`;
+      <col style="width:36px">
+      <col style="width:110px">
+      <col style="width:160px">
+      <col>
+      <col style="width:72px">
+      <col style="width:110px">
+      <col style="width:80px">
+      <col style="width:80px">
+      <col style="width:100px">
+      <col style="width:90px">
+      <col style="width:220px">
+    `;
     table.insertBefore(cg, table.firstElementChild);
     table.style.tableLayout = 'fixed';
     table.__colgroupPatched = true;
@@ -1609,14 +1602,11 @@
     const tb = document.getElementById('tbl-items');
     if (!tb) return;
     const table = tb.closest('table');
-    if (table) {
-      if (table.querySelector('colgroup')) table.querySelector('colgroup').remove();
-      table.__colgroupPatched = false;
-      ensureItemsColgroup();
-    }
+    if (table) { table.__colgroupPatched = false; }
+    ensureItemsColgroup();
   });
 
-  /* -------------------- Tanaoroshi List -------------------- */
+  /* -------------------- Tanaoroshi List (menu baru) -------------------- */
   const JP_TANA_MAP = {
     date:'日付', code:'コード', name:'品名', qty:'数量', unit:'単位',
     location:'場所', department:'部門', userId:'担当者', note:'備考'
@@ -1742,7 +1732,7 @@
     }
   }
 
-  // Auto-refresh UI helpers
+  /* -------------------- Auto-refresh UI helpers -------------------- */
   function itemsAuto_refreshLabel(sec){
     const btn = document.getElementById("btn-items-auto");
     if (!btn) return;
@@ -1788,7 +1778,7 @@
     }
     const wrap = document.createElement("div");
     wrap.id = WRAP_ID;
-    wrap.className = 'btn-group';
+    wrap.className = "btn-group";
     wrap.innerHTML = `
       <button id="${BTN_ID}" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Auto</button>
       <ul class="dropdown-menu dropdown-menu-end">
@@ -1973,7 +1963,7 @@
         await ensureQRCode();
         new QRCode(box, { text, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
       } catch {
-        box.textContent = text;
+        box.textContent = text; // fallback teks
       }
     }
 
@@ -1985,7 +1975,7 @@
       const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
       const lot = ($("#lot-id", wrap).value || "").trim();
       const url = await makeLotLabelDataURL(item, qty, lot);
-      openPreview(url, { kind:'lot', code: item.code, qty, lot });
+      openPreview(url);
     });
 
     $("#lot-dl", wrap)?.addEventListener("click", async ()=>{
@@ -2022,19 +2012,15 @@
     bindPrintAllLabels();
     $("#btn-logout")?.addEventListener("click", logout);
 
-    ensureQRCode().catch(()=>{}).finally(()=>{ try{ bindPreviewButtons(); }catch(e){} });
+    // Preload QR lib & aktifkan Preview
+    ensureQRCode()
+      .catch(()=>{})
+      .finally(()=>{ try{ bindPreviewButtons(); }catch(e){} });
 
     startLiveReload();
   });
 
-  // expose helpers for preview code outside IIFE
-  window._escapeHtml = escapeHtml;
-  window._fmt = fmt;
-  window._generateQrDataUrl = generateQrDataUrl;
-
-})(); // end IIFE
-
-/* -------------------- Preview Modal & helpers (SINGLE SOURCE OF TRUTH) -------------------- */
+})();
 
 /* -------------------- Preview Modal & Preview helpers -------------------- */
 
@@ -2087,6 +2073,7 @@ function ensurePreviewModal(){
   document.body.appendChild(wrap);
 }
 
+// --- Tambahan: container kecil untuk history (10 terbaru) ---
 function ensurePreviewHistoryArea(){
   ensurePreviewModal();
   const modal = document.getElementById('preview-modal');
@@ -2127,11 +2114,11 @@ async function loadItemHistory(code){
     }
     if (tb) tb.innerHTML = rows.map(r => `
       <tr>
-        <td>${_ESC(r.date||'')}</td>
-        <td>${_ESC(r.userId||'')}</td>
-        <td>${_ESC(r.type||'')}</td>
-        <td class="text-end">${_FMT(r.qty||0)} ${_ESC(r.unit||'')}</td>
-        <td>${_ESC(r.note||'')}</td>
+        <td>${escapeHtml(r.date||'')}</td>
+        <td>${escapeHtml(r.userId||'')}</td>
+        <td>${escapeHtml(r.type||'')}</td>
+        <td class="text-end">${fmt(r.qty||0)} ${escapeHtml(r.unit||'')}</td>
+        <td>${escapeHtml(r.note||'')}</td>
       </tr>
     `).join('');
   }catch(e){
@@ -2139,7 +2126,6 @@ async function loadItemHistory(code){
     if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-danger">履歴の取得に失敗</td></tr>`;
   }
 }
-
 function showItemPreview(item){
   try{
     ensurePreviewModal();
@@ -2149,39 +2135,39 @@ function showItemPreview(item){
       name: String(item?.name||'').trim(),
       dept: String(item?.department||'').trim(),
       loc : String(item?.location||'').trim(),
-      price: (item?.price!=null) ? `¥${_FMT(item.price)}` : '',
+      price: (item?.price!=null) ? `¥${fmt(item.price)}` : '',
       stock: Number(item?.stock||0),
       min  : Number(item?.min||0),
       img  : item?.img||''
     };
 
-    document.getElementById('pv-code').textContent  = d.code || '-';
-    document.getElementById('pv-name').textContent  = d.name || '(名称未設定)';
-    document.getElementById('pv-dept').textContent  = d.dept || '-';
-    document.getElementById('pv-loc').textContent   = d.loc  || '-';
-    document.getElementById('pv-price').textContent = d.price || '¥0';
-    document.getElementById('pv-stock').textContent = String(d.stock);
-    document.getElementById('pv-min').textContent   = String(d.min);
+    $('#pv-code').textContent  = d.code || '-';
+    $('#pv-name').textContent  = d.name || '(名称未設定)';
+    $('#pv-dept').textContent  = d.dept || '-';
+    $('#pv-loc').textContent   = d.loc  || '-';
+    $('#pv-price').textContent = d.price || '¥0';
+    $('#pv-stock').textContent = String(d.stock);
+    $('#pv-min').textContent   = String(d.min);
 
-    const st = document.getElementById('pv-status'); st.className = 'badge';
+    const st = $('#pv-status'); st.className = 'badge';
     if (d.stock <= 0) { st.classList.add('bg-secondary'); st.textContent = '在庫ゼロ'; }
     else if (d.stock <= d.min) { st.classList.add('bg-danger'); st.textContent = '要補充'; }
     else { st.classList.add('bg-success'); st.textContent = '十分'; }
 
-    const pvImg = document.getElementById('pv-img');
+    const pvImg = $('#pv-img');
     if (d.img) { pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
 
-    const qrBox = document.getElementById('pv-qr'); qrBox.innerHTML = '';
+    const qrBox = $('#pv-qr'); qrBox.innerHTML = '';
     (async ()=>{
       try{
-        const url = _QRURL ? await _QRURL(`ITEM|${d.code}`, 128) : "";
+        const url = await generateQrDataUrl(`ITEM|${d.code}`, 128);
         if (url) { const im=new Image(); im.src=url; im.width=128; im.height=128; im.alt=d.code; qrBox.appendChild(im); }
         else qrBox.textContent = d.code || '(QR)';
       }catch{ qrBox.textContent = d.code || '(QR)'; }
     })();
 
-    document.getElementById('pv-edit').onclick  = ()=> { try{ openEditItem(d.code); }catch(e){ alert('編集を開けませんでした'); } };
-    document.getElementById('pv-print').onclick = async ()=>{
+    $('#pv-edit').onclick  = ()=> { try{ openEditItem(d.code); }catch(e){ alert('編集を開けませんでした'); } };
+    $('#pv-print').onclick = async ()=>{
       try{
         const url = await makeItemLabelDataURL(item);
         const w = window.open('', '_blank', 'width=900,height=700');
@@ -2195,7 +2181,7 @@ function showItemPreview(item){
 
     const modalEl = document.getElementById('preview-modal');
     if (window.bootstrap && window.bootstrap.Modal) {
-      window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      bootstrap.Modal.getOrCreateInstance(modalEl).show();
       try { loadItemHistory(d.code); } catch (e) {}
     } else {
       modalEl.style.display = 'block';
@@ -2208,16 +2194,10 @@ function showItemPreview(item){
   }
 }
 
-// Fallback helpers
-const _ESC   = window._escapeHtml || (s => String(s||"").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])));
-const _FMT   = window._fmt || (n => new Intl.NumberFormat("ja-JP").format(Number(n||0)));
-const _QRURL = window._generateQrDataUrl;
-
-// === OPEN IMAGE PREVIEW for LOT / dataURL (modal-based) ===
-function openPreview(url, meta){
+// === OPEN IMAGE PREVIEW (untuk dataURL dari Lot/箱 QR) ===
+function openPreview(url){
   try{
     ensurePreviewModal();
-
     const modalEl = document.getElementById('preview-modal');
     const imgEl   = modalEl.querySelector('#pv-img');
     const qrBox   = modalEl.querySelector('#pv-qr');
@@ -2229,8 +2209,14 @@ function openPreview(url, meta){
     const stockEl = modalEl.querySelector('#pv-stock');
     const minEl   = modalEl.querySelector('#pv-min');
 
-    // Clear item fields when showing LOT/image preview
-    [nameEl, codeEl, deptEl, locEl, priceEl, stockEl, minEl].forEach(el => { if (el) el.textContent = ''; });
+    if (nameEl)  nameEl.textContent  = '';
+    if (codeEl)  codeEl.textContent  = '';
+    if (deptEl)  deptEl.textContent  = '';
+    if (locEl)   locEl.textContent   = '';
+    if (priceEl) priceEl.textContent = '';
+    if (stockEl) stockEl.textContent = '';
+    if (minEl)   minEl.textContent   = '';
+
     if (qrBox) qrBox.innerHTML = '';
 
     if (imgEl){
@@ -2238,31 +2224,10 @@ function openPreview(url, meta){
       imgEl.style.display = url ? 'block' : 'none';
     }
 
-    if (!modalEl.querySelector('#pv-lotinfo')) {
-      const info = document.createElement('div');
-      info.id = 'pv-lotinfo';
-      info.className = 'mt-2 small';
-      (modalEl.querySelector('.modal-body') || modalEl).appendChild(info);
-    }
-    const pvLot = modalEl.querySelector('#pv-lotinfo');
-    if (meta && meta.kind === 'lot'){
-      const c = String(meta.code||'').trim();
-      const q = Number(meta.qty||0);
-      const l = String(meta.lot||'').trim();
-      pvLot.innerHTML =
-        `<div class="p-2 border rounded-3 bg-light">
-           <span class="fw-semibold me-2">LOTプレビュー</span>
-           <span class="me-3">コード：<code>${_ESC(c)}</code></span>
-           <span class="me-3">数量/箱：<b>${q}</b></span>
-           <span>${l ? ('ロットID：<b>'+_ESC(l)+'</b>') : ''}</span>
-         </div>`;
-      pvLot.style.display = '';
-    }else{
-      if (pvLot) pvLot.style.display = 'none';
-    }
-
+    let modal;
     if (window.bootstrap && window.bootstrap.Modal){
-      window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.show();
     } else {
       modalEl.style.display = 'block';
     }
@@ -2272,7 +2237,7 @@ function openPreview(url, meta){
   }
 }
 
-// ===== Fixed: bindPreviewButtons (single delegation) =====
+// ===== Fixed clean version: bindPreviewButtons (no nested listeners) =====
 function extractRowData(tr){
   const get = (sel)=> tr.querySelector(sel);
   const code = tr.getAttribute('data-code') || (get('td:nth-child(3)')?.textContent||'').trim();
@@ -2291,7 +2256,7 @@ function bindPreviewButtons(){
   if(!tbl) return;
   ensurePreviewModal();
 
-  // tombol プレビュー
+  // Klik tombol プレビュー
   tbl.addEventListener('click', (ev)=>{
     const btn = ev.target.closest('.btn-preview');
     if(!btn) return;
@@ -2302,7 +2267,7 @@ function bindPreviewButtons(){
     showItemPreview(item);
   });
 
-  // klik nama → プレビュー
+  // Klik nama item → trigger プレビュー
   tbl.addEventListener('click', (ev)=>{
     const a = ev.target.closest('.link-item');
     if(!a) return;
@@ -2311,7 +2276,7 @@ function bindPreviewButtons(){
     tr?.querySelector('.btn-preview')?.click();
   });
 
-  // alias lain
+  // Alias lain
   tbl.addEventListener('click', (ev)=>{
     const btn = ev.target.closest('[data-action="detail"], [data-role="preview"]');
     if(!btn) return;
@@ -2321,7 +2286,6 @@ function bindPreviewButtons(){
   });
 }
 
-// Quick list filters
 document.addEventListener('click',(e)=>{
   const a = e.target.closest('.js-filter'); if(!a) return;
   const f = a.dataset.f;
