@@ -1999,6 +1999,8 @@
 
 /* -------------------- Preview Modal & helpers (SINGLE SOURCE OF TRUTH) -------------------- */
 
+/* -------------------- Preview Modal & Preview helpers -------------------- */
+
 function ensurePreviewModal(){
   if(document.getElementById('preview-modal')) return;
   const wrap = document.createElement('div');
@@ -2013,7 +2015,7 @@ function ensurePreviewModal(){
         <div class="modal-body">
           <div class="d-flex gap-3 align-items-start flex-wrap">
             <div>
-              <div id="pv-qr" class="rounded p-2 border bg-light" style="width:132px;height:132px;display:flex;align-items:center;justify-content:center"></div>
+              <div id="pv-qr" class="rounded p-2 border bg-light"></div>
               <div class="small text-muted mt-1">QR を印刷ラベルと同一サイズ比で生成</div>
             </div>
             <div class="flex-grow-1">
@@ -2036,22 +2038,6 @@ function ensurePreviewModal(){
               <img id="pv-img" alt="" style="max-height:120px;max-width:180px;object-fit:contain;border:1px solid var(--bs-border-color);border-radius:.5rem;display:none">
             </div>
           </div>
-          <div id="pv-lotinfo" class="mt-2 small" style="display:none"></div>
-          <div class="mt-3">
-            <div class="fw-semibold mb-1">履歴（最新10件）</div>
-            <div class="table-responsive">
-              <table class="table table-sm mb-0">
-                <thead><tr>
-                  <th style="white-space:nowrap">日時</th>
-                  <th style="white-space:nowrap">ユーザー</th>
-                  <th style="white-space:nowrap">種別</th>
-                  <th class="text-end" style="white-space:nowrap">数量</th>
-                  <th style="white-space:nowrap">備考</th>
-                </tr></thead>
-                <tbody id="pv-history-body"><tr><td colspan="5" class="text-muted">読み込み中…</td></tr></tbody>
-              </table>
-            </div>
-          </div>
         </div>
         <div class="modal-footer">
           <button id="pv-edit" type="button" class="btn btn-primary btn-sm"><i class="bi bi-pencil me-1"></i>編集</button>
@@ -2064,9 +2050,36 @@ function ensurePreviewModal(){
   document.body.appendChild(wrap);
 }
 
+function ensurePreviewHistoryArea(){
+  ensurePreviewModal();
+  const modal = document.getElementById('preview-modal');
+  if (!modal) return;
+  if (!modal.querySelector('#pv-history')) {
+    const body = modal.querySelector('.modal-body') || modal;
+    const panel = document.createElement('div');
+    panel.id = 'pv-history';
+    panel.className = 'mt-3';
+    panel.innerHTML = `
+      <div class="fw-semibold mb-1">履歴（最新10件）</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr>
+            <th style="white-space:nowrap">日時</th>
+            <th style="white-space:nowrap">ユーザー</th>
+            <th style="white-space:nowrap">種別</th>
+            <th class="text-end" style="white-space:nowrap">数量</th>
+            <th style="white-space:nowrap">備考</th>
+          </tr></thead>
+          <tbody id="pv-history-body"><tr><td colspan="5" class="text-muted">読み込み中…</td></tr></tbody>
+        </table>
+      </div>`;
+    body.appendChild(panel);
+  }
+}
+
 async function loadItemHistory(code){
   try{
-    ensurePreviewModal();
+    ensurePreviewHistoryArea();
     const tb = document.getElementById('pv-history-body');
     if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-muted">読み込み中…</td></tr>`;
     const res = await api('historyByCode', { method:'POST', body:{ code, limit: 10 }, silent:true });
@@ -2105,23 +2118,23 @@ function showItemPreview(item){
       img  : item?.img||''
     };
 
-    $('#pv-code').textContent  = d.code || '-';
-    $('#pv-name').textContent  = d.name || '(名称未設定)';
-    $('#pv-dept').textContent  = d.dept || '-';
-    $('#pv-loc').textContent   = d.loc  || '-';
-    $('#pv-price').textContent = d.price || '¥0';
-    $('#pv-stock').textContent = String(d.stock);
-    $('#pv-min').textContent   = String(d.min);
+    document.getElementById('pv-code').textContent  = d.code || '-';
+    document.getElementById('pv-name').textContent  = d.name || '(名称未設定)';
+    document.getElementById('pv-dept').textContent  = d.dept || '-';
+    document.getElementById('pv-loc').textContent   = d.loc  || '-';
+    document.getElementById('pv-price').textContent = d.price || '¥0';
+    document.getElementById('pv-stock').textContent = String(d.stock);
+    document.getElementById('pv-min').textContent   = String(d.min);
 
-    const st = $('#pv-status'); st.className = 'badge';
+    const st = document.getElementById('pv-status'); st.className = 'badge';
     if (d.stock <= 0) { st.classList.add('bg-secondary'); st.textContent = '在庫ゼロ'; }
     else if (d.stock <= d.min) { st.classList.add('bg-danger'); st.textContent = '要補充'; }
     else { st.classList.add('bg-success'); st.textContent = '十分'; }
 
-    const pvImg = $('#pv-img');
+    const pvImg = document.getElementById('pv-img');
     if (d.img) { pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
 
-    const qrBox = $('#pv-qr'); qrBox.innerHTML = '';
+    const qrBox = document.getElementById('pv-qr'); qrBox.innerHTML = '';
     (async ()=>{
       try{
         const url = _QRURL ? await _QRURL(`ITEM|${d.code}`, 128) : "";
@@ -2130,12 +2143,8 @@ function showItemPreview(item){
       }catch{ qrBox.textContent = d.code || '(QR)'; }
     })();
 
-    // LOT info hidden for item preview
-    const lotInfo = document.getElementById('pv-lotinfo');
-    if (lotInfo) lotInfo.style.display = 'none';
-
-    $('#pv-edit').onclick  = ()=> { try{ openEditItem(d.code); }catch(e){ alert('編集を開けませんでした'); } };
-    $('#pv-print').onclick = async ()=>{
+    document.getElementById('pv-edit').onclick  = ()=> { try{ openEditItem(d.code); }catch(e){ alert('編集を開けませんでした'); } };
+    document.getElementById('pv-print').onclick = async ()=>{
       try{
         const url = await makeItemLabelDataURL(item);
         const w = window.open('', '_blank', 'width=900,height=700');
@@ -2162,12 +2171,12 @@ function showItemPreview(item){
   }
 }
 
-// helpers exposed by IIFE
+// Fallback helpers
 const _ESC   = window._escapeHtml || (s => String(s||"").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])));
 const _FMT   = window._fmt || (n => new Intl.NumberFormat("ja-JP").format(Number(n||0)));
 const _QRURL = window._generateQrDataUrl;
 
-// === Unified OPEN IMAGE PREVIEW (for LOT & any image) ===
+// === OPEN IMAGE PREVIEW for LOT / dataURL (modal-based) ===
 function openPreview(url, meta){
   try{
     ensurePreviewModal();
@@ -2182,20 +2191,111 @@ function openPreview(url, meta){
     const priceEl = modalEl.querySelector('#pv-price');
     const stockEl = modalEl.querySelector('#pv-stock');
     const minEl   = modalEl.querySelector('#pv-min');
-    const stEl    = modalEl.querySelector('#pv-status');
 
-    // Kosongkan info item (mode gambar/LOT)
-    if (nameEl)  nameEl.textContent  = '';
-    if (codeEl)  codeEl.textContent  = '';
-    if (deptEl)  deptEl.textContent  = '';
-    if (locEl)   locEl.textContent   = '';
-    if (priceEl) priceEl.textContent = '';
-    if (stockEl) stockEl.textContent = '';
-    if (minEl)   minEl.textContent   = '';
-    if (stEl)    stEl.className = 'badge';
-
-    if (qrBox)   qrBox.innerHTML     = '';
+    // Clear item fields when showing LOT/image preview
+    [nameEl, codeEl, deptEl, locEl, priceEl, stockEl, minEl].forEach(el => { if (el) el.textContent = ''; });
+    if (qrBox) qrBox.innerHTML = '';
 
     if (imgEl){
       imgEl.src = url || '';
-      imgEl.style.display
+      imgEl.style.display = url ? 'block' : 'none';
+    }
+
+    if (!modalEl.querySelector('#pv-lotinfo')) {
+      const info = document.createElement('div');
+      info.id = 'pv-lotinfo';
+      info.className = 'mt-2 small';
+      (modalEl.querySelector('.modal-body') || modalEl).appendChild(info);
+    }
+    const pvLot = modalEl.querySelector('#pv-lotinfo');
+    if (meta && meta.kind === 'lot'){
+      const c = String(meta.code||'').trim();
+      const q = Number(meta.qty||0);
+      const l = String(meta.lot||'').trim();
+      pvLot.innerHTML =
+        `<div class="p-2 border rounded-3 bg-light">
+           <span class="fw-semibold me-2">LOTプレビュー</span>
+           <span class="me-3">コード：<code>${_ESC(c)}</code></span>
+           <span class="me-3">数量/箱：<b>${q}</b></span>
+           <span>${l ? ('ロットID：<b>'+_ESC(l)+'</b>') : ''}</span>
+         </div>`;
+      pvLot.style.display = '';
+    }else{
+      if (pvLot) pvLot.style.display = 'none';
+    }
+
+    if (window.bootstrap && window.bootstrap.Modal){
+      window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    } else {
+      modalEl.style.display = 'block';
+    }
+  }catch(e){
+    console.error('openPreview failed:', e);
+    alert('プレビューを開けませんでした。');
+  }
+}
+
+// ===== Fixed: bindPreviewButtons (single delegation) =====
+function extractRowData(tr){
+  const get = (sel)=> tr.querySelector(sel);
+  const code = tr.getAttribute('data-code') || (get('td:nth-child(3)')?.textContent||'').trim();
+  const name = (get('td.td-name')?.textContent || '').trim();
+  const imgEl = get('td:nth-child(5) img');
+  const price = (get('td:nth-child(6)')?.textContent||'').trim();
+  const stock = Number((get('td:nth-child(7)')?.textContent||'0').replace(/[^0-9.-]/g,''));
+  const min   = Number((get('td:nth-child(8)')?.textContent||'0').replace(/[^0-9.-]/g,''));
+  const dept  = (get('td:nth-child(9)')?.textContent||'').trim();
+  const loc   = (get('td:nth-child(10)')?.textContent||'').trim();
+  return { code, name, img: imgEl?.getAttribute('src')||'', price, stock, min, dept, loc };
+}
+
+function bindPreviewButtons(){
+  const tbl = document.getElementById('tbl-items');
+  if(!tbl) return;
+  ensurePreviewModal();
+
+  // tombol プレビュー
+  tbl.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('.btn-preview');
+    if(!btn) return;
+    ev.preventDefault();
+    const tr = btn.closest('tr');
+    const code = tr?.getAttribute('data-code') || '';
+    const item = _ITEMS_CACHE.find(x => String(x.code) === String(code)) || extractRowData(tr);
+    showItemPreview(item);
+  });
+
+  // klik nama → プレビュー
+  tbl.addEventListener('click', (ev)=>{
+    const a = ev.target.closest('.link-item');
+    if(!a) return;
+    ev.preventDefault();
+    const tr = a.closest('tr');
+    tr?.querySelector('.btn-preview')?.click();
+  });
+
+  // alias lain
+  tbl.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('[data-action="detail"], [data-role="preview"]');
+    if(!btn) return;
+    ev.preventDefault();
+    const tr = btn.closest('tr');
+    tr?.querySelector('.btn-preview')?.click();
+  });
+}
+
+// Quick list filters
+document.addEventListener('click',(e)=>{
+  const a = e.target.closest('.js-filter'); if(!a) return;
+  const f = a.dataset.f;
+  const rows = document.querySelectorAll('#tbl-items tr[data-code]');
+  rows.forEach(tr=>{
+    const d = extractRowData(tr);
+    let show = true;
+    if(f==='low')  show = d.stock>0 && d.stock<=d.min;
+    if(f==='zero') show = d.stock<=0;
+    if(f==='img')  show = !!d.img;
+    if(f==='all')  show = true;
+    tr.style.display = show ? '' : 'none';
+  });
+});
