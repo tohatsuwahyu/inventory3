@@ -525,13 +525,20 @@ td[data-editable]{ cursor:text; }
     white-space: normal;
   }
 }
-/* ===== 入出庫: highlight field manual ===== */
-.manual-required input#io-qty:not(.from-qr),
-.manual-required select#io-type:not(.from-qr){
-  outline: 2px solid #f59e0b;              /* amber */
-  box-shadow: 0 0 0 4px rgba(245,158,11,.15);
-}
-.manual-required .form-label::after{
-  content:" *"; color:#f59e0b; font-weight:700;
+/* 入出荷: tanda visual untuk field manual */
+.needs-manual{
+  outline: 2px solid rgba(245, 158, 11, .45) !important; /* amber-ish */
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, .12) !important;
 }
 
+/* Jika qty diisi otomatis dari QR Lot, beri badge kecil di pojok */
+input#io-qty[data-autofill="1"]{
+  position: relative;
+}
+input#io-qty[data-autofill="1"]::after{
+  content: "AUTO";
+  position: absolute; right: 10px; top: -10px;
+  font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 999px;
+  background: #e0f2fe; color: #075985; border: 1px solid #bae6fd;
+}
