@@ -579,5 +579,33 @@
 </audio>
 <button id="btn-copy-diagnostics" class="btn btn-sm btn-outline-secondary diag-btn"
         title="Salin info teknis untuk troubleshooting">Salin info teknis</button>
+        <!-- Preview Modal (QR Lot & Item Detail) -->
+<div class="modal fade" id="preview-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">アイテム詳細 / QR Lot</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="pv-body">
+          <!-- diisi via JS -->
+        </div>
+        <hr class="my-3"/>
+        <div class="d-flex flex-wrap gap-2">
+          <button id="pv-in"  class="btn btn-primary"><i class="bi bi-arrow-down-circle me-1"></i> IN</button>
+          <button id="pv-out" class="btn btn-danger"><i class="bi bi-arrow-up-circle me-1"></i> OUT</button>
+          <button id="pv-copy" class="btn btn-outline-secondary"><i class="bi bi-clipboard-check me-1"></i> コードをコピー</button>
+          <button id="pv-print" class="btn btn-outline-secondary"><i class="bi bi-printer me-1"></i> ラベル印刷</button>
+        </div>
+        <div class="mt-3">
+          <div class="fw-semibold mb-1">履歴（最新）</div>
+          <div id="pv-hist" class="small text-muted">読み込み中…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
