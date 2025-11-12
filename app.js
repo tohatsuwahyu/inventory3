@@ -330,45 +330,56 @@
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
 
-  function tplItemRow(it){
-    const qrid  = `qr-${safeId(it.code)}`;
-    const stock = Number(it.stock || 0);
-    const min   = Number(it.min   || 0);
+ function tplItemRow(it){
+  const qrid  = `qr-${safeId(it.code)}`;
+  const stock = Number(it.stock || 0);
+  const min   = Number(it.min   || 0);
 
-    const badge =
-      (stock <= 0) ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
-      (stock <= min) ? '<span class="badge bg-danger ms-1">要補充</span>' :
-      '<span class="badge bg-success ms-1">OK</span>';
+  const badge =
+    (stock <= 0) ? '<span class="badge bg-secondary ms-1">ゼロ</span>' :
+    (stock <= min) ? '<span class="badge bg-danger ms-1">要補充</span>' :
+    '<span class="badge bg-success ms-1">OK</span>';
 
-    const dept = it.department
-      ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>` : '';
-    const loc  = it.location
-      ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>` : '';
+  const dept = it.department ? `<span class="badge rounded-pill text-bg-light">${escapeHtml(it.department)}</span>` : '';
+  const loc  = it.location   ? `<span class="badge rounded-pill bg-body-secondary">${escapeHtml(it.location)}</span>` : '';
 
-    const actions = [
-      `<button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil-square"></i></button>`,
-      `<button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash3"></i></button>`,
-      `<button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>`,
-      `<button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>`,
-      `<button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>`
-    ].join('');
+  const actions = [
+    `<button class="btn btn-sm btn-primary btn-edit" data-code="${escapeAttr(it.code)}" title="編集"><i class="bi bi-pencil-square"></i></button>`,
+    `<button class="btn btn-sm btn-danger btn-del" data-code="${escapeAttr(it.code)}" title="削除"><i class="bi bi-trash3"></i></button>`,
+    `<button class="btn btn-sm btn-outline-success btn-dl" data-code="${escapeAttr(it.code)}" title="ラベルDL"><i class="bi bi-download"></i></button>`,
+    `<button class="btn btn-sm btn-outline-warning btn-lotqr" data-code="${escapeAttr(it.code)}" title="Lot QR"><i class="bi bi-qr-code"></i></button>`,
+    `<button class="btn btn-sm btn-outline-secondary btn-preview" data-code="${escapeAttr(it.code)}" title="プレビュー"><i class="bi bi-search"></i></button>`
+  ].join('');
 
-    return [
-      '<tr data-code="', escapeAttr(it.code), '">',
-        '<td style="width:36px"><input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '"></td>',
-        '<td style="width:110px"><div class="tbl-qr-box"><div id="', qrid, '" class="d-inline-block"></div></div></td>',
-        '<td>', escapeHtml(it.code), '</td>',
-        '<td class="td-name"><a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">', escapeHtml(it.name), '</a></td>',
-        '<td>', (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''), '</td>',
-        '<td class="text-end">¥', fmt(it.price), '</td>',
-        '<td class="text-end">', fmt(stock), badge, '</td>',
-        '<td class="text-end">', fmt(min), '</td>',
-        '<td>', dept, '</td>',
-        '<td>', loc, '</td>',
-        '<td><div class="act-grid" style="display:grid;grid-auto-flow:column;gap:.25rem;place-content:center">', actions, '</div></td>',
-      '</tr>'
-    ].join('');
-  }
+  return [
+    '<tr data-code="', escapeAttr(it.code), '">',
+      // 1) checkbox
+      '<td style="width:36px"><input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '"></td>',
+      // 2) QR
+      '<td style="width:110px"><div class="tbl-qr-box"><div id="', qrid, '" class="d-inline-block"></div></div></td>',
+      // 3) コード + 名称 (sub)
+      '<td>',
+        '<div class="fw-semibold">', escapeHtml(it.code), '</div>',
+        '<div class="small text-truncate"><a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">', escapeHtml(it.name || ''), '</a></div>',
+      '</td>',
+      // 4) 画像
+      '<td>', (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''), '</td>',
+      // 5) 価格
+      '<td class="text-end">¥', fmt(it.price), '</td>',
+      // 6) 在庫
+      '<td class="text-end">', fmt(stock), badge, '</td>',
+      // 7) 最小
+      '<td class="text-end">', fmt(min), '</td>',
+      // 8) 部門
+      '<td>', dept, '</td>',
+      // 9) 置場
+      '<td>', loc, '</td>',
+      // 10) 操作
+      '<td><div class="act-grid d-inline-flex" style="gap:.25rem">', actions, '</div></td>',
+    '</tr>'
+  ].join('');
+}
+
 
   // === Mobile mini "操作" button renderer (HP only) ===
   function ensureMobileActions(){
@@ -1589,18 +1600,18 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     if (table.__colgroupPatched) return;
     const cg = document.createElement('colgroup');
     cg.innerHTML = `
-      <col style="width:36px">
-      <col style="width:110px">
-      <col style="width:160px">
-      <col>
-      <col style="width:72px">
-      <col style="width:110px">
-      <col style="width:80px">
-      <col style="width:80px">
-      <col style="width:100px">
-      <col style="width:90px">
-      <col style="width:220px">
-    `;
+  <col style="width:36px">    /* checkbox */
+  <col style="width:110px">   /* QR */
+  <col style="width:220px">   /* コード+名称 */
+  <col style="width:72px">    /* 画像 */
+  <col style="width:110px">   /* 価格 */
+  <col style="width:90px">    /* 在庫 */
+  <col style="width:80px">    /* 最小 */
+  <col style="width:110px">   /* 部門 */
+  <col style="width:100px">   /* 置場 */
+  <col style="width:220px">   /* 操作 */
+`;
+
     table.insertBefore(cg, table.firstElementChild);
     table.style.tableLayout = 'fixed';
     table.__colgroupPatched = true;
