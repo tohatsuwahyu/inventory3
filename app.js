@@ -330,7 +330,7 @@
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
 
-  function tplItemRow(it){
+   function tplItemRow(it){
     const qrid  = `qr-${safeId(it.code)}`;
     const stock = Number(it.stock || 0);
     const min   = Number(it.min   || 0);
@@ -355,20 +355,56 @@
 
     return [
       '<tr data-code="', escapeAttr(it.code), '">',
-        '<td style="width:36px"><input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '"></td>',
-        '<td style="width:110px"><div class="tbl-qr-box"><div id="', qrid, '" class="d-inline-block"></div></div></td>',
-        '<td>', escapeHtml(it.code), '</td>',
-        '<td class="td-name"><a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">', escapeHtml(it.name), '</a></td>',
-        '<td>', (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''), '</td>',
+        // 1) checkbox
+        '<td style="width:36px">',
+          '<input type="checkbox" class="row-chk" data-code="', escapeAttr(it.code), '">',
+        '</td>',
+
+        // 2) QR
+        '<td style="width:110px">',
+          '<div class="tbl-qr-box"><div id="', qrid, '" class="d-inline-block"></div></div>',
+        '</td>',
+
+        // 3) コード / 名称 (digabung)
+        '<td>',
+          '<div class="small text-muted">', escapeHtml(it.code), '</div>',
+          '<div class="td-name">',
+            '<a href="#" class="link-underline link-item" data-code="', escapeAttr(it.code), '">',
+              escapeHtml(it.name),
+            '</a>',
+          '</div>',
+        '</td>',
+
+        // 4) 画像
+        '<td>',
+          (it.img ? `<img src="${escapeAttr(it.img)}" alt="" style="height:32px">` : ''),
+        '</td>',
+
+        // 5) 価格
         '<td class="text-end">¥', fmt(it.price), '</td>',
+
+        // 6) 在庫
         '<td class="text-end">', fmt(stock), badge, '</td>',
+
+        // 7) 最小
         '<td class="text-end">', fmt(min), '</td>',
+
+        // 8) 部門
         '<td>', dept, '</td>',
+
+        // 9) 置場
         '<td>', loc, '</td>',
-        '<td><div class="act-grid" style="display:grid;grid-auto-flow:column;gap:.25rem;place-content:center">', actions, '</div></td>',
+
+        // 10) 操作
+        '<td>',
+          '<div class="act-grid" style="display:grid;grid-auto-flow:column;gap:.25rem;place-content:center">',
+            actions,
+          '</div>',
+        '</td>',
       '</tr>'
     ].join('');
   }
+
 
   // === Mobile mini "操作" button renderer (HP only) ===
   function ensureMobileActions(){
@@ -1561,7 +1597,7 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
   });
 
   // === Fix lebar kolom: sejajarkan dengan header ==================
-  function ensureItemsColgroup(){
+   function ensureItemsColgroup(){
     const tb = document.getElementById('tbl-items');
     if(!tb) return;
     const table = tb.closest('table');
@@ -1579,24 +1615,25 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     }
 
     if (table.__colgroupPatched) return;
+
     const cg = document.createElement('colgroup');
     cg.innerHTML = `
-      <col style="width:36px">
-      <col style="width:110px">
-      <col style="width:160px">
-      <col>
-      <col style="width:72px">
-      <col style="width:110px">
-      <col style="width:80px">
-      <col style="width:80px">
-      <col style="width:100px">
-      <col style="width:90px">
-      <col style="width:220px">
+      <col style="width:36px">   <!-- checkbox -->
+      <col style="width:110px">  <!-- QR -->
+      <col style="width:220px">  <!-- コード / 名称 -->
+      <col style="width:72px">   <!-- 画像 -->
+      <col style="width:110px">  <!-- 価格 -->
+      <col style="width:90px">   <!-- 在庫 -->
+      <col style="width:80px">   <!-- 最小 -->
+      <col style="width:110px">  <!-- 部門 -->
+      <col style="width:100px">  <!-- 置場 -->
+      <col style="width:220px">  <!-- 操作 -->
     `;
     table.insertBefore(cg, table.firstElementChild);
     table.style.tableLayout = 'fixed';
     table.__colgroupPatched = true;
   }
+
 
   window.addEventListener('resize', () => {
     const tb = document.getElementById('tbl-items');
@@ -1990,6 +2027,15 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
 
     wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
   }
+  // --- Expose core helpers for global preview block ---
+  window.__INV_APP__ = window.__INV_APP__ || {};
+  Object.assign(window.__INV_APP__, {
+    fmt,
+    api,
+    generateQrDataUrl,
+    makeItemLabelDataURL,
+    openEditItem
+  });
 
   /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
@@ -2023,6 +2069,45 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
 })();
 
 /* -------------------- Preview Modal & Preview helpers -------------------- */
+
+// Bridge ke helper inti di dalam IIFE (lihat window.__INV_APP__)
+function __invCore(){
+  return window.__INV_APP__ || {};
+}
+
+// wrapper fmt → pakai formatter dari core kalau ada
+function fmt(n){
+  const core = __invCore();
+  if (typeof core.fmt === "function") {
+    return core.fmt(n);
+  }
+  try{
+    return new Intl.NumberFormat("ja-JP").format(Number(n || 0));
+  }catch{
+    return String(n || 0);
+  }
+}
+
+async function invApi(action, opts){
+  const core = __invCore();
+  if (typeof core.api !== "function") throw new Error("API helper not ready");
+  return core.api(action, opts);
+}
+async function invGenerateQr(text, size){
+  const core = __invCore();
+  if (typeof core.generateQrDataUrl !== "function") throw new Error("QR helper not ready");
+  return core.generateQrDataUrl(text, size);
+}
+async function invMakeItemLabel(item){
+  const core = __invCore();
+  if (typeof core.makeItemLabelDataURL !== "function") throw new Error("Label helper not ready");
+  return core.makeItemLabelDataURL(item);
+}
+function invOpenEditItem(code){
+  const core = __invCore();
+  if (typeof core.openEditItem !== "function") throw new Error("Edit helper not ready");
+  return core.openEditItem(code);
+}
 
 function ensurePreviewModal(){
   if(document.getElementById('preview-modal')) return;
@@ -2073,7 +2158,7 @@ function ensurePreviewModal(){
   document.body.appendChild(wrap);
 }
 
-// --- Tambahan: container kecil untuk history (10 terbaru) ---
+// area kecil untuk history terbaru
 function ensurePreviewHistoryArea(){
   ensurePreviewModal();
   const modal = document.getElementById('preview-modal');
@@ -2106,7 +2191,7 @@ async function loadItemHistory(code){
     ensurePreviewHistoryArea();
     const tb = document.getElementById('pv-history-body');
     if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-muted">読み込み中…</td></tr>`;
-    const res = await api('historyByCode', { method:'POST', body:{ code, limit: 10 }, silent:true });
+    const res = await invApi('historyByCode', { method:'POST', body:{ code, limit: 10 }, silent:true });
     const rows = (res && res.ok && Array.isArray(res.rows)) ? res.rows : [];
     if (!rows.length) {
       if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-muted">履歴はありません</td></tr>`;
@@ -2126,6 +2211,20 @@ async function loadItemHistory(code){
     if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-danger">履歴の取得に失敗</td></tr>`;
   }
 }
+
+function extractRowData(tr){
+  const get = (sel)=> tr.querySelector(sel);
+  const code = tr.getAttribute('data-code') || (get('td:nth-child(3)')?.textContent||'').trim();
+  const name = (get('.td-name')?.textContent || '').trim();
+  const imgEl = get('td:nth-child(4) img');
+  const price = (get('td:nth-child(5)')?.textContent||'').trim();
+  const stock = Number((get('td:nth-child(6)')?.textContent||'0').replace(/[^0-9.-]/g,''));
+  const min   = Number((get('td:nth-child(7)')?.textContent||'0').replace(/[^0-9.-]/g,''));
+  const dept  = (get('td:nth-child(8)')?.textContent||'').trim();
+  const loc   = (get('td:nth-child(9)')?.textContent||'').trim();
+  return { code, name, img: imgEl?.getAttribute('src')||'', price, stock, min, dept, loc };
+}
+
 function showItemPreview(item){
   try{
     ensurePreviewModal();
@@ -2133,43 +2232,53 @@ function showItemPreview(item){
     const d = {
       code: String(item?.code||'').trim(),
       name: String(item?.name||'').trim(),
-      dept: String(item?.department||'').trim(),
-      loc : String(item?.location||'').trim(),
+      dept: String(item?.department||item?.dept||'').trim(),
+      loc : String(item?.location||item?.loc||'').trim(),
       price: (item?.price!=null) ? `¥${fmt(item.price)}` : '',
       stock: Number(item?.stock||0),
       min  : Number(item?.min||0),
       img  : item?.img||''
     };
 
-    $('#pv-code').textContent  = d.code || '-';
-    $('#pv-name').textContent  = d.name || '(名称未設定)';
-    $('#pv-dept').textContent  = d.dept || '-';
-    $('#pv-loc').textContent   = d.loc  || '-';
-    $('#pv-price').textContent = d.price || '¥0';
-    $('#pv-stock').textContent = String(d.stock);
-    $('#pv-min').textContent   = String(d.min);
+    document.getElementById('pv-code').textContent  = d.code || '-';
+    document.getElementById('pv-name').textContent  = d.name || '(名称未設定)';
+    document.getElementById('pv-dept').textContent  = d.dept || '-';
+    document.getElementById('pv-loc').textContent   = d.loc  || '-';
+    document.getElementById('pv-price').textContent = d.price || '¥0';
+    document.getElementById('pv-stock').textContent = String(d.stock);
+    document.getElementById('pv-min').textContent   = String(d.min);
 
-    const st = $('#pv-status'); st.className = 'badge';
+    const st = document.getElementById('pv-status');
+    st.className = 'badge';
     if (d.stock <= 0) { st.classList.add('bg-secondary'); st.textContent = '在庫ゼロ'; }
     else if (d.stock <= d.min) { st.classList.add('bg-danger'); st.textContent = '要補充'; }
     else { st.classList.add('bg-success'); st.textContent = '十分'; }
 
-    const pvImg = $('#pv-img');
+    const pvImg = document.getElementById('pv-img');
     if (d.img) { pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
 
-    const qrBox = $('#pv-qr'); qrBox.innerHTML = '';
+    const qrBox = document.getElementById('pv-qr');
+    qrBox.innerHTML = '';
     (async ()=>{
       try{
-        const url = await generateQrDataUrl(`ITEM|${d.code}`, 128);
-        if (url) { const im=new Image(); im.src=url; im.width=128; im.height=128; im.alt=d.code; qrBox.appendChild(im); }
-        else qrBox.textContent = d.code || '(QR)';
-      }catch{ qrBox.textContent = d.code || '(QR)'; }
+        const url = await invGenerateQr(`ITEM|${d.code}`, 128);
+        if (url) {
+          const im=new Image(); im.src=url; im.width=128; im.height=128; im.alt=d.code;
+          qrBox.appendChild(im);
+        } else {
+          qrBox.textContent = d.code || '(QR)';
+        }
+      }catch{
+        qrBox.textContent = d.code || '(QR)';
+      }
     })();
 
-    $('#pv-edit').onclick  = ()=> { try{ openEditItem(d.code); }catch(e){ alert('編集を開けませんでした'); } };
-    $('#pv-print').onclick = async ()=>{
+    document.getElementById('pv-edit').onclick  = ()=> {
+      try{ invOpenEditItem(d.code); }catch(e){ alert('編集を開けませんでした'); }
+    };
+    document.getElementById('pv-print').onclick = async ()=>{
       try{
-        const url = await makeItemLabelDataURL(item);
+        const url = await invMakeItemLabel(item);
         const w = window.open('', '_blank', 'width=900,height=700');
         if(!w){ alert('ポップアップがブロックされました。'); return; }
         w.document.write('<meta charset="utf-8"><title>ラベル印刷</title>');
@@ -2194,7 +2303,7 @@ function showItemPreview(item){
   }
 }
 
-// === OPEN IMAGE PREVIEW (untuk dataURL dari Lot/箱 QR) ===
+// Untuk Lot / gambar dataURL saja
 function openPreview(url){
   try{
     ensurePreviewModal();
@@ -2216,58 +2325,42 @@ function openPreview(url){
     if (priceEl) priceEl.textContent = '';
     if (stockEl) stockEl.textContent = '';
     if (minEl)   minEl.textContent   = '';
-
-    if (qrBox) qrBox.innerHTML = '';
+    if (qrBox)   qrBox.innerHTML     = '';
 
     if (imgEl){
       imgEl.src = url || '';
       imgEl.style.display = url ? 'block' : 'none';
     }
 
-    let modal;
-    if (window.bootstrap && window.bootstrap.Modal){
-      modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-      modal.show();
-    } else {
-      modalEl.style.display = 'block';
-    }
+    const modal = (window.bootstrap && window.bootstrap.Modal)
+      ? bootstrap.Modal.getOrCreateInstance(modalEl)
+      : null;
+    if (modal) modal.show();
+    else modalEl.style.display = 'block';
   }catch(e){
     console.error('openPreview failed:', e);
     alert('プレビューを開けませんでした。');
   }
 }
 
-// ===== Fixed clean version: bindPreviewButtons (no nested listeners) =====
-function extractRowData(tr){
-  const get = (sel)=> tr.querySelector(sel);
-  const code = tr.getAttribute('data-code') || (get('td:nth-child(3)')?.textContent||'').trim();
-  const name = (get('td.td-name')?.textContent || '').trim();
-  const imgEl = get('td:nth-child(5) img');
-  const price = (get('td:nth-child(6)')?.textContent||'').trim();
-  const stock = Number((get('td:nth-child(7)')?.textContent||'0').replace(/[^0-9.-]/g,''));
-  const min   = Number((get('td:nth-child(8)')?.textContent||'0').replace(/[^0-9.-]/g,''));
-  const dept  = (get('td:nth-child(9)')?.textContent||'').trim();
-  const loc   = (get('td:nth-child(10)')?.textContent||'').trim();
-  return { code, name, img: imgEl?.getAttribute('src')||'', price, stock, min, dept, loc };
-}
-
+// Binding tombol preview di tabel 商品一覧
 function bindPreviewButtons(){
   const tbl = document.getElementById('tbl-items');
   if(!tbl) return;
   ensurePreviewModal();
 
-  // Klik tombol プレビュー
+  // klik tombol プレビュー
   tbl.addEventListener('click', (ev)=>{
     const btn = ev.target.closest('.btn-preview');
     if(!btn) return;
     ev.preventDefault();
     const tr = btn.closest('tr');
     const code = tr?.getAttribute('data-code') || '';
-    const item = _ITEMS_CACHE.find(x => String(x.code) === String(code)) || extractRowData(tr);
+    const item = (window._ITEMS_CACHE || []).find(x => String(x.code) === String(code)) || extractRowData(tr);
     showItemPreview(item);
   });
 
-  // Klik nama item → trigger プレビュー
+  // klik nama item
   tbl.addEventListener('click', (ev)=>{
     const a = ev.target.closest('.link-item');
     if(!a) return;
@@ -2276,7 +2369,7 @@ function bindPreviewButtons(){
     tr?.querySelector('.btn-preview')?.click();
   });
 
-  // Alias lain
+  // alias lain (kalau nanti ada)
   tbl.addEventListener('click', (ev)=>{
     const btn = ev.target.closest('[data-action="detail"], [data-role="preview"]');
     if(!btn) return;
@@ -2286,6 +2379,7 @@ function bindPreviewButtons(){
   });
 }
 
+// Filter cepat via badge (zero/low/img/all)
 document.addEventListener('click',(e)=>{
   const a = e.target.closest('.js-filter'); if(!a) return;
   const f = a.dataset.f;
