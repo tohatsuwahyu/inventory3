@@ -989,15 +989,20 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
                 note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
               }});
               if (r?.ok) {
-                const msgType = (type === "IN") ? "入庫" : "出庫";
-                toast(`${msgType}として登録しました（${code} × ${qty} ${unit} / ${lot || 'LOT'}）`);
-                $("#io-qty").value = "";
-                await findItemIntoIO(code);
-            setManualHints({ autoFromLot:false });
-                renderDashboard();
-              } else {
-                toast(r?.error || "登録失敗");
-              }
+  const msgType = (type === "IN") ? "入庫" : "出庫";
+  toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
+
+  // Bersihkan dan kembali ke kondisi awal
+  const form = document.getElementById('form-io');
+  if (form) form.reset();
+  setManualHints({ autoFromLot:false });
+
+  // Optional: segarkan dashboard
+  renderDashboard();
+} else {
+  toast(r?.error || "登録失敗");
+}
+
             } catch(e){
               toast("登録失敗: " + (e?.message || e));
             }
@@ -1040,15 +1045,18 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
   try {
     const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
     if (r?.ok) {
-      const msgType = (type === "IN") ? "入庫" : "出庫";
-      toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
-      $("#io-qty").value = "";
-      await findItemIntoIO(code);
-            setManualHints({ autoFromLot:false });
-      renderDashboard();
-    } else {
-      toast(r?.error || "登録失敗");
-    }
+  const msgType = (type === "IN") ? "入庫" : "出庫";
+  toast(`${msgType}として登録しました（${code} × ${qty} ${unit} / ${lot || 'LOT'}）`);
+
+  const form = document.getElementById('form-io');
+  if (form) form.reset();
+  setManualHints({ autoFromLot:false });
+
+  renderDashboard();
+} else {
+  toast(r?.error || "登録失敗");
+}
+
   } catch (err) {
     toast("登録失敗: " + (err?.message || err));
   } finally {
@@ -1971,12 +1979,14 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     $("#lot-id", wrap)?.addEventListener("input", renderQR);
     renderQR();
 
-    $("#lot-preview", wrap)?.addEventListener("click", async ()=> {
-      const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
-      const lot = ($("#lot-id", wrap).value || "").trim();
-      const url = await makeLotLabelDataURL(item, qty, lot);
-      openPreview(url);
-    });
+   $("#lot-preview", wrap)?.addEventListener("click", async ()=> {
+  const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
+  const lot = ($("#lot-id", wrap).value || "").trim();
+  const url = await makeLotLabelDataURL(item, qty, lot);
+  // ← kirim meta supaya detail LOT tampil di modal
+  openPreview(url, { kind:'lot', code: item.code, qty, lot });
+});
+
 
     $("#lot-dl", wrap)?.addEventListener("click", async ()=>{
       const qty = Math.max(1, Number($("#lot-qty", wrap).value || 0) || 1);
@@ -2195,9 +2205,11 @@ function showItemPreview(item){
 }
 
 // === OPEN IMAGE PREVIEW (untuk dataURL dari Lot/箱 QR) ===
-function openPreview(url){
+// === OPEN IMAGE PREVIEW (untuk dataURL dari Lot/箱 QR) ===
+function openPreview(url, meta){
   try{
     ensurePreviewModal();
+
     const modalEl = document.getElementById('preview-modal');
     const imgEl   = modalEl.querySelector('#pv-img');
     const qrBox   = modalEl.querySelector('#pv-qr');
@@ -2209,6 +2221,7 @@ function openPreview(url){
     const stockEl = modalEl.querySelector('#pv-stock');
     const minEl   = modalEl.querySelector('#pv-min');
 
+    // Bersihkan isi "preview item" (karena ini mode gambar/LOT)
     if (nameEl)  nameEl.textContent  = '';
     if (codeEl)  codeEl.textContent  = '';
     if (deptEl)  deptEl.textContent  = '';
@@ -2216,17 +2229,43 @@ function openPreview(url){
     if (priceEl) priceEl.textContent = '';
     if (stockEl) stockEl.textContent = '';
     if (minEl)   minEl.textContent   = '';
-
-    if (qrBox) qrBox.innerHTML = '';
+    if (qrBox)   qrBox.innerHTML     = '';
 
     if (imgEl){
       imgEl.src = url || '';
       imgEl.style.display = url ? 'block' : 'none';
     }
 
-    let modal;
+    // --- Tambahan: area info LOT pada modal preview ---
+    // disisipkan sekali saja
+    if (!modalEl.querySelector('#pv-lotinfo')) {
+      const info = document.createElement('div');
+      info.id = 'pv-lotinfo';
+      info.className = 'mt-2 small';
+      // taruh tepat di bawah gambar
+      const body = modalEl.querySelector('.modal-body') || modalEl;
+      body.appendChild(info);
+    }
+    const pvLot = modalEl.querySelector('#pv-lotinfo');
+    if (meta && meta.kind === 'lot'){
+      const c = String(meta.code||'').trim();
+      const q = Number(meta.qty||0);
+      const l = String(meta.lot||'').trim();
+      pvLot.innerHTML =
+        `<div class="p-2 border rounded-3 bg-light">
+           <span class="fw-semibold me-2">LOTプレビュー</span>
+           <span class="me-3">コード：<code>${escapeHtml(c)}</code></span>
+           <span class="me-3">数量/箱：<b>${q}</b></span>
+           <span>${l ? ('ロットID：<b>'+escapeHtml(l)+'</b>') : ''}</span>
+         </div>`;
+      pvLot.style.display = '';
+    }else{
+      if (pvLot) pvLot.style.display = 'none';
+    }
+
+    // Tampilkan modal
     if (window.bootstrap && window.bootstrap.Modal){
-      modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
       modal.show();
     } else {
       modalEl.style.display = 'block';
@@ -2236,6 +2275,7 @@ function openPreview(url){
     alert('プレビューを開けませんでした。');
   }
 }
+  
 
 // ===== Fixed clean version: bindPreviewButtons (no nested listeners) =====
 function extractRowData(tr){
