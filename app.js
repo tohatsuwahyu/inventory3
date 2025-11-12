@@ -900,7 +900,23 @@
     } catch (e) { toast("履歴の読み込みに失敗しました。"); }
   }
 
-  /* -------------------- IO Scanner -------------------- */
+  
+// --- Tambahan: hint visual untuk input manual di 入出荷 ---
+function setManualHints({ autoFromLot } = { autoFromLot:false }){
+  const qty  = document.getElementById('io-qty');
+  const type = document.getElementById('io-type');
+  if (!qty || !type) return;
+  if (autoFromLot){
+    qty.classList.remove('needs-manual');
+    type.classList.remove('needs-manual');
+    qty.dataset.autofill = '1';
+  }else{
+    qty.classList.add('needs-manual');
+    type.classList.add('needs-manual');
+    delete qty.dataset.autofill;
+  }
+}
+/* -------------------- IO Scanner -------------------- */
   let IO_SCANNER = null;
 
   function bindIO() {
@@ -908,6 +924,8 @@
           btnStop  = $("#btn-io-stop"),
           area     = $("#io-scan-area");
     if (!btnStart || !btnStop || !area) return;
+
+    setManualHints({ autoFromLot:false });
 
     const ioCode = document.getElementById("io-code");
     if (ioCode) {
@@ -922,7 +940,7 @@
           if (n) n.value = ""; if (p) p.value = ""; if (s) s.value = "";
           return;
         }
-        timer = setTimeout(() => findItemIntoIO(v), 220);
+        timer = setTimeout(() => { setManualHints({autoFromLot:false}); findItemIntoIO(v); }, 220);
       });
       ioCode.addEventListener("blur", () => {
         const v = (ioCode.value || "").trim();
@@ -947,6 +965,7 @@
             const code = parsed.code;
             $("#io-code").value = code;
             await findItemIntoIO(code);
+            setManualHints({ autoFromLot:false });
             // Tidak ada confirm di 入出荷. User isi qty → klik 登録.
             return;
           }
@@ -955,6 +974,9 @@
             const { code, qty, lot } = parsed;
             $("#io-code").value = code;
             await findItemIntoIO(code);
+
+            document.getElementById('io-qty').value = Number(qty||0);
+            setManualHints({ autoFromLot:true });
 
             const unit = $("#io-unit").value || "pcs";
             const type = $("#io-type").value || "IN";
@@ -971,6 +993,7 @@
                 toast(`${msgType}として登録しました（${code} × ${qty} ${unit} / ${lot || 'LOT'}）`);
                 $("#io-qty").value = "";
                 await findItemIntoIO(code);
+            setManualHints({ autoFromLot:false });
                 renderDashboard();
               } else {
                 toast(r?.error || "登録失敗");
@@ -1021,6 +1044,7 @@
       toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
       $("#io-qty").value = "";
       await findItemIntoIO(code);
+            setManualHints({ autoFromLot:false });
       renderDashboard();
     } else {
       toast(r?.error || "登録失敗");
@@ -2050,6 +2074,60 @@ function ensurePreviewModal(){
 }
 
 // === 商品プレビュー（情報 + QR + tombol di modal） ===
+
+// --- Tambahan: container kecil untuk history (10 terbaru) ---
+function ensurePreviewHistoryArea(){
+  ensurePreviewModal();
+  const modal = document.getElementById('preview-modal');
+  if (!modal) return;
+  if (!modal.querySelector('#pv-history')) {
+    const body = modal.querySelector('.modal-body') || modal;
+    const panel = document.createElement('div');
+    panel.id = 'pv-history';
+    panel.className = 'mt-3';
+    panel.innerHTML = `
+      <div class="fw-semibold mb-1">履歴（最新10件）</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr>
+            <th style="white-space:nowrap">日時</th>
+            <th style="white-space:nowrap">ユーザー</th>
+            <th style="white-space:nowrap">種別</th>
+            <th class="text-end" style="white-space:nowrap">数量</th>
+            <th style="white-space:nowrap">備考</th>
+          </tr></thead>
+          <tbody id="pv-history-body"><tr><td colspan="5" class="text-muted">読み込み中…</td></tr></tbody>
+        </table>
+      </div>`;
+    body.appendChild(panel);
+  }
+}
+
+async function loadItemHistory(code){
+  try{
+    ensurePreviewHistoryArea();
+    const tb = document.getElementById('pv-history-body');
+    if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-muted">読み込み中…</td></tr>`;
+    const res = await api('historyByCode', { method:'POST', body:{ code, limit: 10 }, silent:true });
+    const rows = (res && res.ok && Array.isArray(res.rows)) ? res.rows : [];
+    if (!rows.length) {
+      if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-muted">履歴はありません</td></tr>`;
+      return;
+    }
+    if (tb) tb.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.date||'')}</td>
+        <td>${escapeHtml(r.userId||'')}</td>
+        <td>${escapeHtml(r.type||'')}</td>
+        <td class="text-end">${fmt(r.qty||0)} ${escapeHtml(r.unit||'')}</td>
+        <td>${escapeHtml(r.note||'')}</td>
+      </tr>
+    `).join('');
+  }catch(e){
+    const tb = document.getElementById('pv-history-body');
+    if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-danger">履歴の取得に失敗</td></tr>`;
+  }
+}
 function showItemPreview(item){
   try{
     ensurePreviewModal();
@@ -2104,8 +2182,13 @@ function showItemPreview(item){
     };
 
     const modalEl = document.getElementById('preview-modal');
-    if (window.bootstrap?.Modal) bootstrap.Modal.getOrCreateInstance(modalEl).show();
-    else modalEl.style.display='block';
+    if (window.bootstrap && window.bootstrap.Modal) {
+      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      try { loadItemHistory(d.code); } catch (e) {}
+    } else {
+      modalEl.style.display = 'block';
+      try { loadItemHistory(d.code); } catch (e) {}
+    }
 
   }catch(e){
     console.error('showItemPreview()', e);
