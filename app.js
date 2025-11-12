@@ -2029,6 +2029,10 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
 
     startLiveReload();
   });
+// ---- expose helpers for preview code outside IIFE ----
+window._escapeHtml = escapeHtml;
+window._fmt = fmt;
+window._generateQrDataUrl = generateQrDataUrl;
 
 })();
 
@@ -2145,7 +2149,7 @@ function showItemPreview(item){
       name: String(item?.name||'').trim(),
       dept: String(item?.department||'').trim(),
       loc : String(item?.location||'').trim(),
-      price: (item?.price!=null) ? `¥${fmt(item.price)}` : '',
+      price: (item?.price!=null) ? `¥${_FMT(item.price)}` : '',
       stock: Number(item?.stock||0),
       min  : Number(item?.min||0),
       img  : item?.img||''
@@ -2170,7 +2174,7 @@ function showItemPreview(item){
     const qrBox = $('#pv-qr'); qrBox.innerHTML = '';
     (async ()=>{
       try{
-        const url = await generateQrDataUrl(`ITEM|${d.code}`, 128);
+        const url = _QRURL ? await _QRURL(`ITEM|${d.code}`, 128) : "";
         if (url) { const im=new Image(); im.src=url; im.width=128; im.height=128; im.alt=d.code; qrBox.appendChild(im); }
         else qrBox.textContent = d.code || '(QR)';
       }catch{ qrBox.textContent = d.code || '(QR)'; }
@@ -2191,7 +2195,7 @@ function showItemPreview(item){
 
     const modalEl = document.getElementById('preview-modal');
     if (window.bootstrap && window.bootstrap.Modal) {
-      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
       try { loadItemHistory(d.code); } catch (e) {}
     } else {
       modalEl.style.display = 'block';
@@ -2204,7 +2208,11 @@ function showItemPreview(item){
   }
 }
 
-// === OPEN IMAGE PREVIEW (untuk dataURL dari Lot/箱 QR) ===
+// Fallback untuk akses helper dari luar IIFE
+const _ESC   = window._escapeHtml || (s => String(s||"").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])));
+const _FMT   = window._fmt || (n => new Intl.NumberFormat("ja-JP").format(Number(n||0)));
+const _QRURL = window._generateQrDataUrl; // akan ada setelah langkah (1)
+
 // === OPEN IMAGE PREVIEW (untuk dataURL dari Lot/箱 QR) ===
 function openPreview(url, meta){
   try{
@@ -2254,9 +2262,9 @@ function openPreview(url, meta){
       pvLot.innerHTML =
         `<div class="p-2 border rounded-3 bg-light">
            <span class="fw-semibold me-2">LOTプレビュー</span>
-           <span class="me-3">コード：<code>${escapeHtml(c)}</code></span>
+           <span class="me-3">コード：<code>${_ESC(c)}</code></span>
            <span class="me-3">数量/箱：<b>${q}</b></span>
-           <span>${l ? ('ロットID：<b>'+escapeHtml(l)+'</b>') : ''}</span>
+           <span>${l ? ('ロットID：<b>'+_ESC(l)+'</b>') : ''}</span>
          </div>`;
       pvLot.style.display = '';
     }else{
