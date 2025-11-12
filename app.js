@@ -2073,8 +2073,6 @@ function ensurePreviewModal(){
   document.body.appendChild(wrap);
 }
 
-// === 商品プレビュー（情報 + QR + tombol di modal） ===
-
 // --- Tambahan: container kecil untuk history (10 terbaru) ---
 function ensurePreviewHistoryArea(){
   ensurePreviewModal();
