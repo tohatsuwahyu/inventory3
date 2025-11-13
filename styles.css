@@ -581,4 +581,20 @@ td[data-editable]{ cursor:text; }
   justify-content: center;   /* tengah terhadap header 操作 */
   min-width: 200px;
 }
+/* === 商品一覧: warna badge 部門 & 置場 === */
 
+/* 部門: kuning hangat */
+#view-items .badge.rounded-pill.text-bg-light {
+  background-color: #fef9c3;  /* kuning muda */
+  color: #854d0e;             /* cokelat tua */
+  border: 1px solid #fde68a;
+  font-weight: 600;
+}
+
+/* 置場: biru dingin (lokasi) */
+#view-items .badge.rounded-pill.bg-body-secondary {
+  background-color: #e0f2fe;  /* biru muda terang */
+  color: #0369a1;             /* teks biru gelap */
+  border: 1px solid #bae6fd;
+  font-weight: 600;
+}
