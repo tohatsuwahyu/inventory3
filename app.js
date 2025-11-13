@@ -1467,60 +1467,60 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
 
       btnCommit.disabled = true;
 
-      try {
-        for (const r of rows) {
-          const code = r.code;
-          const diff = Number(r.diff || 0);
-          const realQty = Number(r.qty || 0);
+         try {
+      for (const r of rows) {
+        const code   = r.code;
+        const book   = Number(r.book || 0);   // ← stok buku saat ini
+        const diff   = Number(r.diff || 0);   // ← selisih (実在 − 帳簿)
+        const realQty = Number(r.qty || 0);   // ← 实在（実在在庫）
 
-          // 1) 在庫調整（履歴に log）
-          if (diff !== 0) {
-            const type = diff > 0 ? "IN" : "OUT";
-            const qty  = Math.abs(diff);
-            await api("log", {
-              method: "POST",
-              body: {
-                userId: who.id,
-                code,
-                qty,
-                unit: "pcs",
-                type,
-                note: "棚卸調整"
-              }
-            });
-          }
-
-          // 2) 棚卸シートに結果を1行保存
-          const item = _ITEMS_CACHE.find(x => String(x.code) === String(code)) || {};
-          await api("tanaSave", {
+        // 1) 在庫調整（履歴に log）
+        if (diff !== 0) {
+          const type = diff > 0 ? "IN" : "OUT";
+          const qty  = Math.abs(diff);
+          await api("log", {
             method: "POST",
             body: {
-              code,
-              name: r.name || item.name || "",
-              qty : realQty,
-              unit: "pcs",
-              location: item.location || "",
-              department: r.department || item.department || "",
               userId: who.id,
-              note: ""
+              code,
+              qty,
+              unit: "pcs",
+              type,
+              note: "棚卸調整"
             }
           });
         }
 
-        toast("棚卸結果を保存しました。");
-        ST.rows = new Map();
-        renderShelfTable();
-        clearShelfDraft();
-
-        // 3) もし画面「棚卸一覧」が開いていたら再読み込み
-        try { loadTanaList(); } catch (e) {}
-      } catch (err) {
-        console.error(err);
-        toast("棚卸の確定に失敗しました。");
-      } finally {
-        btnCommit.disabled = false;
+        // 2) 棚卸シートに結果を1行保存（備考に book/diff を埋める）
+        const item = _ITEMS_CACHE.find(x => String(x.code) === String(code)) || {};
+        await api("tanaSave", {
+          method: "POST",
+          body: {
+            code,
+            name      : r.name || item.name || "",
+            qty       : realQty,
+            unit      : "pcs",
+            location  : item.location || "",
+            department: r.department || item.department || "",
+            userId    : who.id,
+            note      : `book:${book} diff:${diff}`   // ★ penting: ini yang dibaca tanaList()
+          }
+        });
       }
-    });
+
+      toast("棚卸結果を保存しました。");
+      ST.rows = new Map();
+      renderShelfTable();
+      clearShelfDraft();
+
+      try { loadTanaList(); } catch (e) {}
+    } catch (err) {
+      console.error(err);
+      toast("棚卸の確定に失敗しました。");
+    } finally {
+      btnCommit.disabled = false;
+    }
+   });
   }
 }
 
