@@ -628,3 +628,32 @@ td[data-editable]{ cursor:text; }
     height: auto;           /* buang bentuk kapsul aneh kalau ada */
   }
 }
+/* === 棚卸: tombol draft & 確定 selalu dekat jempol di smartphone === */
+@media (max-width: 576px) {
+
+  /* kasih ruang di bawah supaya tabel tidak ketutup bar */
+  #view-shelf {
+    padding-bottom: 80px;
+  }
+
+  /* bar tombol di bawah layar */
+  #view-shelf .st-controls {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1050;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.18);
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  #view-shelf .st-controls .btn {
+    flex: 1 1 0;
+    font-size: 0.8rem;
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+}
