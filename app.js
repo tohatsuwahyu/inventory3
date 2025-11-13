@@ -1341,155 +1341,188 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
   }
 
   function bindShelf() {
-    const toolbarRight = document.querySelector('#view-shelf .items-toolbar .right');
-    if (toolbarRight && !toolbarRight.querySelector('.st-controls')) {
-      const wrap = document.createElement('div');
-      wrap.className = 'st-controls d-flex align-items-center gap-2 flex-wrap';
-      wrap.innerHTML = `
-        <div class="form-check form-switch m-0">
-          <input class="form-check-input" type="checkbox" id="st-diff-only">
-          <label class="form-check-label small" for="st-diff-only">差異のみ</label>
-        </div>
-        <button id="st-save"   class="btn btn-sm btn-outline-secondary">下書き保存</button>
-        <button id="st-load"   class="btn btn-sm btn-outline-secondary">読込</button>
-        <button id="st-clear"  class="btn btn-sm btn-outline-danger">クリア</button>
-        <button id="st-commit" class="btn btn-sm btn-primary">確定（在庫更新）</button>
-      `;
-      toolbarRight.appendChild(wrap);
-    }
+  // --- toolbar buttons (差異のみ / 下書き保存 / 読込 / クリア / 確定) ---
+  const toolbarRight = document.querySelector('#view-shelf .items-toolbar .right');
+  if (toolbarRight && !toolbarRight.querySelector('.st-controls')) {
+    const wrap = document.createElement('div');
+    wrap.className = 'st-controls d-flex align-items-center gap-2 flex-wrap';
+    wrap.innerHTML = `
+      <div class="form-check form-switch m-0">
+        <input class="form-check-input" type="checkbox" id="st-diff-only">
+        <label class="form-check-label small" for="st-diff-only">差異のみ</label>
+      </div>
+      <button id="st-save"   class="btn btn-sm btn-outline-secondary">下書き保存</button>
+      <button id="st-load"   class="btn btn-sm btn-outline-secondary">読込</button>
+      <button id="st-clear"  class="btn btn-sm btn-outline-danger">クリア</button>
+      <button id="st-commit" class="btn btn-sm btn-primary">確定（在庫更新）</button>
+    `;
+    toolbarRight.appendChild(wrap);
+  }
 
-    const btnStart = $("#btn-start-scan"), btnStop = $("#btn-stop-scan"), area = $("#scan-area");
-    if (!btnStart || !btnStop || !area) return;
+  const btnStart = $("#btn-start-scan"),
+        btnStop  = $("#btn-stop-scan"),
+        area     = $("#scan-area");
 
-    btnStart.addEventListener("click", async () => {
-      try {
-        area.textContent = "カメラ起動中…";
-        SHELF_SCANNER = await startBackCameraScan("scan-area", async (text) => {
-          const p = parseScanText(String(text || ""));
-          if (!p) return;
-          if (p.kind === "item") {
-            if (confirm("この商品を追加してもよろしいですか？")) {
-              await addOrUpdateStocktake(p.code, ST.rows.get(p.code)?.qty ?? undefined);
-            }
-            return;
+  if (!btnStart || !btnStop || !area) return;
+
+  // --- スキャン開始 / 停止 ---
+  btnStart.addEventListener("click", async () => {
+    try {
+      area.textContent = "カメラ起動中…";
+      SHELF_SCANNER = await startBackCameraScan("scan-area", async (text) => {
+        const p = parseScanText(String(text || ""));
+        if (!p) return;
+
+        if (p.kind === "item") {
+          if (confirm("この商品を追加してもよろしいですか？")) {
+            await addOrUpdateStocktake(p.code, ST.rows.get(p.code)?.qty ?? undefined);
           }
-          if (p.kind === "lot") {
-            if (confirm("この商品を追加してもよろしいですか？")) {
-              await addOrIncStocktake(p.code, Number(p.qty || 0));
-            }
-            return;
+          return;
+        }
+        if (p.kind === "lot") {
+          if (confirm("この商品を追加してもよろしいですか？")) {
+            await addOrIncStocktake(p.code, Number(p.qty || 0));
           }
-        });
-      } catch (e) { toast(e?.message || String(e)); }
-    });
-
-    btnStop.addEventListener("click", async () => {
-      try { await SHELF_SCANNER?.stop?.(); SHELF_SCANNER?.clear?.(); } catch (e) {}
-      area.innerHTML = "カメラ待機中…";
-    });
-
-    $("#st-filter")?.addEventListener("input", (e) => {
-      const q = (e.target.value || "").toLowerCase();
-      $$("#tbl-stocktake tr").forEach(tr => {
-        const code = (tr.children[0]?.textContent || "").toLowerCase();
-        const name = (tr.children[1]?.textContent || "").toLowerCase();
-        tr.style.display = (code.includes(q) || name.includes(q)) ? "" : "none";
+          return;
+        }
       });
-    });
+    } catch (e) {
+      toast(e?.message || String(e));
+    }
+  });
 
-    $("#st-add")?.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const code = ($("#st-code").value || "").trim();
-      const qty = Number($("#st-qty").value || 0);
-      if (!code) return;
-      await addOrUpdateStocktake(code, qty || undefined);
-      $("#st-code").value = ""; $("#st-qty").value = "";
-    });
-        // --- tombol draft & 確定（在庫更新） ---
-    const btnSave   = document.getElementById("st-save");
-    const btnLoad   = document.getElementById("st-load");
-    const btnClear  = document.getElementById("st-clear");
-    const btnCommit = document.getElementById("st-commit");
+  btnStop.addEventListener("click", async () => {
+    try { await SHELF_SCANNER?.stop?.(); SHELF_SCANNER?.clear?.(); } catch (e) {}
+    area.innerHTML = "カメラ待機中…";
+  });
 
-    // 下書き保存
-    btnSave?.addEventListener("click", (e) => {
-      e.preventDefault();
-      saveShelfDraft();
+  // --- フィルタ (コード / 名称) ---
+  $("#st-filter")?.addEventListener("input", (e) => {
+    const q = (e.target.value || "").toLowerCase();
+    $$("#tbl-stocktake tr").forEach(tr => {
+      const code = (tr.children[0]?.textContent || "").toLowerCase();
+      const name = (tr.children[1]?.textContent || "").toLowerCase();
+      tr.style.display = (code.includes(q) || name.includes(q)) ? "" : "none";
     });
+  });
 
-    // 読込
-    btnLoad?.addEventListener("click", (e) => {
-      e.preventDefault();
-      loadShelfDraft();
-    });
+  // --- 手入力で1件追加 ---
+  $("#st-add")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const code = ($("#st-code").value || "").trim();
+    const qty  = Number($("#st-qty").value || 0);
+    if (!code) return;
+    await addOrUpdateStocktake(code, qty || undefined);
+    $("#st-code").value = "";
+    $("#st-qty").value  = "";
+  });
 
-    // クリア（画面 & draft）
-    btnClear?.addEventListener("click", (e) => {
-      e.preventDefault();
-      ST.rows = new Map();
-      renderShelfTable();
-      clearShelfDraft();
-    });
-
-    // 差異のみフィルタ ON/OFF
-    document.getElementById("st-diff-only")?.addEventListener("change", (e) => {
-      const on = e.target.checked;
+  // --- 差異のみスイッチ ---
+  const diffOnly = document.getElementById("st-diff-only");
+  if (diffOnly && !diffOnly.__bound) {
+    diffOnly.__bound = true;
+    diffOnly.addEventListener("change", () => {
+      const only = diffOnly.checked;
       $$("#tbl-stocktake tr").forEach(tr => {
         const diffText = (tr.children[5]?.textContent || "0").replace(/[,¥]/g, "");
         const diff = Number(diffText || 0);
-        tr.style.display = (on && diff === 0) ? "none" : "";
+        tr.style.display = (!only || diff !== 0) ? "" : "none";
       });
     });
+  }
 
-    // 確定（在庫更新）→ backend
-    btnCommit?.addEventListener("click", async (e) => {
+  // --- 下書き保存 / 読込 / クリア ---
+  $("#st-save")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    saveShelfDraft();
+  });
+
+  $("#st-load")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    loadShelfDraft();
+  });
+
+  $("#st-clear")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (!confirm("現在の棚卸データをクリアしますか？")) return;
+    ST.rows = new Map();
+    renderShelfTable();
+    clearShelfDraft();
+  });
+
+  // --- 確定（在庫更新 ＋ 棚卸シート保存） ---
+  const btnCommit = $("#st-commit");
+  if (btnCommit && !btnCommit.__bound) {
+    btnCommit.__bound = true;
+    btnCommit.addEventListener("click", async (e) => {
       e.preventDefault();
 
-      if (!ST.rows.size) {
-        toast("棚卸データがありません。");
-        return;
-      }
-      if (!confirm("現在の棚卸結果で在庫を更新しますか？")) return;
+      const rows = [...ST.rows.values()];
+      if (!rows.length) return toast("棚卸データがありません。");
 
-      const who    = getCurrentUser();
-      const userId = who?.id || "";
+      const who = getCurrentUser();
+      if (!who) return toast("ログイン情報がありません。");
 
-      const rows = [...ST.rows.values()].map(r => ({
-        code : r.code,
-        name : r.name || "",
-        department: r.department || "",
-        book : Number(r.book || 0),
-        qty  : Number(r.qty  || 0),
-        diff : Number(r.diff || 0)
-      }));
+      if (!confirm("帳簿在庫を更新し、棚卸結果を保存しますか？")) return;
+
+      btnCommit.disabled = true;
 
       try {
-        // TODO: pastikan di GAS ada handler 'tanaCommit'
-        const res = await api("tanaCommit", {
-          method: "POST",
-          body  : { userId, rows }
-        });
+        for (const r of rows) {
+          const code = r.code;
+          const diff = Number(r.diff || 0);
+          const realQty = Number(r.qty || 0);
 
-        if (res?.ok) {
-          toast("棚卸を確定しました。");
+          // 1) 在庫調整（履歴に log）
+          if (diff !== 0) {
+            const type = diff > 0 ? "IN" : "OUT";
+            const qty  = Math.abs(diff);
+            await api("log", {
+              method: "POST",
+              body: {
+                userId: who.id,
+                code,
+                qty,
+                unit: "pcs",
+                type,
+                note: "棚卸調整"
+              }
+            });
+          }
 
-          // kosongkan data lokal
-          ST.rows = new Map();
-          renderShelfTable();
-          clearShelfDraft();
-
-          // refresh master & daftar 棚卸一覧
-          try { renderItems(); } catch (_) {}
-          try { loadTanaList(); } catch (_) {}
-        } else {
-          toast(res?.error || "確定に失敗しました。");
+          // 2) 棚卸シートに結果を1行保存
+          const item = _ITEMS_CACHE.find(x => String(x.code) === String(code)) || {};
+          await api("tanaSave", {
+            method: "POST",
+            body: {
+              code,
+              name: r.name || item.name || "",
+              qty : realQty,
+              unit: "pcs",
+              location: item.location || "",
+              department: r.department || item.department || "",
+              userId: who.id,
+              note: ""
+            }
+          });
         }
+
+        toast("棚卸結果を保存しました。");
+        ST.rows = new Map();
+        renderShelfTable();
+        clearShelfDraft();
+
+        // 3) もし画面「棚卸一覧」が開いていたら再読み込み
+        try { loadTanaList(); } catch (e) {}
       } catch (err) {
-        toast("確定に失敗しました: " + (err?.message || err));
+        console.error(err);
+        toast("棚卸の確定に失敗しました。");
+      } finally {
+        btnCommit.disabled = false;
       }
     });
-
   }
+}
 
   /* -------------------- Export / Import (JP) -------------------- */
 
