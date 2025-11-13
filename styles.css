@@ -598,3 +598,19 @@ td[data-editable]{ cursor:text; }
   border: 1px solid #bae6fd;
   font-weight: 600;
 }
+/* === 入出庫（QR対応）: highlight kolom yang harus diisi setelah scan === */
+
+/* Kolom 数量 & 種別 selalu diberi warna khusus */
+#view-io #io-qty,
+#view-io #io-type {
+  background-color: #fff7ed;                 /* oranye muda, lembut */
+  border-color: #fdba74;                     /* oranye sedikit lebih kuat */
+  box-shadow: 0 0 0 3px rgba(253,186,116,.35); /* efek "disorot" tipis */
+}
+
+/* Saat fokus, garisnya sedikit lebih kuat */
+#view-io #io-qty:focus,
+#view-io #io-type:focus {
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249,115,22,.45);
+}
