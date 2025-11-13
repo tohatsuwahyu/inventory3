@@ -218,27 +218,54 @@
   })();
 
   /* -------------------- Dashboard -------------------- */
-  let chartLine = null, chartPie = null;
+    let chartLine = null, chartPie = null;
   async function renderDashboard() {
     const who = getCurrentUser();
     if (who) $("#who").textContent = `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`;
 
     try {
-      const [itemsRaw, usersRaw, seriesRaw] = await Promise.all([
+      const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
         api("items", { method: "GET" }).catch(() => []),
         api("users", { method: "GET" }).catch(() => []),
-        api("statsMonthlySeries", { method: "GET" }).catch(() => [])
+        api("statsMonthlySeries", { method: "GET" }).catch(() => []),
+        api("history", { method: "GET" }).catch(() => [])
       ]);
 
-      const items = Array.isArray(itemsRaw) ? itemsRaw : [];
-      const users = Array.isArray(usersRaw) ? usersRaw : [];
-      const series = Array.isArray(seriesRaw) ? seriesRaw : [];
+      const items   = Array.isArray(itemsRaw) ? itemsRaw : [];
+      const users   = Array.isArray(usersRaw) ? usersRaw : [];
+      const series  = Array.isArray(seriesRaw) ? seriesRaw : [];
+      const history = Array.isArray(historyRaw)
+        ? historyRaw
+        : (Array.isArray(historyRaw?.history) ? historyRaw.history
+          : (Array.isArray(historyRaw?.data) ? historyRaw.data : []));
 
+      // --- metric kartu utama ---
       $("#metric-total-items").textContent = items.length;
       const low = items.filter(it => Number(it.stock || 0) <= Number(it.min || 0)).length;
       $("#metric-low-stock").textContent = low;
       $("#metric-users").textContent = users.length;
 
+      // --- 直近30日の入出庫 件数 → #metric-txn ---
+      const now   = new Date();
+      const limit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 hari ke belakang
+      let count30 = 0;
+      for (const h of history) {
+        const raw = h.timestamp || h.date || "";
+        if (!raw) continue;
+        let dt;
+        if (raw instanceof Date) {
+          dt = raw;
+        } else {
+          // dukung "yyyy-MM-dd HH:mm:ss" dari GAS
+          dt = new Date(String(raw).replace(" ", "T"));
+        }
+        if (isNaN(dt)) continue;
+        if (dt >= limit && dt <= now) count30++;
+      }
+      const elTxn = $("#metric-txn");
+      if (elTxn) elTxn.textContent = count30;
+
+      // --- grafik line bulanan ---
       const ctx1 = $("#chart-monthly");
       if (ctx1) {
         chartLine?.destroy();
@@ -247,33 +274,42 @@
           data: {
             labels: series.map(s => s.month || ""),
             datasets: [
-              { label: "IN", data: series.map(s => Number(s.in || 0)), borderWidth: 2 },
+              { label: "IN",  data: series.map(s => Number(s.in  || 0)), borderWidth: 2 },
               { label: "OUT", data: series.map(s => Number(s.out || 0)), borderWidth: 2 }
             ]
           },
           options: { responsive: true, maintainAspectRatio: false }
         });
       }
+
+      // --- grafik pie (bulan terakhir) ---
       const ctx2 = $("#chart-pie");
       if (ctx2) {
         chartPie?.destroy();
         const last = series.length ? series[series.length - 1] : { in: 0, out: 0 };
         chartPie = new Chart(ctx2, {
           type: "pie",
-          data: { labels: ["IN", "OUT"], datasets: [{ data: [Number(last.in || 0), Number(last.out || 0)] }] },
+          data: {
+            labels: ["IN", "OUT"],
+            datasets: [{ data: [Number(last.in || 0), Number(last.out || 0)] }]
+          },
           options: { responsive: true, maintainAspectRatio: false }
         });
       }
 
       $("#btn-export-mov")?.addEventListener("click", () => {
         const heads = ["月","IN","OUT"];
-        const csv = [heads.join(",")].concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(","))).join("\n");
+        const csv = [heads.join(",")]
+          .concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(",")))
+          .join("\n");
         downloadCSV_JP("月次INOUT.csv", csv);
       }, { once: true });
     } catch (e) {
+      console.error("renderDashboard()", e);
       toast("ダッシュボードの読み込みに失敗しました。");
     }
   }
+
 
   // --- GANTI fungsi lama updateWelcomeBanner ---
   function updateWelcomeBanner() {
