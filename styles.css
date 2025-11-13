@@ -614,3 +614,17 @@ td[data-editable]{ cursor:text; }
   border-color: #f97316;
   box-shadow: 0 0 0 3px rgba(249,115,22,.45);
 }
+/* === 棚卸: perbaiki input 実在 di smartphone === */
+#tbl-stocktake input.st-qty {
+  text-align: right;
+}
+
+/* Di layar kecil, pastikan angka tidak "hilang" */
+@media (max-width: 576px) {
+  #tbl-stocktake input.st-qty {
+    font-size: 16px;        /* angka lebih besar & jelas */
+    padding: 0.25rem 0.5rem;
+    min-width: 72px;        /* jangan terlalu ramping */
+    height: auto;           /* buang bentuk kapsul aneh kalau ada */
+  }
+}
