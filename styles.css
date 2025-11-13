@@ -525,4 +525,60 @@ td[data-editable]{ cursor:text; }
     white-space: normal;
   }
 }
+/* === 商品一覧: luruskan header & isi (fix alignment) === */
+
+/* Paksa tabel items pakai layout tetap, tapi hanya untuk 商品一覧 */
+#view-items table.table-items {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Semua sel rata vertikal tengah */
+#view-items table.table-items thead th,
+#view-items table.table-items tbody td {
+  vertical-align: middle;
+}
+
+/* QR & 画像: header dan isi sama-sama rata tengah */
+#view-items table.table-items thead th:nth-child(2),
+#view-items table.table-items tbody td:nth-child(2), /* QR */
+#view-items table.table-items thead th:nth-child(4),
+#view-items table.table-items tbody td:nth-child(4)  /* 画像 */ {
+  text-align: center;
+}
+
+/* Kolom angka: 価格 / 在庫 / 最小 → kanan semua */
+#view-items table.table-items thead th:nth-child(5),
+#view-items table.table-items thead th:nth-child(6),
+#view-items table.table-items thead th:nth-child(7),
+#view-items table.table-items tbody td:nth-child(5),
+#view-items table.table-items tbody td:nth-child(6),
+#view-items table.table-items tbody td:nth-child(7) {
+  text-align: right;
+}
+
+/* コード / 名称, 部門, 置場 → kiri (teks) */
+#view-items table.table-items thead th:nth-child(3),
+#view-items table.table-items tbody td:nth-child(3), /* コード / 名称 */
+#view-items table.table-items thead th:nth-child(8),
+#view-items table.table-items tbody td:nth-child(8), /* 部門 */
+#view-items table.table-items thead th:nth-child(9),
+#view-items table.table-items tbody td:nth-child(9)  /* 置場 */ {
+  text-align: left;
+}
+
+/* 操作: header & isi rata tengah supaya tulisan "操作" tepat di atas tombol */
+#view-items table.table-items thead th:nth-child(10),
+#view-items table.table-items tbody td:nth-child(10) {
+  text-align: center;
+}
+
+/* Biar tombol 操作 tidak kepotong & selalu simetris */
+#view-items table.table-items td:last-child .act-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 32px);
+  gap: 8px;
+  justify-content: center;   /* tengah terhadap header 操作 */
+  min-width: 200px;
+}
 
