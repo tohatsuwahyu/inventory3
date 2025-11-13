@@ -1405,6 +1405,90 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
       await addOrUpdateStocktake(code, qty || undefined);
       $("#st-code").value = ""; $("#st-qty").value = "";
     });
+        // --- tombol draft & 確定（在庫更新） ---
+    const btnSave   = document.getElementById("st-save");
+    const btnLoad   = document.getElementById("st-load");
+    const btnClear  = document.getElementById("st-clear");
+    const btnCommit = document.getElementById("st-commit");
+
+    // 下書き保存
+    btnSave?.addEventListener("click", (e) => {
+      e.preventDefault();
+      saveShelfDraft();
+    });
+
+    // 読込
+    btnLoad?.addEventListener("click", (e) => {
+      e.preventDefault();
+      loadShelfDraft();
+    });
+
+    // クリア（画面 & draft）
+    btnClear?.addEventListener("click", (e) => {
+      e.preventDefault();
+      ST.rows = new Map();
+      renderShelfTable();
+      clearShelfDraft();
+    });
+
+    // 差異のみフィルタ ON/OFF
+    document.getElementById("st-diff-only")?.addEventListener("change", (e) => {
+      const on = e.target.checked;
+      $$("#tbl-stocktake tr").forEach(tr => {
+        const diffText = (tr.children[5]?.textContent || "0").replace(/[,¥]/g, "");
+        const diff = Number(diffText || 0);
+        tr.style.display = (on && diff === 0) ? "none" : "";
+      });
+    });
+
+    // 確定（在庫更新）→ backend
+    btnCommit?.addEventListener("click", async (e) => {
+      e.preventDefault();
+
+      if (!ST.rows.size) {
+        toast("棚卸データがありません。");
+        return;
+      }
+      if (!confirm("現在の棚卸結果で在庫を更新しますか？")) return;
+
+      const who    = getCurrentUser();
+      const userId = who?.id || "";
+
+      const rows = [...ST.rows.values()].map(r => ({
+        code : r.code,
+        name : r.name || "",
+        department: r.department || "",
+        book : Number(r.book || 0),
+        qty  : Number(r.qty  || 0),
+        diff : Number(r.diff || 0)
+      }));
+
+      try {
+        // TODO: pastikan di GAS ada handler 'tanaCommit'
+        const res = await api("tanaCommit", {
+          method: "POST",
+          body  : { userId, rows }
+        });
+
+        if (res?.ok) {
+          toast("棚卸を確定しました。");
+
+          // kosongkan data lokal
+          ST.rows = new Map();
+          renderShelfTable();
+          clearShelfDraft();
+
+          // refresh master & daftar 棚卸一覧
+          try { renderItems(); } catch (_) {}
+          try { loadTanaList(); } catch (_) {}
+        } else {
+          toast(res?.error || "確定に失敗しました。");
+        }
+      } catch (err) {
+        toast("確定に失敗しました: " + (err?.message || err));
+      }
+    });
+
   }
 
   /* -------------------- Export / Import (JP) -------------------- */
