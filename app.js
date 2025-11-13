@@ -1625,26 +1625,41 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
   });
 
   /* -------------------- Tanaoroshi List (menu baru) -------------------- */
+    // 棚卸一覧: mapping header JP
   const JP_TANA_MAP = {
-    date:'日付', code:'コード', name:'品名', qty:'数量', unit:'単位',
-    location:'場所', department:'部門', userId:'担当者', note:'備考'
+    period : '棚卸年月',   // ← tahun-bulan, contoh: 2025-11
+    date   : '日付',
+    code   : 'コード',
+    name   : '品名',
+    qty    : '数量',
+    unit   : '単位',
+    location   : '場所',
+    department : '部門',
+    userId     : '担当者',
+    note       : '備考'
   };
   function tanaJPHeaders(){ return Object.values(JP_TANA_MAP); }
+
   function tanaToJPRow(r){
+    const date = r.date || '';
+    const period = date ? String(date).slice(0, 7) : ''; // "YYYY-MM"
+
     return {
-      [JP_TANA_MAP.date]: r.date || '',
-      [JP_TANA_MAP.code]: r.code || '',
-      [JP_TANA_MAP.name]: r.name || '',
-      [JP_TANA_MAP.qty] : String(r.qty ?? ''),
-      [JP_TANA_MAP.unit]: r.unit || 'pcs',
-      [JP_TANA_MAP.location]: r.location || '',
+      [JP_TANA_MAP.period]: period,
+      [JP_TANA_MAP.date]  : date,
+      [JP_TANA_MAP.code]  : r.code || '',
+      [JP_TANA_MAP.name]  : r.name || '',
+      [JP_TANA_MAP.qty]   : String(r.qty ?? ''),
+      [JP_TANA_MAP.unit]  : r.unit || 'pcs',
+      [JP_TANA_MAP.location]  : r.location || '',
       [JP_TANA_MAP.department]: r.department || '',
-      [JP_TANA_MAP.userId]: r.userId || '',
-      [JP_TANA_MAP.note]: r.note || ''
+      [JP_TANA_MAP.userId]    : r.userId || '',
+      [JP_TANA_MAP.note]      : r.note || ''
     };
   }
 
-  async function loadTanaList(){
+
+   async function loadTanaList(){
     try{
       const res = await api("tanaList", { method:'GET' });
       const tbl = document.getElementById('tbl-tana');
@@ -1656,14 +1671,51 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
         Array.isArray(res?.data) ? res.data : [];
 
       const heads = tanaJPHeaders();
-      tbl.innerHTML = '<thead><tr>' + heads.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
+      const headsWithOps = [...heads, '操作'];
+
+      // header: + 操作
+      tbl.innerHTML =
+        '<thead><tr>' + headsWithOps.map(h=>`<th>${h}</th>`).join('') + '</tr></thead>';
 
       if (!rowsRaw.length){
         tbl.insertAdjacentHTML('beforeend',
-          '<tbody><tr><td colspan="'+heads.length+'" class="text-muted py-4">データはありません</td></tr></tbody>');
+          '<tbody><tr><td colspan="'+headsWithOps.length+'" class="text-muted py-4">データはありません</td></tr></tbody>');
         ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
         return;
       }
+
+      const rows = rowsRaw.map(tanaToJPRow);
+
+      tbl.insertAdjacentHTML('beforeend',
+        '<tbody>' + rows.map(r => {
+          const code = r[JP_TANA_MAP.code] || '';
+          return `<tr data-code="${escapeAttr(code)}">${
+            heads.map(h=>`<td>${escapeHtml(r[h])}</td>`).join('') +
+            `<td class="text-end">
+               <button class="btn btn-sm btn-outline-primary btn-tana-edit">編集</button>
+             </td>`
+          }</tr>`;
+        }).join('') + '</tbody>'
+      );
+
+      // klik tombol 編集 → buka edit item (kode sama)
+      tbl.addEventListener('click', (ev)=>{
+        const btn = ev.target.closest('.btn-tana-edit'); if (!btn) return;
+        const tr  = btn.closest('tr'); if (!tr) return;
+        const code = tr.getAttribute('data-code') || '';
+        if (!code) return;
+        openEditItem(code);
+      });
+
+      ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+    }catch (e) {
+      const tbl = document.getElementById('tbl-tana');
+      if (tbl) tbl.innerHTML =
+        '<tbody><tr><td class="text-danger">取得に失敗</td></tr></tbody>';
+      ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+    }
+  }
+
 
       const rows = rowsRaw.map(tanaToJPRow);
       tbl.insertAdjacentHTML('beforeend',
