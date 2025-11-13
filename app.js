@@ -1006,39 +1006,20 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
             return;
           }
 
-          if (parsed.kind === "lot") {
-            const { code, qty, lot } = parsed;
-            $("#io-code").value = code;
-            await findItemIntoIO(code);
+         if (parsed.kind === "lot") {
+  const { code, qty, lot } = parsed;
+  $("#io-code").value = code;
+  await findItemIntoIO(code);
 
-            document.getElementById('io-qty').value = Number(qty||0);
-            setManualHints({ autoFromLot:true });
+  // Auto-fill quantity dari QR LOT, tapi TIDAK otomatis register.
+  const qtyField = document.getElementById("io-qty");
+  if (qtyField) qtyField.value = Number(qty || 0) || "";
 
-            const unit = $("#io-unit").value || "pcs";
-            const type = $("#io-type").value || "IN";
-            const who  = getCurrentUser();
-            if (!who) return toast("ログイン情報がありません。");
+  setManualHints({ autoFromLot:true });
+  // User tetap input / cek sendiri lalu klik 登録, sama seperti QR satuan.
+  return;
+}
 
-            try {
-              const r = await api("log", { method: "POST", body: {
-                userId: who.id, code, qty: Number(qty || 0), unit, type,
-                note: lot ? `LOT:${lot} x ${qty}` : `LOT x ${qty}`
-              }});
-              if (r?.ok) {
-                const msgType = (type === "IN") ? "入庫" : "出庫";
-                toast(`${msgType}として登録しました（${code} × ${qty} ${unit} / ${lot || 'LOT'}）`);
-                $("#io-qty").value = "";
-                await findItemIntoIO(code);
-            setManualHints({ autoFromLot:false });
-                renderDashboard();
-              } else {
-                toast(r?.error || "登録失敗");
-              }
-            } catch(e){
-              toast("登録失敗: " + (e?.message || e));
-            }
-            return; // <— selesai; tidak ada kode sisa setelah ini
-          }
         });
       } catch (e) { toast(e?.message || String(e)); }
     });
