@@ -1814,21 +1814,47 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     };
   }
 
-  async function loadTanaList() {
+    async function loadTanaList() {
     try {
       const res = await api("tanaList", { method: "GET" });
-      const tbl = document.getElementById("tbl-tana");
-      if (!tbl) return;
 
       const rowsRaw =
         Array.isArray(res)        ? res :
         Array.isArray(res?.rows) ? res.rows :
         Array.isArray(res?.data) ? res.data : [];
 
-      const heads        = tanaJPHeaders();
+      // === (A) UI baru: <tbody id="tbl-shelf-list"> ... </tbody> ===
+      const tbodyShelf = document.getElementById("tbl-shelf-list");
+      if (tbodyShelf) {
+        if (!rowsRaw.length) {
+          tbodyShelf.innerHTML =
+            '<tr><td colspan="8" class="text-muted py-4">データはありません</td></tr>';
+        } else {
+          tbodyShelf.innerHTML = rowsRaw.map(r => `
+            <tr>
+              <td>${escapeHtml(r.date   || "")}</td>
+              <td>${escapeHtml(r.userId || "")}</td>
+              <td>${escapeHtml(r.code   || "")}</td>
+              <td>${escapeHtml(r.name   || "")}</td>
+              <td class="text-end">${fmt(r.book || 0)}</td>
+              <td class="text-end">${fmt(r.qty  || 0)}</td>
+              <td class="text-end">${fmt(r.diff || 0)}</td>
+              <td>${escapeHtml(r.note || "")}</td>
+            </tr>
+          `).join("");
+        }
+        ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+        return; // sudah beres untuk UI yang sekarang dipakai
+      }
+
+      // === (B) fallback: UI lama dengan table#tbl-tana (kalau ada) ===
+      const tbl = document.getElementById("tbl-tana");
+      if (!tbl) return;
+
+      const heads        = tanaJPHeaders();          // ['棚卸年月','日付',...]
       const headsWithOps = [...heads, "操作"];
 
-      // header (tambahkan kolom 操作)
+      // header
       tbl.innerHTML =
         "<thead><tr>" +
         headsWithOps.map(h => `<th>${h}</th>`).join("") +
@@ -1845,36 +1871,41 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
 
       const rows = rowsRaw.map(tanaToJPRow);
 
-      // body + tombol 編集
       const bodyHtml =
         "<tbody>" +
         rows.map(r => {
           const code = r[JP_TANA_MAP.code] || "";
           const tds  = heads.map(h => `<td>${escapeHtml(r[h])}</td>`).join("");
-          return `<tr data-code="${escapeAttr(code)}">
-                    ${tds}
-                    <td class="text-end">
-                      <button class="btn btn-sm btn-outline-primary btn-tana-edit">編集</button>
-                    </td>
-                  </tr>`;
+          return `
+            <tr data-code="${escapeAttr(code)}">
+              ${tds}
+              <td class="text-end">
+                <button class="btn btn-sm btn-outline-primary btn-tana-edit">編集</button>
+              </td>
+            </tr>`;
         }).join("") +
         "</tbody>";
 
       tbl.insertAdjacentHTML("beforeend", bodyHtml);
 
-      // klik 編集 → buka modal edit item
+      // klik 編集 → edit item
       tbl.addEventListener("click", (ev) => {
         const btn = ev.target.closest(".btn-tana-edit");
         if (!btn) return;
-        const tr = btn.closest("tr");
-        if (!tr) return;
-        const code = tr.getAttribute("data-code") || "";
+        const tr   = btn.closest("tr");
+        const code = tr?.getAttribute("data-code") || "";
         if (!code) return;
         openEditItem(code);
       });
 
       ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
     } catch (e) {
+      console.error("loadTanaList error", e);
+      const tbodyShelf = document.getElementById("tbl-shelf-list");
+      if (tbodyShelf) {
+        tbodyShelf.innerHTML =
+          '<tr><td colspan="8" class="text-danger py-4">取得に失敗しました</td></tr>';
+      }
       const tbl = document.getElementById("tbl-tana");
       if (tbl) {
         tbl.innerHTML =
@@ -1883,77 +1914,23 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
       ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
     }
   }
+// CSV Export / Import untuk 棚卸一覧
+$("#tana-exp")?.addEventListener("click", async ()=> {
+  const resp = await api("tanaExportCSV", { method:'GET' });
+  if(!resp || !resp.ok) return alert('エクスポート失敗');
+  downloadCSV_JP(resp.filename || "棚卸.csv", resp.csv);
+});
 
-
-  $("#tana-exp")?.addEventListener("click", async ()=>{
-    const resp = await api("tanaExportCSV", { method:'GET' });
-    if(!resp || !resp.ok) return alert('エクスポート失敗');
-    downloadCSV_JP(resp.filename || "棚卸.csv", resp.csv);
-  });
-
-  $("#input-tana-imp")?.addEventListener("change", async (ev)=>{
-    const file = ev.target.files?.[0]; if(!file) return;
-    const buf = await file.arrayBuffer();
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-    const resp = await api("tanaImportCSV", { method:'POST', body:{ csvBase64: b64 } });
-    if(!resp || !resp.ok) return alert('インポート失敗');
-    alert(`インポート: ${resp.imported} 行`);
-    loadTanaList();
-    ev.target.value = '';
-  });
-
-  async function renderShelfRecapForList(){
-    try {
-      const raw = await api("history", { method: "GET" });
-      const list = Array.isArray(raw) ? raw : (raw?.history || raw?.data || []);
-      const byMonth = new Map();
-      const byYear = new Map();
-      for (const h of list) {
-        const d = new Date(h.timestamp || h.date || ""); if (isNaN(d)) continue;
-        const m = d.toISOString().slice(0, 7);
-        const y = String(d.getFullYear());
-        const type = String(h.type || "").toUpperCase();
-        const qty = Number(h.qty || 0);
-        if (!byMonth.has(m)) byMonth.set(m, { in: 0, out: 0 });
-        if (!byYear.has(y)) byYear.set(y, { in: 0, out: 0 });
-        if (type === "IN") { byMonth.get(m).in += qty; byYear.get(y).in += qty; }
-        else if (type === "OUT") { byMonth.get(m).out += qty; byYear.get(y).out += qty; }
-      }
-
-      $("#tana-recap-export-monthly")?.addEventListener("click", () => {
-        const heads = ["月","IN","OUT"];
-        const csv = [heads.join(",")]
-          .concat([...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, v.in, v.out].join(","))).join("\n");
-        downloadCSV_JP("棚卸_月次.csv", csv);
-      }, { once: true });
-
-      $("#tana-recap-export-yearly")?.addEventListener("click", () => {
-        const heads = ["年","IN","OUT"];
-        const csv = [heads.join(",")]
-          .concat(
-            [...byYear.entries()]
-              .sort((a,b)=>a[0].localeCompare(b[0]))
-              .map(([k,v]) => [k, v.in, v.out].join(","))
-          )
-          .join("\n");
-        downloadCSV_JP("棚卸_年次.csv", csv);
-      }, { once: true });
-
-      $("#tana-matome-exp")?.addEventListener("click", async ()=>{
-        const res = await api("tanaList", { method:'GET' }); if(!res || !res.rows) return;
-        const agg = {}; res.rows.forEach(r=>{ agg[r.code] = (agg[r.code]||0) + Number(r.qty||0); });
-        const heads = ['コード','数量'];
-        const csv = [heads.join(',')]
-          .concat(Object.keys(agg).map(k=>[k, agg[k]].join(',')))
-          .join('\n');
-        downloadCSV_JP("棚卸まとめ.csv", csv);
-      }, { once:true });
-
-      ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
-    } catch (e) {
-      ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
-    }
-  }
+$("#input-tana-imp")?.addEventListener("change", async (ev)=> {
+  const file = ev.target.files?.[0]; if(!file) return;
+  const buf = await file.arrayBuffer();
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const resp = await api("tanaImportCSV", { method:'POST', body:{ csvBase64: b64 } });
+  if(!resp || !resp.ok) return alert('インポート失敗');
+  alert(`インポート: ${resp.imported} 行`);
+  loadTanaList();      // ⬅ setelah import, daftar ulang otomatis
+  ev.target.value = '';
+});
 
   /* -------------------- Auto-refresh UI helpers -------------------- */
   function itemsAuto_refreshLabel(sec){
