@@ -13,8 +13,18 @@
   function ensure(x, msg) { if (!x) throw new Error(msg || "Assertion failed"); return x; }
 
   // Escape
-  function escapeHtml(s){ return String(s || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
-  function escapeAttr(s){ return escapeHtml(s); }
+    // Escape
+  function escapeHtml(s) {
+    return String(s || "").replace(/[&<>"']/g, (m) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    }[m]));
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
 
   // CSV helper: paksa Excel baca UTF-8 + JP header OK
   function downloadCSV_JP(filename, csv){
