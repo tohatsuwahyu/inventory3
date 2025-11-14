@@ -1527,37 +1527,69 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
           });
         }
 
-        // 2) 棚卸シートに結果を1行保存（備考に book/diff を埋める）
-        const item = _ITEMS_CACHE.find(x => String(x.code) === String(code)) || {};
-        await api("tanaSave", {
-          method: "POST",
-          body: {
-            code,
-            name      : r.name || item.name || "",
-            qty       : realQty,
-            unit      : "pcs",
-            location  : item.location || "",
-            department: r.department || item.department || "",
-            userId    : who.id,
-            note      : `book:${book} diff:${diff}`   // ★ penting: ini yang dibaca tanaList()
-          }
-        });
-      }
+       /* -------------------- Tanaoroshi List (menu baru) -------------------- */
 
-      toast("棚卸結果を保存しました。");
-      ST.rows = new Map();
-      renderShelfTable();
-      clearShelfDraft();
+// Header JP + kolom "棚卸年月", 単価, 金額
+const JP_TANA_MAP = {
+  period : "棚卸年月",   // contoh: 2025-11
+  date   : "日付",
+  code   : "コード",
+  name   : "品名",
+  qty    : "数量",
+  unit   : "単位",
+  price  : "単価",
+  amount : "金額",
+  location   : "場所",
+  department : "部門",
+  userId     : "担当者",
+  note       : "備考"
+};
 
-      try { loadTanaList(); } catch (e) {}
-    } catch (err) {
-      console.error(err);
-      toast("棚卸の確定に失敗しました。");
-    } finally {
-      btnCommit.disabled = false;
+// cache data 棚卸一覧 (sudah diperkaya: price, amount, dll)
+let _TANA_ROWS = [];
+
+function tanaJPHeaders() {
+  return Object.values(JP_TANA_MAP);
+}
+
+// format note: "book:6 diff:0" → "帳簿:6 / 差異:0"
+function formatTanaNote(row) {
+  const raw = String(row.note || "");
+  let book = row.book;
+  let diff = row.diff;
+
+  if (book == null || diff == null) {
+    const m = raw.match(/book:\s*(-?\d+)\s+diff:\s*(-?\d+)/i);
+    if (m) {
+      book = Number(m[1]);
+      diff = Number(m[2]);
     }
-   });
   }
+  if (book != null || diff != null) {
+    const b = Number(book || 0);
+    const d = Number(diff || 0);
+    return `帳簿:${fmt(b)} / 差異:${fmt(d)}`;
+  }
+  return raw;
+}
+
+// ubah ke bentuk "header JP → nilai"
+function tanaToJPRow(row) {
+  return {
+    [JP_TANA_MAP.period]    : row.period || "",
+    [JP_TANA_MAP.date]      : row.date || "",
+    [JP_TANA_MAP.code]      : row.code || "",
+    [JP_TANA_MAP.name]      : row.name || "",
+    [JP_TANA_MAP.qty]       : String(row.qty ?? ""),
+    [JP_TANA_MAP.unit]      : row.unit || "pcs",
+    [JP_TANA_MAP.price]     : row.price != null ? String(row.price) : "",
+    [JP_TANA_MAP.amount]    : row.amount != null ? String(row.amount) : "",
+    [JP_TANA_MAP.location]  : row.location || "",
+    [JP_TANA_MAP.department]: row.department || "",
+    [JP_TANA_MAP.userId]    : row.userId || "",
+    [JP_TANA_MAP.note]      : formatTanaNote(row)
+  };
+}
 }
 
   /* -------------------- Export / Import (JP) -------------------- */
@@ -1814,112 +1846,374 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     };
   }
 
-    async function loadTanaList() {
-    try {
-      const res = await api("tanaList", { method: "GET" });
+// render tabel utama (pakai _TANA_ROWS yang sudah diperkaya)
+function renderTanaTable() {
+  const tbl = document.getElementById("tbl-tana");
+  if (!tbl) return;
 
-      const rowsRaw =
-        Array.isArray(res)        ? res :
-        Array.isArray(res?.rows) ? res.rows :
-        Array.isArray(res?.data) ? res.data : [];
+  const heads        = tanaJPHeaders();          // ['棚卸年月','日付',...,'金額','備考']
+  const headsWithOps = [...heads, "操作"];
 
-      // === (A) UI baru: <tbody id="tbl-shelf-list"> ... </tbody> ===
-      const tbodyShelf = document.getElementById("tbl-shelf-list");
-      if (tbodyShelf) {
-        if (!rowsRaw.length) {
-          tbodyShelf.innerHTML =
-            '<tr><td colspan="8" class="text-muted py-4">データはありません</td></tr>';
-        } else {
-          tbodyShelf.innerHTML = rowsRaw.map(r => `
-            <tr>
-              <td>${escapeHtml(r.date   || "")}</td>
-              <td>${escapeHtml(r.userId || "")}</td>
-              <td>${escapeHtml(r.code   || "")}</td>
-              <td>${escapeHtml(r.name   || "")}</td>
-              <td class="text-end">${fmt(r.book || 0)}</td>
-              <td class="text-end">${fmt(r.qty  || 0)}</td>
-              <td class="text-end">${fmt(r.diff || 0)}</td>
-              <td>${escapeHtml(r.note || "")}</td>
-            </tr>
-          `).join("");
+  const monthSel = document.getElementById("tana-month");
+  const month    = (monthSel?.value || "").trim();
+
+  const data = month
+    ? _TANA_ROWS.filter(r => r.period === month)
+    : _TANA_ROWS.slice();
+
+  // header
+  tbl.innerHTML =
+    "<thead><tr>" +
+    headsWithOps.map(h => `<th>${h}</th>`).join("") +
+    "</tr></thead>";
+
+  if (!data.length) {
+    tbl.insertAdjacentHTML(
+      "beforeend",
+      `<tbody><tr><td colspan="${headsWithOps.length}" class="text-muted py-4 text-center">データはありません</td></tr></tbody>`
+    );
+    updateTanaSummary();
+    bindTanaTableEvents();
+    return;
+  }
+
+  let totalAmount = 0;
+
+  const bodyHtml =
+    "<tbody>" +
+    data.map((row, idx) => {
+      const jpRow = tanaToJPRow(row);        // sudah include note yang diformat
+      const code  = jpRow[JP_TANA_MAP.code] || "";
+
+      // hitung total 金額
+      totalAmount += Number(row.amount || 0);
+
+      const tds = heads.map(h => {
+        const v = jpRow[h] ?? "";
+        if (h === JP_TANA_MAP.price || h === JP_TANA_MAP.amount) {
+          const num = Number(v || 0);
+          return `<td class="text-end">${num ? "¥" + fmt(num) : ""}</td>`;
         }
-        ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
-        return; // sudah beres untuk UI yang sekarang dipakai
+        if (h === JP_TANA_MAP.qty) {
+          return `<td class="text-end">${fmt(v)}</td>`;
+        }
+        return `<td>${escapeHtml(v)}</td>`;
+      }).join("");
+
+      return `
+        <tr data-idx="${row.idx}" data-code="${escapeAttr(code)}">
+          ${tds}
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-primary btn-tana-edit">編集</button>
+          </td>
+        </tr>`;
+    }).join("") +
+    "</tbody>";
+
+  // total 金額 di bawah tabel (tfoot)
+  const idxAmount = heads.indexOf(JP_TANA_MAP.amount);
+  const leftSpan  = idxAmount;          // sebelum kolom 金額
+  const rightSpan = headsWithOps.length - idxAmount - 1;
+
+  const tfootHtml = `
+    <tfoot>
+      <tr>
+        <td colspan="${leftSpan}" class="text-end fw-bold">合計金額</td>
+        <td class="text-end fw-bold">¥${fmt(totalAmount)}</td>
+        <td colspan="${rightSpan}"></td>
+      </tr>
+    </tfoot>`;
+
+  tbl.insertAdjacentHTML("beforeend", bodyHtml + tfootHtml);
+
+  updateTanaSummary();
+  bindTanaTableEvents();
+}
+
+// rekap bulanan: total qty & 金額 per 月 (pakai semua data, bukan hanya filter)
+function updateTanaSummary() {
+  const host = document.getElementById("tana-summary");
+  if (!host) return;
+  if (!_TANA_ROWS.length) {
+    host.textContent = "";
+    return;
+  }
+
+  const agg = new Map();  // period → { qty, amount }
+  for (const r of _TANA_ROWS) {
+    const key = r.period || "不明";
+    const cur = agg.get(key) || { qty: 0, amount: 0 };
+    cur.qty    += Number(r.qty || 0);
+    cur.amount += Number(r.amount || 0);
+    agg.set(key, cur);
+  }
+
+  const rows = [...agg.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  const html =
+    '<div class="fw-semibold mb-1">月別集計（全データ）</div>' +
+    '<div class="table-responsive"><table class="table table-sm mb-0">' +
+    '<thead><tr><th>棚卸年月</th><th class="text-end">数量合計</th><th class="text-end">金額合計</th></tr></thead>' +
+    '<tbody>' +
+    rows.map(([period, v]) => `
+      <tr>
+        <td>${escapeHtml(period)}</td>
+        <td class="text-end">${fmt(v.qty)}</td>
+        <td class="text-end">¥${fmt(v.amount)}</td>
+      </tr>`).join("") +
+    '</tbody></table></div>';
+
+  host.innerHTML = html;
+}
+
+// binding filter bulan
+function bindTanaFilterUI() {
+  const monthSel = document.getElementById("tana-month");
+  if (monthSel && !monthSel.__bound) {
+    monthSel.__bound = true;
+    monthSel.addEventListener("change", () => renderTanaTable());
+  }
+  const clearBtn = document.getElementById("tana-month-clear");
+  if (clearBtn && !clearBtn.__bound) {
+    clearBtn.__bound = true;
+    clearBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (monthSel) monthSel.value = "";
+      renderTanaTable();
+    });
+  }
+}
+
+// klik 編集 → modal edit quantity saja
+function bindTanaTableEvents() {
+  const tbl = document.getElementById("tbl-tana");
+  if (!tbl || tbl.__tanaBound) return;
+  tbl.__tanaBound = true;
+
+  tbl.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".btn-tana-edit");
+    if (!btn) return;
+    const tr  = btn.closest("tr");
+    const idx = Number(tr?.getAttribute("data-idx") || "-1");
+    const row = _TANA_ROWS.find(r => r.idx === idx);
+    if (!row) return;
+    openTanaEditModal(row);
+  });
+}
+
+// modal untuk edit quantity (hanya qty yang bisa diubah)
+function openTanaEditModal(row) {
+  const who = getCurrentUser();
+  if (!who) return toast("ログイン情報がありません。");
+
+  const wrap = document.createElement("div");
+  wrap.className = "modal fade";
+  wrap.innerHTML = `
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">棚卸数量の編集</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="mb-2 small text-muted">コード・名称などは変更不可です。数量のみ編集できます。</div>
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">コード</label>
+              <input class="form-control" value="${escapeAttr(row.code)}" readonly></div>
+            <div class="col-md-6"><label class="form-label">品名</label>
+              <input class="form-control" value="${escapeAttr(row.name || "")}" readonly></div>
+            <div class="col-md-4"><label class="form-label">棚卸年月</label>
+              <input class="form-control" value="${escapeAttr(row.period || "")}" readonly></div>
+            <div class="col-md-4"><label class="form-label">単価</label>
+              <input class="form-control" value="${fmt(row.price || 0)}" readonly></div>
+            <div class="col-md-4"><label class="form-label">数量</label>
+              <input id="tana-edit-qty" type="number" class="form-control" min="0" value="${row.qty}"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button class="btn btn-primary" id="tana-edit-save">保存</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const modal = new bootstrap.Modal(wrap); modal.show();
+
+  $("#tana-edit-save", wrap)?.addEventListener("click", async () => {
+    const qtyVal = Number($("#tana-edit-qty", wrap).value || 0);
+    if (!Number.isFinite(qtyVal) || qtyVal < 0) {
+      return toast("数量を正しく入力してください。");
+    }
+
+    // hitung selisih terhadap qty lama → log koreksi
+    const oldQty = Number(row.qty || 0);
+    const delta  = qtyVal - oldQty;
+
+    // coba rekonstruksi book & diff lama dari data / note
+    let book = row.book;
+    let oldDiff = row.diff;
+    if (book == null || oldDiff == null) {
+      const m = String(row.note || "").match(/book:\s*(-?\d+)\s+diff:\s*(-?\d+)/i);
+      if (m) {
+        book    = Number(m[1]);
+        oldDiff = Number(m[2]);
+      }
+    }
+    if (book == null) {
+      book = oldQty - (oldDiff || 0);
+    }
+    const newDiff = qtyVal - book;
+
+    try {
+      // 1) kalau quantity berubah, catat koreksi ke history (log)
+      if (delta !== 0) {
+        const type = delta > 0 ? "IN" : "OUT";
+        const qty  = Math.abs(delta);
+        await api("log", {
+          method: "POST",
+          body: {
+            userId: who.id,
+            code  : row.code,
+            qty,
+            unit  : row.unit || "pcs",
+            type,
+            note  : "棚卸修正"
+          }
+        });
       }
 
-      // === (B) fallback: UI lama dengan table#tbl-tana (kalau ada) ===
-      const tbl = document.getElementById("tbl-tana");
-      if (!tbl) return;
-
-      const heads        = tanaJPHeaders();          // ['棚卸年月','日付',...]
-      const headsWithOps = [...heads, "操作"];
-
-      // header
-      tbl.innerHTML =
-        "<thead><tr>" +
-        headsWithOps.map(h => `<th>${h}</th>`).join("") +
-        "</tr></thead>";
-
-      if (!rowsRaw.length) {
-        tbl.insertAdjacentHTML(
-          "beforeend",
-          `<tbody><tr><td colspan="${headsWithOps.length}" class="text-muted py-4">データはありません</td></tr></tbody>`
-        );
-        ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
-        return;
-      }
-
-      const rows = rowsRaw.map(tanaToJPRow);
-
-      const bodyHtml =
-        "<tbody>" +
-        rows.map(r => {
-          const code = r[JP_TANA_MAP.code] || "";
-          const tds  = heads.map(h => `<td>${escapeHtml(r[h])}</td>`).join("");
-          return `
-            <tr data-code="${escapeAttr(code)}">
-              ${tds}
-              <td class="text-end">
-                <button class="btn btn-sm btn-outline-primary btn-tana-edit">編集</button>
-              </td>
-            </tr>`;
-        }).join("") +
-        "</tbody>";
-
-      tbl.insertAdjacentHTML("beforeend", bodyHtml);
-
-      // klik 編集 → edit item
-      tbl.addEventListener("click", (ev) => {
-        const btn = ev.target.closest(".btn-tana-edit");
-        if (!btn) return;
-        const tr   = btn.closest("tr");
-        const code = tr?.getAttribute("data-code") || "";
-        if (!code) return;
-        openEditItem(code);
+      // 2) simpan rekaman 棚卸 baru (baris koreksi) dengan quantity terbaru
+      await api("tanaSave", {
+        method: "POST",
+        body: {
+          code      : row.code,
+          name      : row.name,
+          qty       : qtyVal,
+          unit      : row.unit || "pcs",
+          location  : row.location || "",
+          department: row.department || "",
+          userId    : row.userId || who.id,
+          note      : `book:${book} diff:${newDiff}`
+        }
       });
 
-      ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+      toast("棚卸数量を保存しました。");
+      modal.hide();
+      wrap.remove();
+      // reload dari backend supaya data & rekap up to date
+      loadTanaList();
     } catch (e) {
-      console.error("loadTanaList error", e);
-      const tbodyShelf = document.getElementById("tbl-shelf-list");
-      if (tbodyShelf) {
-        tbodyShelf.innerHTML =
-          '<tr><td colspan="8" class="text-danger py-4">取得に失敗しました</td></tr>';
-      }
-      const tbl = document.getElementById("tbl-tana");
-      if (tbl) {
-        tbl.innerHTML =
-          '<tbody><tr><td class="text-danger">取得に失敗</td></tr></tbody>';
-      }
-      ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+      console.error(e);
+      toast("保存に失敗しました。");
     }
+  });
+
+  wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
+}
+
+// load data dari backend, join dengan 商品一覧 untuk ambil 単価 & 部門
+async function loadTanaList() {
+  try {
+    const [res, itemsRaw] = await Promise.all([
+      api("tanaList", { method: "GET" }),
+      api("items",   { method: "GET", silent: true }).catch(() => [])
+    ]);
+
+    const rowsRaw =
+      Array.isArray(res)        ? res :
+      Array.isArray(res?.rows) ? res.rows :
+      Array.isArray(res?.data) ? res.data : [];
+
+    const items =
+      Array.isArray(itemsRaw) ? itemsRaw :
+      Array.isArray(itemsRaw?.data) ? itemsRaw.data : [];
+
+    const mapItems = new Map(items.map(it => [String(it.code), it]));
+
+    _TANA_ROWS = rowsRaw.map((r, idx) => {
+      const date   = r.date || "";
+      const period = date ? String(date).slice(0, 7) : "";
+      const code   = r.code || "";
+      const item   = mapItems.get(String(code)) || {};
+
+      const qty   = Number(r.qty || 0);
+      const unit  = r.unit || "pcs";
+      const price = (r.price != null)
+        ? Number(r.price || 0)
+        : Number(item.price || 0);
+      const amount = qty * price;
+
+      const location   = r.location   || item.location   || "";
+      const department = r.department || item.department || "";
+
+      return {
+        idx,
+        period,
+        date,
+        code,
+        name      : r.name || item.name || "",
+        qty,
+        unit,
+        price,
+        amount,
+        location,
+        department,
+        userId    : r.userId || "",
+        note      : r.note || "",
+        book      : (typeof r.book !== "undefined") ? Number(r.book || 0) : null,
+        diff      : (typeof r.diff !== "undefined") ? Number(r.diff || 0) : null
+      };
+    });
+
+    renderTanaTable();
+    bindTanaFilterUI();
+    ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+  } catch (e) {
+    console.error("loadTanaList error", e);
+    const tbl = document.getElementById("tbl-tana");
+    if (tbl) {
+      tbl.innerHTML =
+        '<tbody><tr><td colspan="5" class="text-danger py-4">取得に失敗しました</td></tr></tbody>';
+    }
+    const host = document.getElementById("tana-summary");
+    if (host) host.textContent = "取得に失敗しました。";
+    ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
   }
+}
+
 // CSV Export / Import untuk 棚卸一覧
-$("#tana-exp")?.addEventListener("click", async ()=> {
-  const resp = await api("tanaExportCSV", { method:'GET' });
-  if(!resp || !resp.ok) return alert('エクスポート失敗');
-  downloadCSV_JP(resp.filename || "棚卸.csv", resp.csv);
+// CSV Export / Import untuk 棚卸一覧 (per bulan)
+$("#tana-exp")?.addEventListener("click", (e)=> {
+  e.preventDefault();
+  if (!_TANA_ROWS.length) {
+    alert("データがありません。");
+    return;
+  }
+
+  const month = (document.getElementById("tana-month")?.value || "").trim();
+  const rows  = month
+    ? _TANA_ROWS.filter(r => r.period === month)
+    : _TANA_ROWS.slice();
+
+  if (!rows.length) {
+    alert("該当するデータがありません。");
+    return;
+  }
+
+  const heads = tanaJPHeaders(); // sudah termasuk 単価, 金額, dll
+  const csvRows = rows.map(r => {
+    const jp = tanaToJPRow(r);
+    return heads.map(h => {
+      let v = jp[h] ?? "";
+      // bersihkan koma supaya tidak merusak CSV
+      v = String(v).replace(/,/g, " ");
+      return v;
+    }).join(",");
+  });
+
+  const fname = month ? `棚卸_${month}.csv` : "棚卸.csv";
+  const csv   = [heads.join(",")].concat(csvRows).join("\n");
+  downloadCSV_JP(fname, csv);
 });
+
 
 $("#input-tana-imp")?.addEventListener("change", async (ev)=> {
   const file = ev.target.files?.[0]; if(!file) return;
