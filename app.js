@@ -2295,7 +2295,7 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     startLiveReload();
   });
 
-})();
+
 
 /* -------------------- Preview Modal & Preview helpers -------------------- */
 
