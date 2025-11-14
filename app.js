@@ -13,18 +13,8 @@
   function ensure(x, msg) { if (!x) throw new Error(msg || "Assertion failed"); return x; }
 
   // Escape
-    // Escape
-  function escapeHtml(s) {
-    return String(s || "").replace(/[&<>"']/g, (m) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;"
-    }[m]));
-  }
-  function escapeAttr(s) { return escapeHtml(s); }
-
+  function escapeHtml(s){ return String(s || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])); }
+  function escapeAttr(s){ return escapeHtml(s); }
 
   // CSV helper: paksa Excel baca UTF-8 + JP header OK
   function downloadCSV_JP(filename, csv){
@@ -219,13 +209,12 @@
 
       closeSB();
 
-           if (id === "view-items") renderItems();
+      if (id === "view-items") renderItems();
       if (id === "view-users") renderUsers();
       if (id === "view-history") renderHistory();
       if (id === "view-shelf") { renderShelfTable(); }
-      // 棚卸一覧：リスト + 集計は loadTanaList の中で行う
-      if (id === "view-shelf-list") { loadTanaList(); }
- });
+      if (id === "view-shelf-list") { loadTanaList(); renderShelfRecapForList(); }
+    });
   })();
 
   /* -------------------- Dashboard -------------------- */
@@ -1498,7 +1487,6 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
   });
 
   // --- 確定（在庫更新 ＋ 棚卸シート保存） ---
-   // --- 確定（在庫更新 ＋ 棚卸シート保存） ---
   const btnCommit = $("#st-commit");
   if (btnCommit && !btnCommit.__bound) {
     btnCommit.__bound = true;
@@ -1506,70 +1494,291 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
       e.preventDefault();
 
       const rows = [...ST.rows.values()];
-      if (!rows.length) {
-        toast("棚卸データがありません。");
-        return;
-      }
+      if (!rows.length) return toast("棚卸データがありません。");
 
       const who = getCurrentUser();
-      if (!who) {
-        toast("ログイン情報がありません。");
-        return;
-      }
+      if (!who) return toast("ログイン情報がありません。");
 
       if (!confirm("帳簿在庫を更新し、棚卸結果を保存しますか？")) return;
 
       btnCommit.disabled = true;
 
-      try {
-        // siapkan payload untuk GAS → fungsi tanaCommit()
-        const payloadRows = rows.map(r => ({
-          code      : r.code,
-          name      : r.name,
-          qty       : Number(r.qty || 0),
-          book      : Number(r.book || 0),
-          diff      : Number(r.diff || 0),
-          unit      : "pcs",
-          department: r.department || ""
-        }));
+         try {
+      for (const r of rows) {
+        const code   = r.code;
+        const book   = Number(r.book || 0);   // ← stok buku saat ini
+        const diff   = Number(r.diff || 0);   // ← selisih (実在 − 帳簿)
+        const realQty = Number(r.qty || 0);   // ← 实在（実在在庫）
 
-        const res = await api("tanaCommit", {
-          method: "POST",
-          body: {
-            userId: who.id,
-            rows : payloadRows
-          }
-        });
-
-        if (!res || !res.ok) {
-          throw new Error((res && res.error) || "tanaCommit failed");
+        // 1) 在庫調整（履歴に log）
+        if (diff !== 0) {
+          const type = diff > 0 ? "IN" : "OUT";
+          const qty  = Math.abs(diff);
+          await api("log", {
+            method: "POST",
+            body: {
+              userId: who.id,
+              code,
+              qty,
+              unit: "pcs",
+              type,
+              note: "棚卸調整"
+            }
+          });
         }
 
-        toast(`棚卸を確定しました（在庫更新 ${res.updated || 0} 件）`);
-
-        // bersihkan data lokal + draft
-        ST.rows = new Map();
-        renderShelfTable();
-        clearShelfDraft();
-
-        // refresh daftar, items, dan dashboard (kalau gagal, di-ignore)
-        try { await loadTanaList(); } catch (_) {}
-        try { await renderItems(); } catch (_) {}
-        renderDashboard();
-
-      } catch (err) {
-        console.error("tanaCommit error", err);
-        toast("棚卸の確定に失敗しました。");
-      } finally {
-        btnCommit.disabled = false;
+        // 2) 棚卸シートに結果を1行保存（備考に book/diff を埋める）
+        const item = _ITEMS_CACHE.find(x => String(x.code) === String(code)) || {};
+        await api("tanaSave", {
+          method: "POST",
+          body: {
+            code,
+            name      : r.name || item.name || "",
+            qty       : realQty,
+            unit      : "pcs",
+            location  : item.location || "",
+            department: r.department || item.department || "",
+            userId    : who.id,
+            note      : `book:${book} diff:${diff}`   // ★ penting: ini yang dibaca tanaList()
+          }
+        });
       }
-    });
+
+      toast("棚卸結果を保存しました。");
+      ST.rows = new Map();
+      renderShelfTable();
+      clearShelfDraft();
+
+      try { loadTanaList(); } catch (e) {}
+    } catch (err) {
+      console.error(err);
+      toast("棚卸の確定に失敗しました。");
+    } finally {
+      btnCommit.disabled = false;
+    }
+   });
+  }
+}
+
+  /* -------------------- Export / Import (JP) -------------------- */
+
+  // Users print
+  $("#btn-print-qr-users")?.addEventListener("click", () => window.print());
+
+  // Users export/import (JP headers)
+  $("#btn-users-export")?.addEventListener("click", async () => {
+    try {
+      const list = await api("users", { method: "GET" });
+      const arr = Array.isArray(list) ? list : (list?.data || []);
+      const heads = ["ユーザーID","氏名","権限"];
+      const csv = [heads.join(",")]
+        .concat(arr.map(u => [
+          u.id,
+          String(u.name || "").replace(/,/g, " "),
+          (u.role || "user")
+        ].join(","))).join("\n");
+      downloadCSV_JP("ユーザー一覧.csv", csv);
+    } catch (e) { alert("エクスポート失敗"); }
+  });
+  $("#btn-users-import")?.addEventListener("click", () => {
+    if (!isAdmin()) return alert("権限がありません（admin のみ）");
+    $("#input-users-import")?.click();
+  });
+  $("#input-users-import")?.addEventListener("change", async (e) => {
+    if (!isAdmin()) return alert("権限がありません（admin のみ）");
+    const f = e.target.files?.[0]; if (!f) return;
+    const text = await f.text();
+    const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
+    const start = rows[0]?.includes("ユーザーID") ? 1 : 0;
+    let ok = 0, fail = 0;
+    for (let i = start; i < rows.length; i++) {
+      const [id, name, role] = rows[i].split(",").map(s => s?.trim());
+      if (!id) { fail++; continue; }
+      try { await api("upsertUser", { method: "POST", body: { id, name, role: (role || "user") } }); ok++; }
+      catch (e) { fail++; }
+    }
+    alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderUsers();
+  });
+
+  // Items export (CSV) + Excel (JP)
+  $("#btn-items-export")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    try {
+      const list = await api("items", { method: "GET" });
+      const arr = Array.isArray(list) ? list : (list?.data || []);
+      const heads = ["コード","品名","価格","在庫","最小","置場","部門","画像"];
+      const csv = [heads.join(",")]
+        .concat(arr.map(i => [
+          i.code,
+          String(i.name || "").replace(/,/g, " "),
+          Number(i.price || 0),
+          Number(i.stock || 0),
+          Number(i.min || 0),
+          String(i.location || "").toUpperCase(),
+          String(i.department || "").replace(/,/g, " "),
+          i.img || ""
+        ].join(",")))
+        .join("\n");
+      downloadCSV_JP("商品.csv", csv);
+    } catch (e) { alert("エクスポート失敗"); }
+  });
+
+  $("#btn-items-xlsx")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    try {
+      const list = await api("items", { method: "GET" });
+      const arr = Array.isArray(list) ? list : (list?.data || []);
+      const rows = arr.map(i => ({
+        "コード": i.code,
+        "品名": i.name || "",
+        "価格": Number(i.price || 0),
+        "在庫": Number(i.stock || 0),
+        "最小": Number(i.min || 0),
+        "置場": String(i.location || "").toUpperCase(),
+        "部門": i.department || "",
+        "画像": i.img || ""
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows, { header: ["コード","品名","価格","在庫","最小","置場","部門","画像"] });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "商品");
+      XLSX.writeFile(wb, "商品.xlsx");
+    } catch (e) { alert("エクスポート失敗"); }
+  });
+
+  // Items import (CSV) — dukung header JP atau EN
+  $("#btn-items-import")?.addEventListener("click", () => $("#input-items-import")?.click());
+  $("#input-items-import")?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const text = await file.text();
+    const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
+    const head = (rows[0] || "").toLowerCase();
+    const jp = head.includes("コード");
+    const start = (head.includes("code") || jp) ? 1 : 0;
+    let ok = 0, fail = 0;
+    for (let i = start; i < rows.length; i++) {
+      const cols = rows[i].split(",").map(s => s?.trim());
+      const [code,name,price,stock,min,location,department,img] = jp
+        ? [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7]]
+        : [cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[7], cols[6]];
+      if (!code) { fail++; continue; }
+      try {
+        await api("updateItem", {
+          method: "POST", body: {
+            code, name,
+            price: Number(price || 0), stock: Number(stock || 0), min: Number(min || 0),
+            location: (location || "").toUpperCase(), img, department: (department || "").trim(), overwrite: true
+          }
+        });
+        ok++;
+      } catch (e) { fail++; }
+    }
+    alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = ""; renderItems();
+  });
+
+  // IO export/import (CSV JP)
+  $("#btn-io-export")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    try {
+      const raw = await api("history", { method: "GET" });
+      const list = Array.isArray(raw) ? raw : (raw?.history || raw?.data || []);
+      const recent = list.slice(-200);
+      const heads = ["日時","ユーザーID","コード","数量","単位","種別","備考"];
+      const csv = [heads.join(",")]
+        .concat(recent.map(h => [
+          h.timestamp || h.date || "", h.userId || "", h.code || "", h.qty || 0, h.unit || "", h.type || "", (h.note || "").replace(/,/g, " ")
+        ].join(","))).join("\n");
+      downloadCSV_JP("入出庫履歴.csv", csv);
+    } catch (e) { alert("エクスポート失敗"); }
+  });
+  $("#btn-io-import")?.addEventListener("click", (e) => {
+    e.preventDefault(); $("#input-io-import")?.click();
+  });
+  $("#input-io-import")?.addEventListener("change", async (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const text = await f.text();
+    const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
+    const start = rows[0]?.includes("ユーザーID") || rows[0]?.toLowerCase?.().includes("user") ? 1 : 0;
+    let ok = 0, fail = 0;
+    for (let i = start; i < rows.length; i++) {
+      const [userId, code, qty, unit, type, note] = rows[i].split(",").map(s => s?.trim());
+      if (!userId || !code) { fail++; continue; }
+      try { await api("log", { method: "POST", body: { userId, code, qty: Number(qty || 0), unit, type, note } }); ok++; }
+      catch (e) { fail++; }
+    }
+    alert(`インポート完了：成功 ${ok} 件 / 失敗 ${fail} 件`); e.target.value = "";
+  });
+
+  // 履歴 CSV (JP)
+  $("#btn-history-export")?.addEventListener("click", async () => {
+    try {
+      const raw = await api("history", { method: "GET" });
+      const list = Array.isArray(raw) ? raw : (raw?.history || raw?.data || []);
+      const heads = ["日時","ユーザーID","ユーザー名","コード","品名","数量","単位","種別","備考"];
+      const csv = [heads.join(",")]
+        .concat(list.map(h => [
+          h.timestamp || h.date || "",
+          h.userId || "",
+          h.userName || "",
+          h.code || "",
+          (h.itemName || h.name || "").replace(/,/g, " "),
+          h.qty || 0,
+          h.unit || "",
+          h.type || "",
+          (h.note || "").replace(/,/g, " ")
+        ].join(","))).join("\n");
+      downloadCSV_JP("履歴.csv", csv);
+    } catch (e) { alert("エクスポート失敗"); }
+  });
+
+  // === Fix lebar kolom: sejajarkan dengan header ==================
+   function ensureItemsColgroup(){
+    const tb = document.getElementById('tbl-items');
+    if(!tb) return;
+    const table = tb.closest('table');
+    if(!table) return;
+
+    const isSmall = window.matchMedia('(max-width: 576px)').matches;
+
+    if (isSmall){
+      table.style.tableLayout = 'auto';
+      if (table.__colgroupPatched && table.querySelector('colgroup')) {
+        table.querySelector('colgroup').remove();
+        table.__colgroupPatched = false;
+      }
+      return;
+    }
+
+    if (table.__colgroupPatched) return;
+
+    const cg = document.createElement('colgroup');
+    cg.innerHTML = `
+      <col style="width:36px">   <!-- checkbox -->
+      <col style="width:110px">  <!-- QR -->
+      <col style="width:220px">  <!-- コード / 名称 -->
+      <col style="width:72px">   <!-- 画像 -->
+      <col style="width:110px">  <!-- 価格 -->
+      <col style="width:90px">   <!-- 在庫 -->
+      <col style="width:80px">   <!-- 最小 -->
+      <col style="width:110px">  <!-- 部門 -->
+      <col style="width:100px">  <!-- 置場 -->
+      <col style="width:220px">  <!-- 操作 -->
+    `;
+    table.insertBefore(cg, table.firstElementChild);
+    table.style.tableLayout = 'fixed';
+    table.__colgroupPatched = true;
   }
 
 
-        /* -------------------- Tanaoroshi List (棚卸一覧) -------------------- */
+  window.addEventListener('resize', () => {
+    const tb = document.getElementById('tbl-items');
+    if (!tb) return;
+    const table = tb.closest('table');
+    if (table) { table.__colgroupPatched = false; }
+    ensureItemsColgroup();
+  });
 
-  // Header JP + kolom "棚卸年月", 単価, 金額
+   /* -------------------- Tanaoroshi List (menu baru) -------------------- */
+  // Header JP + kolom "棚卸年月"
   const JP_TANA_MAP = {
     period : "棚卸年月",   // contoh: 2025-11
     date   : "日付",
@@ -1577,436 +1786,151 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     name   : "品名",
     qty    : "数量",
     unit   : "単位",
-    price  : "単価",
-    amount : "金額",
     location   : "場所",
     department : "部門",
     userId     : "担当者",
     note       : "備考"
   };
 
-  // cache data 棚卸一覧 (sudah diperkaya: price, amount, dll)
-  let _TANA_ROWS = [];
-
   function tanaJPHeaders() {
     return Object.values(JP_TANA_MAP);
   }
 
-  // format note: "book:6 diff:0" → "帳簿:6 / 差異:0"
-  function formatTanaNote(row) {
-    const raw = String(row.note || "");
-    let book = row.book;
-    let diff = row.diff;
+  function tanaToJPRow(r) {
+    const date   = r.date || "";
+    const period = date ? String(date).slice(0, 7) : ""; // "YYYY-MM"
 
-    if (book == null || diff == null) {
-      const m = raw.match(/book:\s*(-?\d+)\s+diff:\s*(-?\d+)/i);
-      if (m) {
-        book = Number(m[1]);
-        diff = Number(m[2]);
-      }
-    }
-    if (book != null || diff != null) {
-      const b = Number(book || 0);
-      const d = Number(diff || 0);
-      return `帳簿:${fmt(b)} / 差異:${fmt(d)}`;
-    }
-    return raw;
-  }
-
-  // ubah ke bentuk "header JP → nilai"
-  function tanaToJPRow(row) {
     return {
-      [JP_TANA_MAP.period]    : row.period || "",
-      [JP_TANA_MAP.date]      : row.date || "",
-      [JP_TANA_MAP.code]      : row.code || "",
-      [JP_TANA_MAP.name]      : row.name || "",
-      [JP_TANA_MAP.qty]       : String(row.qty ?? ""),
-      [JP_TANA_MAP.unit]      : row.unit || "pcs",
-      [JP_TANA_MAP.price]     : row.price != null ? String(row.price) : "",
-      [JP_TANA_MAP.amount]    : row.amount != null ? String(row.amount) : "",
-      [JP_TANA_MAP.location]  : row.location || "",
-      [JP_TANA_MAP.department]: row.department || "",
-      [JP_TANA_MAP.userId]    : row.userId || "",
-      [JP_TANA_MAP.note]      : formatTanaNote(row)
+      [JP_TANA_MAP.period]    : period,
+      [JP_TANA_MAP.date]      : date,
+      [JP_TANA_MAP.code]      : r.code || "",
+      [JP_TANA_MAP.name]      : r.name || "",
+      [JP_TANA_MAP.qty]       : String(r.qty ?? ""),
+      [JP_TANA_MAP.unit]      : r.unit || "pcs",
+      [JP_TANA_MAP.location]  : r.location || "",
+      [JP_TANA_MAP.department]: r.department || "",
+      [JP_TANA_MAP.userId]    : r.userId || "",
+      [JP_TANA_MAP.note]      : r.note || ""
     };
   }
 
-  // render tabel utama (pakai _TANA_ROWS yang sudah diperkaya)
-  function renderTanaTable() {
-    const tbl = document.getElementById("tbl-tana");
-    if (!tbl) return;
-
-    const heads        = tanaJPHeaders();          // ['棚卸年月','日付',...,'金額','備考']
-    const headsWithOps = [...heads, "操作"];
-
-    const monthSel = document.getElementById("tana-month");
-    const month    = (monthSel?.value || "").trim();
-
-    const data = month
-      ? _TANA_ROWS.filter(r => r.period === month)
-      : _TANA_ROWS.slice();
-
-    // header
-    tbl.innerHTML =
-      "<thead><tr>" +
-      headsWithOps.map(h => `<th>${h}</th>`).join("") +
-      "</tr></thead>";
-
-    if (!data.length) {
-      tbl.insertAdjacentHTML(
-        "beforeend",
-        `<tbody><tr><td colspan="${headsWithOps.length}" class="text-muted py-4 text-center">データはありません</td></tr></tbody>`
-      );
-      updateTanaSummary();
-      bindTanaTableEvents();
-      return;
-    }
-
-    let totalAmount = 0;
-
-    const bodyHtml =
-      "<tbody>" +
-      data.map((row) => {
-        const jpRow = tanaToJPRow(row);
-        const code  = jpRow[JP_TANA_MAP.code] || "";
-
-        // hitung total 金額
-        totalAmount += Number(row.amount || 0);
-
-        const tds = heads.map(h => {
-          const v = jpRow[h] ?? "";
-          if (h === JP_TANA_MAP.price || h === JP_TANA_MAP.amount) {
-            const num = Number(v || 0);
-            return `<td class="text-end">${num ? "¥" + fmt(num) : ""}</td>`;
-          }
-          if (h === JP_TANA_MAP.qty) {
-            return `<td class="text-end">${fmt(v)}</td>`;
-          }
-          return `<td>${escapeHtml(v)}</td>`;
-        }).join("");
-
-        return `
-          <tr data-idx="${row.idx}" data-code="${escapeAttr(code)}">
-            ${tds}
-            <td class="text-end">
-              <button class="btn btn-sm btn-outline-primary btn-tana-edit">編集</button>
-            </td>
-          </tr>`;
-      }).join("") +
-      "</tbody>";
-
-    // total 金額 di bawah tabel (tfoot)
-    const idxAmount = heads.indexOf(JP_TANA_MAP.amount);
-    const leftSpan  = idxAmount;          // sebelum kolom 金額
-    const rightSpan = headsWithOps.length - idxAmount - 1;
-
-    const tfootHtml = `
-      <tfoot>
-        <tr>
-          <td colspan="${leftSpan}" class="text-end fw-bold">合計金額</td>
-          <td class="text-end fw-bold">¥${fmt(totalAmount)}</td>
-          <td colspan="${rightSpan}"></td>
-        </tr>
-      </tfoot>`;
-
-    tbl.insertAdjacentHTML("beforeend", bodyHtml + tfootHtml);
-
-    updateTanaSummary();
-    bindTanaTableEvents();
-  }
-
-  // rekap bulanan: total qty & 金額 per 月 (pakai semua data, bukan hanya filter)
-  function updateTanaSummary() {
-    const host = document.getElementById("tana-summary");
-    if (!host) return;
-    if (!_TANA_ROWS.length) {
-      host.textContent = "";
-      return;
-    }
-
-    const agg = new Map();  // period → { qty, amount }
-    for (const r of _TANA_ROWS) {
-      const key = r.period || "不明";
-      const cur = agg.get(key) || { qty: 0, amount: 0 };
-      cur.qty    += Number(r.qty || 0);
-      cur.amount += Number(r.amount || 0);
-      agg.set(key, cur);
-    }
-
-    const rows = [...agg.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-
-    const html =
-      '<div class="fw-semibold mb-1">月別集計（全データ）</div>' +
-      '<div class="table-responsive"><table class="table table-sm mb-0">' +
-      '<thead><tr><th>棚卸年月</th><th class="text-end">数量合計</th><th class="text-end">金額合計</th></tr></thead>' +
-      '<tbody>' +
-      rows.map(([period, v]) => `
-        <tr>
-          <td>${escapeHtml(period)}</td>
-          <td class="text-end">${fmt(v.qty)}</td>
-          <td class="text-end">¥${fmt(v.amount)}</td>
-        </tr>`).join("") +
-      '</tbody></table></div>';
-
-    host.innerHTML = html;
-  }
-
-  // binding filter bulan
-  function bindTanaFilterUI() {
-    const monthSel = document.getElementById("tana-month");
-    if (monthSel && !monthSel.__bound) {
-      monthSel.__bound = true;
-      monthSel.addEventListener("change", () => renderTanaTable());
-    }
-    const clearBtn = document.getElementById("tana-month-clear");
-    if (clearBtn && !clearBtn.__bound) {
-      clearBtn.__bound = true;
-      clearBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (monthSel) monthSel.value = "";
-        renderTanaTable();
-      });
-    }
-  }
-
-  // klik 編集 → modal edit quantity saja
-  function bindTanaTableEvents() {
-    const tbl = document.getElementById("tbl-tana");
-    if (!tbl || tbl.__tanaBound) return;
-    tbl.__tanaBound = true;
-
-    tbl.addEventListener("click", (ev) => {
-      const btn = ev.target.closest(".btn-tana-edit");
-      if (!btn) return;
-      const tr  = btn.closest("tr");
-      const idx = Number(tr?.getAttribute("data-idx") || "-1");
-      const row = _TANA_ROWS.find(r => r.idx === idx);
-      if (!row) return;
-      openTanaEditModal(row);
-    });
-  }
-
-  // modal untuk edit quantity (hanya qty yang bisa diubah)
-  function openTanaEditModal(row) {
-    const who = getCurrentUser();
-    if (!who) return toast("ログイン情報がありません。");
-
-    const wrap = document.createElement("div");
-    wrap.className = "modal fade";
-    wrap.innerHTML = `
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header"><h5 class="modal-title">棚卸数量の編集</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-          <div class="modal-body">
-            <div class="mb-2 small text-muted">コード・名称などは変更不可です。数量のみ編集できます。</div>
-            <div class="row g-3">
-              <div class="col-md-6"><label class="form-label">コード</label>
-                <input class="form-control" value="${escapeAttr(row.code)}" readonly></div>
-              <div class="col-md-6"><label class="form-label">品名</label>
-                <input class="form-control" value="${escapeAttr(row.name || "")}" readonly></div>
-              <div class="col-md-4"><label class="form-label">棚卸年月</label>
-                <input class="form-control" value="${escapeAttr(row.period || "")}" readonly></div>
-              <div class="col-md-4"><label class="form-label">単価</label>
-                <input class="form-control" value="${fmt(row.price || 0)}" readonly></div>
-              <div class="col-md-4"><label class="form-label">数量</label>
-                <input id="tana-edit-qty" type="number" class="form-control" min="0" value="${row.qty}"></div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-            <button class="btn btn-primary" id="tana-edit-save">保存</button>
-          </div>
-        </div>
-      </div>`;
-    document.body.appendChild(wrap);
-    const modal = new bootstrap.Modal(wrap); modal.show();
-
-    $("#tana-edit-save", wrap)?.addEventListener("click", async () => {
-      const qtyVal = Number($("#tana-edit-qty", wrap).value || 0);
-      if (!Number.isFinite(qtyVal) || qtyVal < 0) {
-        return toast("数量を正しく入力してください。");
-      }
-
-      // hitung selisih terhadap qty lama → log koreksi
-      const oldQty = Number(row.qty || 0);
-      const delta  = qtyVal - oldQty;
-
-      // coba rekonstruksi book & diff lama dari data / note
-      let book = row.book;
-      let oldDiff = row.diff;
-      if (book == null || oldDiff == null) {
-        const m = String(row.note || "").match(/book:\s*(-?\d+)\s+diff:\s*(-?\d+)/i);
-        if (m) {
-          book    = Number(m[1]);
-          oldDiff = Number(m[2]);
-        }
-      }
-      if (book == null) {
-        book = oldQty - (oldDiff || 0);
-      }
-      const newDiff = qtyVal - book;
-
-      try {
-        // 1) kalau quantity berubah, catat koreksi ke history (log)
-        if (delta !== 0) {
-          const type = delta > 0 ? "IN" : "OUT";
-          const qty  = Math.abs(delta);
-          await api("log", {
-            method: "POST",
-            body: {
-              userId: who.id,
-              code  : row.code,
-              qty,
-              unit  : row.unit || "pcs",
-              type,
-              note  : "棚卸修正"
-            }
-          });
-        }
-
-        // 2) simpan rekaman 棚卸 baru (baris koreksi) dengan quantity terbaru
-        await api("tanaSave", {
-          method: "POST",
-          body: {
-            code      : row.code,
-            name      : row.name,
-            qty       : qtyVal,
-            unit      : row.unit || "pcs",
-            location  : row.location || "",
-            department: row.department || "",
-            userId    : row.userId || who.id,
-            note      : `book:${book} diff:${newDiff}`
-          }
-        });
-
-        toast("棚卸数量を保存しました。");
-        modal.hide();
-        wrap.remove();
-        // reload dari backend supaya data & rekap up to date
-        loadTanaList();
-      } catch (e) {
-        console.error(e);
-        toast("保存に失敗しました。");
-      }
-    });
-
-    wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
-  }
-
-  // load data dari backend, join dengan 商品一覧 untuk ambil 単価 & 部門
-  async function loadTanaList() {
+    async function loadTanaList() {
     try {
-      const [res, itemsRaw] = await Promise.all([
-        api("tanaList", { method: "GET" }),
-        api("items",   { method: "GET", silent: true }).catch(() => [])
-      ]);
+      const res = await api("tanaList", { method: "GET" });
 
       const rowsRaw =
         Array.isArray(res)        ? res :
         Array.isArray(res?.rows) ? res.rows :
         Array.isArray(res?.data) ? res.data : [];
 
-      const items =
-        Array.isArray(itemsRaw) ? itemsRaw :
-        Array.isArray(itemsRaw?.data) ? itemsRaw.data : [];
+      // === (A) UI baru: <tbody id="tbl-shelf-list"> ... </tbody> ===
+      const tbodyShelf = document.getElementById("tbl-shelf-list");
+      if (tbodyShelf) {
+        if (!rowsRaw.length) {
+          tbodyShelf.innerHTML =
+            '<tr><td colspan="8" class="text-muted py-4">データはありません</td></tr>';
+        } else {
+          tbodyShelf.innerHTML = rowsRaw.map(r => `
+            <tr>
+              <td>${escapeHtml(r.date   || "")}</td>
+              <td>${escapeHtml(r.userId || "")}</td>
+              <td>${escapeHtml(r.code   || "")}</td>
+              <td>${escapeHtml(r.name   || "")}</td>
+              <td class="text-end">${fmt(r.book || 0)}</td>
+              <td class="text-end">${fmt(r.qty  || 0)}</td>
+              <td class="text-end">${fmt(r.diff || 0)}</td>
+              <td>${escapeHtml(r.note || "")}</td>
+            </tr>
+          `).join("");
+        }
+        ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+        return; // sudah beres untuk UI yang sekarang dipakai
+      }
 
-      const mapItems = new Map(items.map(it => [String(it.code), it]));
+      // === (B) fallback: UI lama dengan table#tbl-tana (kalau ada) ===
+      const tbl = document.getElementById("tbl-tana");
+      if (!tbl) return;
 
-      _TANA_ROWS = rowsRaw.map((r, idx) => {
-        const date   = r.date || "";
-        const period = date ? String(date).slice(0, 7) : "";
-        const code   = r.code || "";
-        const item   = mapItems.get(String(code)) || {};
+      const heads        = tanaJPHeaders();          // ['棚卸年月','日付',...]
+      const headsWithOps = [...heads, "操作"];
 
-        const qty   = Number(r.qty || 0);
-        const unit  = r.unit || "pcs";
-        const price = (r.price != null)
-          ? Number(r.price || 0)
-          : Number(item.price || 0);
-        const amount = qty * price;
+      // header
+      tbl.innerHTML =
+        "<thead><tr>" +
+        headsWithOps.map(h => `<th>${h}</th>`).join("") +
+        "</tr></thead>";
 
-        const location   = r.location   || item.location   || "";
-        const department = r.department || item.department || "";
+      if (!rowsRaw.length) {
+        tbl.insertAdjacentHTML(
+          "beforeend",
+          `<tbody><tr><td colspan="${headsWithOps.length}" class="text-muted py-4">データはありません</td></tr></tbody>`
+        );
+        ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
+        return;
+      }
 
-        return {
-          idx,
-          period,
-          date,
-          code,
-          name      : r.name || item.name || "",
-          qty,
-          unit,
-          price,
-          amount,
-          location,
-          department,
-          userId    : r.userId || "",
-          note      : r.note || "",
-          book      : (typeof r.book !== "undefined") ? Number(r.book || 0) : null,
-          diff      : (typeof r.diff !== "undefined") ? Number(r.diff || 0) : null
-        };
+      const rows = rowsRaw.map(tanaToJPRow);
+
+      const bodyHtml =
+        "<tbody>" +
+        rows.map(r => {
+          const code = r[JP_TANA_MAP.code] || "";
+          const tds  = heads.map(h => `<td>${escapeHtml(r[h])}</td>`).join("");
+          return `
+            <tr data-code="${escapeAttr(code)}">
+              ${tds}
+              <td class="text-end">
+                <button class="btn btn-sm btn-outline-primary btn-tana-edit">編集</button>
+              </td>
+            </tr>`;
+        }).join("") +
+        "</tbody>";
+
+      tbl.insertAdjacentHTML("beforeend", bodyHtml);
+
+      // klik 編集 → edit item
+      tbl.addEventListener("click", (ev) => {
+        const btn = ev.target.closest(".btn-tana-edit");
+        if (!btn) return;
+        const tr   = btn.closest("tr");
+        const code = tr?.getAttribute("data-code") || "";
+        if (!code) return;
+        openEditItem(code);
       });
 
-      renderTanaTable();
-      bindTanaFilterUI();
       ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
     } catch (e) {
       console.error("loadTanaList error", e);
+      const tbodyShelf = document.getElementById("tbl-shelf-list");
+      if (tbodyShelf) {
+        tbodyShelf.innerHTML =
+          '<tr><td colspan="8" class="text-danger py-4">取得に失敗しました</td></tr>';
+      }
       const tbl = document.getElementById("tbl-tana");
       if (tbl) {
         tbl.innerHTML =
-          '<tbody><tr><td colspan="5" class="text-danger py-4">取得に失敗しました</td></tr></tbody>';
+          '<tbody><tr><td class="text-danger">取得に失敗</td></tr></tbody>';
       }
-      const host = document.getElementById("tana-summary");
-      if (host) host.textContent = "取得に失敗しました。";
       ensureViewAutoMenu("shelf-list", "#view-shelf-list .items-toolbar .right");
     }
   }
+// CSV Export / Import untuk 棚卸一覧
+$("#tana-exp")?.addEventListener("click", async ()=> {
+  const resp = await api("tanaExportCSV", { method:'GET' });
+  if(!resp || !resp.ok) return alert('エクスポート失敗');
+  downloadCSV_JP(resp.filename || "棚卸.csv", resp.csv);
+});
 
-  // CSV Export / Import untuk 棚卸一覧 (per bulan)
-  $("#tana-exp")?.addEventListener("click", (e)=> {
-    e.preventDefault();
-    if (!_TANA_ROWS.length) {
-      alert("データがありません。");
-      return;
-    }
-
-    const month = (document.getElementById("tana-month")?.value || "").trim();
-    const rows  = month
-      ? _TANA_ROWS.filter(r => r.period === month)
-      : _TANA_ROWS.slice();
-
-    if (!rows.length) {
-      alert("該当するデータがありません。");
-      return;
-    }
-
-    const heads = tanaJPHeaders(); // sudah termasuk 単価, 金額, dll
-    const csvRows = rows.map(r => {
-      const jp = tanaToJPRow(r);
-      return heads.map(h => {
-        let v = jp[h] ?? "";
-        v = String(v).replace(/,/g, " ");
-        return v;
-      }).join(",");
-    });
-
-    const fname = month ? `棚卸_${month}.csv` : "棚卸.csv";
-    const csv   = [heads.join(",")].concat(csvRows).join("\n");
-    downloadCSV_JP(fname, csv);
-  });
-
-  $("#input-tana-imp")?.addEventListener("change", async (ev)=> {
-    const file = ev.target.files?.[0]; if(!file) return;
-    const buf = await file.arrayBuffer();
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-    const resp = await api("tanaImportCSV", { method:'POST', body:{ csvBase64: b64 } });
-    if(!resp || !resp.ok) return alert('インポート失敗');
-    alert(`インポート: ${resp.imported} 行`);
-    loadTanaList();
-    ev.target.value = '';
-  });
+$("#input-tana-imp")?.addEventListener("change", async (ev)=> {
+  const file = ev.target.files?.[0]; if(!file) return;
+  const buf = await file.arrayBuffer();
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const resp = await api("tanaImportCSV", { method:'POST', body:{ csvBase64: b64 } });
+  if(!resp || !resp.ok) return alert('インポート失敗');
+  alert(`インポート: ${resp.imported} 行`);
+  loadTanaList();      // ⬅ setelah import, daftar ulang otomatis
+  ev.target.value = '';
+});
 
   /* -------------------- Auto-refresh UI helpers -------------------- */
   function itemsAuto_refreshLabel(sec){
@@ -2276,7 +2200,7 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     openEditItem
   });
 
-      /* -------------------- Boot -------------------- */
+  /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
     const logo = document.getElementById("brand-logo");
     if (logo && window.CONFIG && CONFIG.LOGO_URL) {
@@ -2305,455 +2229,331 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     startLiveReload();
   });
 
-})();   // <-- PENUTUP IIFE UTAMA, hanya baris ini yang ditambahkan
-
-
+})();
 
 /* -------------------- Preview Modal & Preview helpers -------------------- */
-(function () {
-  "use strict";
 
-  // escapeHtml lokal (modul preview berdiri sendiri dari IIFE utama)
-  function escapeHtml(s) {
-    return String(s || "").replace(/[&<>"']/g, (m) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      "\"": "&quot;",
-      "'": "&#39;"
-    }[m]));
+// Bridge ke helper inti di dalam IIFE (lihat window.__INV_APP__)
+function __invCore(){
+  return window.__INV_APP__ || {};
+}
+
+// wrapper fmt → pakai formatter dari core kalau ada
+function fmt(n){
+  const core = __invCore();
+  if (typeof core.fmt === "function") {
+    return core.fmt(n);
   }
-
-  // Bridge ke helper inti di dalam IIFE utama (lihat window.__INV_APP__)
-  function __invCore() {
-    return window.__INV_APP__ || {};
+  try{
+    return new Intl.NumberFormat("ja-JP").format(Number(n || 0));
+  }catch{
+    return String(n || 0);
   }
+}
 
-  // wrapper fmt → pakai formatter dari core kalau ada
-  function fmt(n) {
-    const core = __invCore();
-    if (typeof core.fmt === "function") {
-      return core.fmt(n);
-    }
-    try {
-      return new Intl.NumberFormat("ja-JP").format(Number(n || 0));
-    } catch {
-      return String(n || 0);
-    }
-  }
+async function invApi(action, opts){
+  const core = __invCore();
+  if (typeof core.api !== "function") throw new Error("API helper not ready");
+  return core.api(action, opts);
+}
+async function invGenerateQr(text, size){
+  const core = __invCore();
+  if (typeof core.generateQrDataUrl !== "function") throw new Error("QR helper not ready");
+  return core.generateQrDataUrl(text, size);
+}
+async function invMakeItemLabel(item){
+  const core = __invCore();
+  if (typeof core.makeItemLabelDataURL !== "function") throw new Error("Label helper not ready");
+  return core.makeItemLabelDataURL(item);
+}
+function invOpenEditItem(code){
+  const core = __invCore();
+  if (typeof core.openEditItem !== "function") throw new Error("Edit helper not ready");
+  return core.openEditItem(code);
+}
 
-  async function invApi(action, opts) {
-    const core = __invCore();
-    if (typeof core.api !== "function") {
-      throw new Error("API helper not ready");
-    }
-    return core.api(action, opts);
-  }
-
-  async function invGenerateQr(text, size) {
-    const core = __invCore();
-    if (typeof core.generateQrDataUrl !== "function") {
-      throw new Error("QR helper not ready");
-    }
-    return core.generateQrDataUrl(text, size);
-  }
-
-  async function invMakeItemLabel(item) {
-    const core = __invCore();
-    if (typeof core.makeItemLabelDataURL !== "function") {
-      throw new Error("Label helper not ready");
-    }
-    return core.makeItemLabelDataURL(item);
-  }
-
-  function invOpenEditItem(code) {
-    const core = __invCore();
-    if (typeof core.openEditItem !== "function") {
-      throw new Error("Edit helper not ready");
-    }
-    return core.openEditItem(code);
-  }
-
-  // --------- Modal dasar untuk preview ---------
-  function ensurePreviewModal() {
-    if (document.getElementById("preview-modal")) return;
-    const wrap = document.createElement("div");
-    wrap.innerHTML = `
-      <div class="modal fade" id="preview-modal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title"><i class="bi bi-search me-2"></i>商品プレビュー</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+function ensurePreviewModal(){
+  if(document.getElementById('preview-modal')) return;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+  <div class="modal fade" id="preview-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-search me-2"></i>商品プレビュー</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-flex gap-3 align-items-start flex-wrap">
+            <div>
+              <div id="pv-qr" class="rounded p-2 border bg-light"></div>
+              <div class="small text-muted mt-1">QR を印刷ラベルと同一サイズ比で生成</div>
             </div>
-            <div class="modal-body">
-              <div class="d-flex gap-3 align-items-start flex-wrap">
-                <div>
-                  <div id="pv-qr" class="rounded p-2 border bg-light"></div>
-                  <div class="small text-muted mt-1">QR を印刷ラベルと同一サイズ比で生成</div>
-                </div>
-                <div class="flex-grow-1">
-                  <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span id="pv-name" class="fw-semibold fs-5"></span>
-                    <span id="pv-status" class="badge"></span>
-                  </div>
-                  <div class="text-muted mt-1">
-                    <span class="me-3">コード: <span id="pv-code"></span></span>
-                    <span class="me-3">部門: <span id="pv-dept"></span></span>
-                    <span>置場: <span id="pv-loc"></span></span>
-                  </div>
-                  <div class="mt-2">
-                    <span class="me-3">価格: <span id="pv-price"></span></span>
-                    <span class="me-3">在庫: <span id="pv-stock"></span></span>
-                    <span>最小: <span id="pv-min"></span></span>
-                  </div>
-                </div>
-                <div class="ms-auto">
-                  <img id="pv-img" alt="" style="max-height:120px;max-width:180px;object-fit:contain;border:1px solid var(--bs-border-color);border-radius:.5rem;display:none">
-                </div>
+            <div class="flex-grow-1">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span id="pv-name" class="fw-semibold fs-5"></span>
+                <span id="pv-status" class="badge"></span>
+              </div>
+              <div class="text-muted mt-1">
+                <span class="me-3">コード: <span id="pv-code"></span></span>
+                <span class="me-3">部門: <span id="pv-dept"></span></span>
+                <span>置場: <span id="pv-loc"></span></span>
+              </div>
+              <div class="mt-2">
+                <span class="me-3">価格: <span id="pv-price"></span></span>
+                <span class="me-3">在庫: <span id="pv-stock"></span></span>
+                <span>最小: <span id="pv-min"></span></span>
               </div>
             </div>
-            <div class="modal-footer">
-              <button id="pv-edit" type="button" class="btn btn-primary btn-sm">
-                <i class="bi bi-pencil me-1"></i>編集
-              </button>
-              <button id="pv-print" type="button" class="btn btn-outline-secondary btn-sm">
-                <i class="bi bi-printer me-1"></i>ラベル印刷
-              </button>
-              <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">閉じる</button>
+            <div class="ms-auto">
+              <img id="pv-img" alt="" style="max-height:120px;max-width:180px;object-fit:contain;border:1px solid var(--bs-border-color);border-radius:.5rem;display:none">
             </div>
           </div>
         </div>
-      </div>`;
-    document.body.appendChild(wrap);
-  }
+        <div class="modal-footer">
+          <button id="pv-edit" type="button" class="btn btn-primary btn-sm"><i class="bi bi-pencil me-1"></i>編集</button>
+          <button id="pv-print" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>ラベル印刷</button>
+          <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+}
 
-  // --------- Panel history kecil di dalam modal ---------
-  function ensurePreviewHistoryArea() {
-    ensurePreviewModal();
-    const modal = document.getElementById("preview-modal");
-    if (!modal) return;
-    if (modal.querySelector("#pv-history")) return;
-
-    const body = modal.querySelector(".modal-body") || modal;
-    const panel = document.createElement("div");
-    panel.id = "pv-history";
-    panel.className = "mt-3";
+// area kecil untuk history terbaru
+function ensurePreviewHistoryArea(){
+  ensurePreviewModal();
+  const modal = document.getElementById('preview-modal');
+  if (!modal) return;
+  if (!modal.querySelector('#pv-history')) {
+    const body = modal.querySelector('.modal-body') || modal;
+    const panel = document.createElement('div');
+    panel.id = 'pv-history';
+    panel.className = 'mt-3';
     panel.innerHTML = `
       <div class="fw-semibold mb-1">履歴（最新10件）</div>
       <div class="table-responsive">
         <table class="table table-sm mb-0">
-          <thead>
-            <tr>
-              <th style="white-space:nowrap">日時</th>
-              <th style="white-space:nowrap">ユーザー</th>
-              <th style="white-space:nowrap">種別</th>
-              <th class="text-end" style="white-space:nowrap">数量</th>
-              <th style="white-space:nowrap">備考</th>
-            </tr>
-          </thead>
-          <tbody id="pv-history-body">
-            <tr><td colspan="5" class="text-muted">読み込み中…</td></tr>
-          </tbody>
+          <thead><tr>
+            <th style="white-space:nowrap">日時</th>
+            <th style="white-space:nowrap">ユーザー</th>
+            <th style="white-space:nowrap">種別</th>
+            <th class="text-end" style="white-space:nowrap">数量</th>
+            <th style="white-space:nowrap">備考</th>
+          </tr></thead>
+          <tbody id="pv-history-body"><tr><td colspan="5" class="text-muted">読み込み中…</td></tr></tbody>
         </table>
       </div>`;
     body.appendChild(panel);
   }
+}
 
-  async function loadItemHistory(code) {
-    try {
-      ensurePreviewHistoryArea();
-      const tb = document.getElementById("pv-history-body");
-      if (tb) {
-        tb.innerHTML = `<tr><td colspan="5" class="text-muted">読み込み中…</td></tr>`;
-      }
-      const res = await invApi("historyByCode", {
-        method: "POST",
-        body: { code, limit: 10 },
-        silent: true
-      });
-      const rows = (res && res.ok && Array.isArray(res.rows)) ? res.rows : [];
-      if (!rows.length) {
-        if (tb) {
-          tb.innerHTML = `<tr><td colspan="5" class="text-muted">履歴はありません</td></tr>`;
-        }
-        return;
-      }
-      if (tb) {
-        tb.innerHTML = rows.map(r => `
-          <tr>
-            <td>${escapeHtml(r.date || "")}</td>
-            <td>${escapeHtml(r.userId || "")}</td>
-            <td>${escapeHtml(r.type || "")}</td>
-            <td class="text-end">${fmt(r.qty || 0)} ${escapeHtml(r.unit || "")}</td>
-            <td>${escapeHtml(r.note || "")}</td>
-          </tr>`).join("");
-      }
-    } catch (e) {
-      const tb = document.getElementById("pv-history-body");
-      if (tb) {
-        tb.innerHTML = `<tr><td colspan="5" class="text-danger">履歴の取得に失敗</td></tr>`;
-      }
+async function loadItemHistory(code){
+  try{
+    ensurePreviewHistoryArea();
+    const tb = document.getElementById('pv-history-body');
+    if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-muted">読み込み中…</td></tr>`;
+    const res = await invApi('historyByCode', { method:'POST', body:{ code, limit: 10 }, silent:true });
+    const rows = (res && res.ok && Array.isArray(res.rows)) ? res.rows : [];
+    if (!rows.length) {
+      if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-muted">履歴はありません</td></tr>`;
+      return;
     }
+    if (tb) tb.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.date||'')}</td>
+        <td>${escapeHtml(r.userId||'')}</td>
+        <td>${escapeHtml(r.type||'')}</td>
+        <td class="text-end">${fmt(r.qty||0)} ${escapeHtml(r.unit||'')}</td>
+        <td>${escapeHtml(r.note||'')}</td>
+      </tr>
+    `).join('');
+  }catch(e){
+    const tb = document.getElementById('pv-history-body');
+    if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-danger">履歴の取得に失敗</td></tr>`;
   }
+}
 
-  // Ambil data dari <tr> kalau item object dari cache tidak tersedia
-  function extractRowData(tr) {
-    const get = sel => tr.querySelector(sel);
-    const codeCell = get("td:nth-child(3) .small, td:nth-child(3)");
-    const code = (tr.getAttribute("data-code") ||
-                 (codeCell ? codeCell.textContent : "") ||
-                 "").trim();
-    const name = (get(".td-name")?.textContent || "").trim();
-    const imgEl = get("td:nth-child(4) img");
-    const priceText = (get("td:nth-child(5)")?.textContent || "").trim();
-    const stockText = (get("td:nth-child(6)")?.textContent || "0").replace(/[^0-9.-]/g, "");
-    const minText   = (get("td:nth-child(7)")?.textContent || "0").replace(/[^0-9.-]/g, "");
-    const dept  = (get("td:nth-child(8)")?.textContent || "").trim();
-    const loc   = (get("td:nth-child(9)")?.textContent || "").trim();
-    return {
-      code,
-      name,
-      img: imgEl?.getAttribute("src") || "",
-      price: priceText,
-      stock: Number(stockText || 0),
-      min: Number(minText || 0),
-      department: dept,
-      location: loc
-    };
-  }
+function extractRowData(tr){
+  const get = (sel)=> tr.querySelector(sel);
+  const code = tr.getAttribute('data-code') || (get('td:nth-child(3)')?.textContent||'').trim();
+  const name = (get('.td-name')?.textContent || '').trim();
+  const imgEl = get('td:nth-child(4) img');
+  const price = (get('td:nth-child(5)')?.textContent||'').trim();
+  const stock = Number((get('td:nth-child(6)')?.textContent||'0').replace(/[^0-9.-]/g,''));
+  const min   = Number((get('td:nth-child(7)')?.textContent||'0').replace(/[^0-9.-]/g,''));
+  const dept  = (get('td:nth-child(8)')?.textContent||'').trim();
+  const loc   = (get('td:nth-child(9)')?.textContent||'').trim();
+  return { code, name, img: imgEl?.getAttribute('src')||'', price, stock, min, dept, loc };
+}
 
-  // --------- Fungsi utama untuk preview item ---------
-  function showItemPreview(item) {
-    try {
-      ensurePreviewModal();
-
-      const d = {
-        code: String(item?.code || "").trim(),
-        name: String(item?.name || "").trim(),
-        dept: String(item?.department || item?.dept || "").trim(),
-        loc : String(item?.location || item?.loc || "").trim(),
-        priceNum: Number(item?.price || 0),
-        stock: Number(item?.stock || 0),
-        min  : Number(item?.min || 0),
-        img  : item?.img || ""
-      };
-
-      const elCode  = document.getElementById("pv-code");
-      const elName  = document.getElementById("pv-name");
-      const elDept  = document.getElementById("pv-dept");
-      const elLoc   = document.getElementById("pv-loc");
-      const elPrice = document.getElementById("pv-price");
-      const elStock = document.getElementById("pv-stock");
-      const elMin   = document.getElementById("pv-min");
-      const elImg   = document.getElementById("pv-img");
-      const elStatus= document.getElementById("pv-status");
-      const qrBox   = document.getElementById("pv-qr");
-
-      if (elCode)  elCode.textContent  = d.code || "-";
-      if (elName)  elName.textContent  = d.name || "(名称未設定)";
-      if (elDept)  elDept.textContent  = d.dept || "-";
-      if (elLoc)   elLoc.textContent   = d.loc  || "-";
-      if (elPrice) elPrice.textContent = "¥" + fmt(d.priceNum || 0);
-      if (elStock) elStock.textContent = String(d.stock);
-      if (elMin)   elMin.textContent   = String(d.min);
-
-      if (elStatus) {
-        elStatus.className = "badge";
-        if (d.stock <= 0) {
-          elStatus.classList.add("bg-secondary");
-          elStatus.textContent = "在庫ゼロ";
-        } else if (d.stock <= d.min) {
-          elStatus.classList.add("bg-danger");
-          elStatus.textContent = "要補充";
-        } else {
-          elStatus.classList.add("bg-success");
-          elStatus.textContent = "十分";
-        }
-      }
-
-      if (elImg) {
-        if (d.img) {
-          elImg.src = d.img;
-          elImg.style.display = "";
-        } else {
-          elImg.style.display = "none";
-        }
-      }
-
-      if (qrBox) {
-        qrBox.innerHTML = "";
-        (async () => {
-          try {
-            const url = await invGenerateQr(`ITEM|${d.code}`, 128);
-            if (url) {
-              const im = new Image();
-              im.src = url;
-              im.width = 128;
-              im.height = 128;
-              im.alt = d.code;
-              qrBox.appendChild(im);
-            } else {
-              qrBox.textContent = d.code || "(QR)";
-            }
-          } catch {
-            qrBox.textContent = d.code || "(QR)";
-          }
-        })();
-      }
-
-      const btnEdit  = document.getElementById("pv-edit");
-      const btnPrint = document.getElementById("pv-print");
-
-      if (btnEdit) {
-        btnEdit.onclick = () => {
-          try { invOpenEditItem(d.code); }
-          catch (e) { alert("編集を開けませんでした"); }
-        };
-      }
-
-      if (btnPrint) {
-        btnPrint.onclick = async () => {
-          try {
-            const url = await invMakeItemLabel(item);
-            const w = window.open("", "_blank", "width=900,height=700");
-            if (!w) {
-              alert("ポップアップがブロックされました。");
-              return;
-            }
-            w.document.write("<meta charset='utf-8'><title>ラベル印刷</title>");
-            w.document.write("<style>body{margin:0;padding:16px;font-family:sans-serif} img{max-width:100%;display:block;margin:0 auto} @media print{img{page-break-inside:avoid;}}</style>");
-            w.document.write(`<img src="${url}" alt="${d.code}">`);
-            w.document.close();
-            w.focus();
-            setTimeout(() => { try { w.print(); } catch (_) {} }, 500);
-          } catch (e) {
-            alert("ラベル生成に失敗しました");
-          }
-        };
-      }
-
-      const modalEl = document.getElementById("preview-modal");
-      if (window.bootstrap && window.bootstrap.Modal && modalEl) {
-        window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
-      } else if (modalEl) {
-        modalEl.style.display = "block";
-      }
-
-      try { loadItemHistory(d.code); } catch (_e) {}
-
-    } catch (e) {
-      console.error("showItemPreview()", e);
-      alert("プレビューを開けませんでした。");
-    }
-  }
-
-  // Untuk Lot / dataURL saja
-  function openPreview(url) {
-    try {
-      ensurePreviewModal();
-      const modalEl = document.getElementById("preview-modal");
-      if (!modalEl) return;
-
-      const imgEl   = modalEl.querySelector("#pv-img");
-      const qrBox   = modalEl.querySelector("#pv-qr");
-      const nameEl  = modalEl.querySelector("#pv-name");
-      const codeEl  = modalEl.querySelector("#pv-code");
-      const deptEl  = modalEl.querySelector("#pv-dept");
-      const locEl   = modalEl.querySelector("#pv-loc");
-      const priceEl = modalEl.querySelector("#pv-price");
-      const stockEl = modalEl.querySelector("#pv-stock");
-      const minEl   = modalEl.querySelector("#pv-min");
-      const statusEl= modalEl.querySelector("#pv-status");
-
-      if (nameEl)  nameEl.textContent  = "";
-      if (codeEl)  codeEl.textContent  = "";
-      if (deptEl)  deptEl.textContent  = "";
-      if (locEl)   locEl.textContent   = "";
-      if (priceEl) priceEl.textContent = "";
-      if (stockEl) stockEl.textContent = "";
-      if (minEl)   minEl.textContent   = "";
-      if (statusEl) { statusEl.className = "badge"; statusEl.textContent = ""; }
-      if (qrBox)   qrBox.innerHTML     = "";
-
-      if (imgEl) {
-        imgEl.src = url || "";
-        imgEl.style.display = url ? "block" : "none";
-      }
-
-      if (window.bootstrap && window.bootstrap.Modal) {
-        window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
-      } else {
-        modalEl.style.display = "block";
-      }
-    } catch (e) {
-      console.error("openPreview failed:", e);
-      alert("プレビューを開けませんでした。");
-    }
-  }
-
-  // Binding tombol preview di tabel 商品一覧
-  function bindPreviewButtons() {
-    const tbl = document.getElementById("tbl-items");
-    if (!tbl || tbl.__pvBound) return;
-    tbl.__pvBound = true;
-
+function showItemPreview(item){
+  try{
     ensurePreviewModal();
 
-    // klik tombol プレビュー (fallback kalau IIFE utama tidak memanggil showItemPreview langsung)
-    tbl.addEventListener("click", (ev) => {
-      const btn = ev.target.closest(".btn-preview");
-      if (!btn) return;
-      ev.preventDefault();
-      const tr = btn.closest("tr");
-      if (!tr) return;
-      const data = extractRowData(tr);
-      showItemPreview(data);
-    });
+    const d = {
+      code: String(item?.code||'').trim(),
+      name: String(item?.name||'').trim(),
+      dept: String(item?.department||item?.dept||'').trim(),
+      loc : String(item?.location||item?.loc||'').trim(),
+      price: (item?.price!=null) ? `¥${fmt(item.price)}` : '',
+      stock: Number(item?.stock||0),
+      min  : Number(item?.min||0),
+      img  : item?.img||''
+    };
 
-    // klik nama item
-    tbl.addEventListener("click", (ev) => {
-      const a = ev.target.closest(".link-item");
-      if (!a) return;
-      ev.preventDefault();
-      const tr = a.closest("tr");
-      if (!tr) return;
-      const data = extractRowData(tr);
-      showItemPreview(data);
-    });
+    document.getElementById('pv-code').textContent  = d.code || '-';
+    document.getElementById('pv-name').textContent  = d.name || '(名称未設定)';
+    document.getElementById('pv-dept').textContent  = d.dept || '-';
+    document.getElementById('pv-loc').textContent   = d.loc  || '-';
+    document.getElementById('pv-price').textContent = d.price || '¥0';
+    document.getElementById('pv-stock').textContent = String(d.stock);
+    document.getElementById('pv-min').textContent   = String(d.min);
 
-    // alias lain kalau nanti ada
-    tbl.addEventListener("click", (ev) => {
-      const btn = ev.target.closest("[data-action='detail'], [data-role='preview']");
-      if (!btn) return;
-      ev.preventDefault();
-      const tr = btn.closest("tr");
-      if (!tr) return;
-      const data = extractRowData(tr);
-      showItemPreview(data);
-    });
+    const st = document.getElementById('pv-status');
+    st.className = 'badge';
+    if (d.stock <= 0) { st.classList.add('bg-secondary'); st.textContent = '在庫ゼロ'; }
+    else if (d.stock <= d.min) { st.classList.add('bg-danger'); st.textContent = '要補充'; }
+    else { st.classList.add('bg-success'); st.textContent = '十分'; }
+
+    const pvImg = document.getElementById('pv-img');
+    if (d.img) { pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
+
+    const qrBox = document.getElementById('pv-qr');
+    qrBox.innerHTML = '';
+    (async ()=>{
+      try{
+        const url = await invGenerateQr(`ITEM|${d.code}`, 128);
+        if (url) {
+          const im=new Image(); im.src=url; im.width=128; im.height=128; im.alt=d.code;
+          qrBox.appendChild(im);
+        } else {
+          qrBox.textContent = d.code || '(QR)';
+        }
+      }catch{
+        qrBox.textContent = d.code || '(QR)';
+      }
+    })();
+
+    document.getElementById('pv-edit').onclick  = ()=> {
+      try{ invOpenEditItem(d.code); }catch(e){ alert('編集を開けませんでした'); }
+    };
+    document.getElementById('pv-print').onclick = async ()=>{
+      try{
+        const url = await invMakeItemLabel(item);
+        const w = window.open('', '_blank', 'width=900,height=700');
+        if(!w){ alert('ポップアップがブロックされました。'); return; }
+        w.document.write('<meta charset="utf-8"><title>ラベル印刷</title>');
+        w.document.write('<style>body{margin:0;padding:16px;font-family:sans-serif} img{max-width:100%;display:block;margin:0 auto} @media print{img{page-break-inside:avoid;}}</style>');
+        w.document.write(`<img src="${url}" alt="${d.code}">`);
+        w.document.close(); w.focus(); setTimeout(()=>{ try{ w.print(); }catch(_){ } }, 500);
+      }catch(e){ alert('ラベル生成に失敗しました'); }
+    };
+
+    const modalEl = document.getElementById('preview-modal');
+    if (window.bootstrap && window.bootstrap.Modal) {
+      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      try { loadItemHistory(d.code); } catch (e) {}
+    } else {
+      modalEl.style.display = 'block';
+      try { loadItemHistory(d.code); } catch (e) {}
+    }
+
+  }catch(e){
+    console.error('showItemPreview()', e);
+    alert('プレビューを開けませんでした。');
   }
+}
 
-  // Filter badge cepat (low / zero / img / all)
-  document.addEventListener("click", (e) => {
-    const a = e.target.closest(".js-filter");
-    if (!a) return;
-    const f = a.dataset.f;
-    const rows = document.querySelectorAll("#tbl-items tr[data-code]");
-    rows.forEach(tr => {
-      const d = extractRowData(tr);
-      let show = true;
-      if (f === "low")  show = d.stock > 0 && d.stock <= d.min;
-      if (f === "zero") show = d.stock <= 0;
-      if (f === "img")  show = !!d.img;
-      if (f === "all")  show = true;
-      tr.style.display = show ? "" : "none";
-    });
+// Untuk Lot / gambar dataURL saja
+function openPreview(url){
+  try{
+    ensurePreviewModal();
+    const modalEl = document.getElementById('preview-modal');
+    const imgEl   = modalEl.querySelector('#pv-img');
+    const qrBox   = modalEl.querySelector('#pv-qr');
+    const nameEl  = modalEl.querySelector('#pv-name');
+    const codeEl  = modalEl.querySelector('#pv-code');
+    const deptEl  = modalEl.querySelector('#pv-dept');
+    const locEl   = modalEl.querySelector('#pv-loc');
+    const priceEl = modalEl.querySelector('#pv-price');
+    const stockEl = modalEl.querySelector('#pv-stock');
+    const minEl   = modalEl.querySelector('#pv-min');
+
+    if (nameEl)  nameEl.textContent  = '';
+    if (codeEl)  codeEl.textContent  = '';
+    if (deptEl)  deptEl.textContent  = '';
+    if (locEl)   locEl.textContent   = '';
+    if (priceEl) priceEl.textContent = '';
+    if (stockEl) stockEl.textContent = '';
+    if (minEl)   minEl.textContent   = '';
+    if (qrBox)   qrBox.innerHTML     = '';
+
+    if (imgEl){
+      imgEl.src = url || '';
+      imgEl.style.display = url ? 'block' : 'none';
+    }
+
+    const modal = (window.bootstrap && window.bootstrap.Modal)
+      ? bootstrap.Modal.getOrCreateInstance(modalEl)
+      : null;
+    if (modal) modal.show();
+    else modalEl.style.display = 'block';
+  }catch(e){
+    console.error('openPreview failed:', e);
+    alert('プレビューを開けませんでした。');
+  }
+}
+
+// Binding tombol preview di tabel 商品一覧
+function bindPreviewButtons(){
+  const tbl = document.getElementById('tbl-items');
+  if(!tbl) return;
+  ensurePreviewModal();
+
+  // klik tombol プレビュー
+  tbl.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('.btn-preview');
+    if(!btn) return;
+    ev.preventDefault();
+    const tr = btn.closest('tr');
+    const code = tr?.getAttribute('data-code') || '';
+    const item = (window._ITEMS_CACHE || []).find(x => String(x.code) === String(code)) || extractRowData(tr);
+    showItemPreview(item);
   });
 
-  // Expose helper ke global agar bisa dipakai dari IIFE utama
-  window.showItemPreview    = showItemPreview;
-  window.openPreview        = openPreview;
-  window.bindPreviewButtons = bindPreviewButtons;
+  // klik nama item
+  tbl.addEventListener('click', (ev)=>{
+    const a = ev.target.closest('.link-item');
+    if(!a) return;
+    ev.preventDefault();
+    const tr = a.closest('tr');
+    tr?.querySelector('.btn-preview')?.click();
+  });
 
-})();
+  // alias lain (kalau nanti ada)
+  tbl.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('[data-action="detail"], [data-role="preview"]');
+    if(!btn) return;
+    ev.preventDefault();
+    const tr = btn.closest('tr');
+    tr?.querySelector('.btn-preview')?.click();
+  });
+}
+
+// Filter cepat via badge (zero/low/img/all)
+document.addEventListener('click',(e)=>{
+  const a = e.target.closest('.js-filter'); if(!a) return;
+  const f = a.dataset.f;
+  const rows = document.querySelectorAll('#tbl-items tr[data-code]');
+  rows.forEach(tr=>{
+    const d = extractRowData(tr);
+    let show = true;
+    if(f==='low')  show = d.stock>0 && d.stock<=d.min;
+    if(f==='zero') show = d.stock<=0;
+    if(f==='img')  show = !!d.img;
+    if(f==='all')  show = true;
+    tr.style.display = show ? '' : 'none';
+  });
+});
