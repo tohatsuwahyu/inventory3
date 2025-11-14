@@ -2266,7 +2266,7 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     openEditItem
   });
 
-    /* -------------------- Boot -------------------- */
+      /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
     const logo = document.getElementById("brand-logo");
     if (logo && window.CONFIG && CONFIG.LOGO_URL) {
@@ -2295,53 +2295,72 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     startLiveReload();
   });
 
-})();  // ← TAMBAHKAN BARIS INI, PENUTUP IIFE
-
-/* -------------------- Preview Modal & Preview helpers -------------------- */
-
-/* -------------------- Preview Modal & Preview helpers -------------------- */
+})();   // <-- PENUTUP IIFE UTAMA, hanya baris ini yang ditambahkan
 
 
 /* -------------------- Preview Modal & Preview helpers -------------------- */
 
-// Bridge ke helper inti di dalam IIFE (lihat window.__INV_APP__)
-function __invCore(){
-  return window.__INV_APP__ || {};
-}
-
-// wrapper fmt → pakai formatter dari core kalau ada
-function fmt(n){
-  const core = __invCore();
-  if (typeof core.fmt === "function") {
-    return core.fmt(n);
+/* -------------------- Preview Modal & Preview helpers -------------------- */
+(function () {
+  "use strict";
+function escapeHtml(s){
+    return String(s || "").replace(/[&<>"']/g, (m) => ({
+      "&":"&amp;",
+      "<":"&lt;",
+      ">":"&gt;",
+      "\"":"&quot;",
+      "'":"&#39;"
+    }[m]));
   }
-  try{
-    return new Intl.NumberFormat("ja-JP").format(Number(n || 0));
-  }catch{
-    return String(n || 0);
-  }
-}
 
-async function invApi(action, opts){
-  const core = __invCore();
-  if (typeof core.api !== "function") throw new Error("API helper not ready");
-  return core.api(action, opts);
-}
-async function invGenerateQr(text, size){
-  const core = __invCore();
-  if (typeof core.generateQrDataUrl !== "function") throw new Error("QR helper not ready");
-  return core.generateQrDataUrl(text, size);
-}
-async function invMakeItemLabel(item){
-  const core = __invCore();
-  if (typeof core.makeItemLabelDataURL !== "function") throw new Error("Label helper not ready");
-  return core.makeItemLabelDataURL(item);
-}
-function invOpenEditItem(code){
-  const core = __invCore();
-  if (typeof core.openEditItem !== "function") throw new Error("Edit helper not ready");
-  return core.openEditItem(code);
-}
+  // Bridge ke helper inti di dalam IIFE (lihat window.__INV_APP__)
+  function __invCore(){
+    return window.__INV_APP__ || {};
+  }
+  // Bridge ke helper inti di dalam IIFE (lihat window.__INV_APP__)
+  function __invCore(){
+    return window.__INV_APP__ || {};
+  }
+
+  // wrapper fmt → pakai formatter dari core kalau ada
+  function fmt(n){
+    const core = __invCore();
+    if (typeof core.fmt === "function") {
+      return core.fmt(n);
+    }
+    try{
+      return new Intl.NumberFormat("ja-JP").format(Number(n || 0));
+    }catch{
+      return String(n || 0);
+    }
+  }
+
+  async function invApi(action, opts){
+    const core = __invCore();
+    if (typeof core.api !== "function") throw new Error("API helper not ready");
+    return core.api(action, opts);
+  }
+
+  async function invGenerateQr(text, size){
+    const core = __invCore();
+    if (typeof core.generateQrDataUrl !== "function") throw new Error("QR helper not ready");
+    return core.generateQrDataUrl(text, size);
+  }
+
+  async function invMakeItemLabel(item){
+    const core = __invCore();
+    if (typeof core.makeItemLabelDataURL !== "function") throw new Error("Label helper not ready");
+    return core.makeItemLabelDataURL(item);
+  }
+
+  function invOpenEditItem(code){
+    const core = __invCore();
+    if (typeof core.openEditItem !== "function") throw new Error("Edit helper not ready");
+    return core.openEditItem(code);
+  }
+
+ 
+
 
 function ensurePreviewModal(){
   if(document.getElementById('preview-modal')) return;
@@ -2628,3 +2647,10 @@ document.addEventListener('click',(e)=>{
     tr.style.display = show ? '' : 'none';
   });
 });
+
+  // PATCH: expose helper preview ke global agar bisa dipakai dari IIFE utama
+  window.showItemPreview    = showItemPreview;
+  window.openPreview        = openPreview;
+  window.bindPreviewButtons = bindPreviewButtons;
+
+})();
