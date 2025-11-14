@@ -2298,357 +2298,450 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
 })();   // <-- PENUTUP IIFE UTAMA, hanya baris ini yang ditambahkan
 
 
-/* -------------------- Preview Modal & Preview helpers -------------------- */
 
 /* -------------------- Preview Modal & Preview helpers -------------------- */
 (function () {
   "use strict";
-function escapeHtml(s){
+
+  // escapeHtml lokal (modul preview berdiri sendiri dari IIFE utama)
+  function escapeHtml(s) {
     return String(s || "").replace(/[&<>"']/g, (m) => ({
-      "&":"&amp;",
-      "<":"&lt;",
-      ">":"&gt;",
-      "\"":"&quot;",
-      "'":"&#39;"
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;"
     }[m]));
   }
 
-  // Bridge ke helper inti di dalam IIFE (lihat window.__INV_APP__)
-  function __invCore(){
-    return window.__INV_APP__ || {};
-  }
-  // Bridge ke helper inti di dalam IIFE (lihat window.__INV_APP__)
-  function __invCore(){
+  // Bridge ke helper inti di dalam IIFE utama (lihat window.__INV_APP__)
+  function __invCore() {
     return window.__INV_APP__ || {};
   }
 
   // wrapper fmt → pakai formatter dari core kalau ada
-  function fmt(n){
+  function fmt(n) {
     const core = __invCore();
     if (typeof core.fmt === "function") {
       return core.fmt(n);
     }
-    try{
+    try {
       return new Intl.NumberFormat("ja-JP").format(Number(n || 0));
-    }catch{
+    } catch {
       return String(n || 0);
     }
   }
 
-  async function invApi(action, opts){
+  async function invApi(action, opts) {
     const core = __invCore();
-    if (typeof core.api !== "function") throw new Error("API helper not ready");
+    if (typeof core.api !== "function") {
+      throw new Error("API helper not ready");
+    }
     return core.api(action, opts);
   }
 
-  async function invGenerateQr(text, size){
+  async function invGenerateQr(text, size) {
     const core = __invCore();
-    if (typeof core.generateQrDataUrl !== "function") throw new Error("QR helper not ready");
+    if (typeof core.generateQrDataUrl !== "function") {
+      throw new Error("QR helper not ready");
+    }
     return core.generateQrDataUrl(text, size);
   }
 
-  async function invMakeItemLabel(item){
+  async function invMakeItemLabel(item) {
     const core = __invCore();
-    if (typeof core.makeItemLabelDataURL !== "function") throw new Error("Label helper not ready");
+    if (typeof core.makeItemLabelDataURL !== "function") {
+      throw new Error("Label helper not ready");
+    }
     return core.makeItemLabelDataURL(item);
   }
 
-  function invOpenEditItem(code){
+  function invOpenEditItem(code) {
     const core = __invCore();
-    if (typeof core.openEditItem !== "function") throw new Error("Edit helper not ready");
+    if (typeof core.openEditItem !== "function") {
+      throw new Error("Edit helper not ready");
+    }
     return core.openEditItem(code);
   }
 
- 
-
-
-function ensurePreviewModal(){
-  if(document.getElementById('preview-modal')) return;
-  const wrap = document.createElement('div');
-  wrap.innerHTML = `
-  <div class="modal fade" id="preview-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-search me-2"></i>商品プレビュー</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
-        </div>
-        <div class="modal-body">
-          <div class="d-flex gap-3 align-items-start flex-wrap">
-            <div>
-              <div id="pv-qr" class="rounded p-2 border bg-light"></div>
-              <div class="small text-muted mt-1">QR を印刷ラベルと同一サイズ比で生成</div>
+  // --------- Modal dasar untuk preview ---------
+  function ensurePreviewModal() {
+    if (document.getElementById("preview-modal")) return;
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `
+      <div class="modal fade" id="preview-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title"><i class="bi bi-search me-2"></i>商品プレビュー</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
             </div>
-            <div class="flex-grow-1">
-              <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span id="pv-name" class="fw-semibold fs-5"></span>
-                <span id="pv-status" class="badge"></span>
-              </div>
-              <div class="text-muted mt-1">
-                <span class="me-3">コード: <span id="pv-code"></span></span>
-                <span class="me-3">部門: <span id="pv-dept"></span></span>
-                <span>置場: <span id="pv-loc"></span></span>
-              </div>
-              <div class="mt-2">
-                <span class="me-3">価格: <span id="pv-price"></span></span>
-                <span class="me-3">在庫: <span id="pv-stock"></span></span>
-                <span>最小: <span id="pv-min"></span></span>
+            <div class="modal-body">
+              <div class="d-flex gap-3 align-items-start flex-wrap">
+                <div>
+                  <div id="pv-qr" class="rounded p-2 border bg-light"></div>
+                  <div class="small text-muted mt-1">QR を印刷ラベルと同一サイズ比で生成</div>
+                </div>
+                <div class="flex-grow-1">
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span id="pv-name" class="fw-semibold fs-5"></span>
+                    <span id="pv-status" class="badge"></span>
+                  </div>
+                  <div class="text-muted mt-1">
+                    <span class="me-3">コード: <span id="pv-code"></span></span>
+                    <span class="me-3">部門: <span id="pv-dept"></span></span>
+                    <span>置場: <span id="pv-loc"></span></span>
+                  </div>
+                  <div class="mt-2">
+                    <span class="me-3">価格: <span id="pv-price"></span></span>
+                    <span class="me-3">在庫: <span id="pv-stock"></span></span>
+                    <span>最小: <span id="pv-min"></span></span>
+                  </div>
+                </div>
+                <div class="ms-auto">
+                  <img id="pv-img" alt="" style="max-height:120px;max-width:180px;object-fit:contain;border:1px solid var(--bs-border-color);border-radius:.5rem;display:none">
+                </div>
               </div>
             </div>
-            <div class="ms-auto">
-              <img id="pv-img" alt="" style="max-height:120px;max-width:180px;object-fit:contain;border:1px solid var(--bs-border-color);border-radius:.5rem;display:none">
+            <div class="modal-footer">
+              <button id="pv-edit" type="button" class="btn btn-primary btn-sm">
+                <i class="bi bi-pencil me-1"></i>編集
+              </button>
+              <button id="pv-print" type="button" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-printer me-1"></i>ラベル印刷
+              </button>
+              <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">閉じる</button>
             </div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button id="pv-edit" type="button" class="btn btn-primary btn-sm"><i class="bi bi-pencil me-1"></i>編集</button>
-          <button id="pv-print" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>ラベル印刷</button>
-          <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">閉じる</button>
-        </div>
-      </div>
-    </div>
-  </div>`;
-  document.body.appendChild(wrap);
-}
+      </div>`;
+    document.body.appendChild(wrap);
+  }
 
-// area kecil untuk history terbaru
-function ensurePreviewHistoryArea(){
-  ensurePreviewModal();
-  const modal = document.getElementById('preview-modal');
-  if (!modal) return;
-  if (!modal.querySelector('#pv-history')) {
-    const body = modal.querySelector('.modal-body') || modal;
-    const panel = document.createElement('div');
-    panel.id = 'pv-history';
-    panel.className = 'mt-3';
+  // --------- Panel history kecil di dalam modal ---------
+  function ensurePreviewHistoryArea() {
+    ensurePreviewModal();
+    const modal = document.getElementById("preview-modal");
+    if (!modal) return;
+    if (modal.querySelector("#pv-history")) return;
+
+    const body = modal.querySelector(".modal-body") || modal;
+    const panel = document.createElement("div");
+    panel.id = "pv-history";
+    panel.className = "mt-3";
     panel.innerHTML = `
       <div class="fw-semibold mb-1">履歴（最新10件）</div>
       <div class="table-responsive">
         <table class="table table-sm mb-0">
-          <thead><tr>
-            <th style="white-space:nowrap">日時</th>
-            <th style="white-space:nowrap">ユーザー</th>
-            <th style="white-space:nowrap">種別</th>
-            <th class="text-end" style="white-space:nowrap">数量</th>
-            <th style="white-space:nowrap">備考</th>
-          </tr></thead>
-          <tbody id="pv-history-body"><tr><td colspan="5" class="text-muted">読み込み中…</td></tr></tbody>
+          <thead>
+            <tr>
+              <th style="white-space:nowrap">日時</th>
+              <th style="white-space:nowrap">ユーザー</th>
+              <th style="white-space:nowrap">種別</th>
+              <th class="text-end" style="white-space:nowrap">数量</th>
+              <th style="white-space:nowrap">備考</th>
+            </tr>
+          </thead>
+          <tbody id="pv-history-body">
+            <tr><td colspan="5" class="text-muted">読み込み中…</td></tr>
+          </tbody>
         </table>
       </div>`;
     body.appendChild(panel);
   }
-}
 
-async function loadItemHistory(code){
-  try{
-    ensurePreviewHistoryArea();
-    const tb = document.getElementById('pv-history-body');
-    if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-muted">読み込み中…</td></tr>`;
-    const res = await invApi('historyByCode', { method:'POST', body:{ code, limit: 10 }, silent:true });
-    const rows = (res && res.ok && Array.isArray(res.rows)) ? res.rows : [];
-    if (!rows.length) {
-      if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-muted">履歴はありません</td></tr>`;
-      return;
-    }
-    if (tb) tb.innerHTML = rows.map(r => `
-      <tr>
-        <td>${escapeHtml(r.date||'')}</td>
-        <td>${escapeHtml(r.userId||'')}</td>
-        <td>${escapeHtml(r.type||'')}</td>
-        <td class="text-end">${fmt(r.qty||0)} ${escapeHtml(r.unit||'')}</td>
-        <td>${escapeHtml(r.note||'')}</td>
-      </tr>
-    `).join('');
-  }catch(e){
-    const tb = document.getElementById('pv-history-body');
-    if (tb) tb.innerHTML = `<tr><td colspan="5" class="text-danger">履歴の取得に失敗</td></tr>`;
-  }
-}
-
-function extractRowData(tr){
-  const get = (sel)=> tr.querySelector(sel);
-  const code = tr.getAttribute('data-code') || (get('td:nth-child(3)')?.textContent||'').trim();
-  const name = (get('.td-name')?.textContent || '').trim();
-  const imgEl = get('td:nth-child(4) img');
-  const price = (get('td:nth-child(5)')?.textContent||'').trim();
-  const stock = Number((get('td:nth-child(6)')?.textContent||'0').replace(/[^0-9.-]/g,''));
-  const min   = Number((get('td:nth-child(7)')?.textContent||'0').replace(/[^0-9.-]/g,''));
-  const dept  = (get('td:nth-child(8)')?.textContent||'').trim();
-  const loc   = (get('td:nth-child(9)')?.textContent||'').trim();
-  return { code, name, img: imgEl?.getAttribute('src')||'', price, stock, min, dept, loc };
-}
-
-function showItemPreview(item){
-  try{
-    ensurePreviewModal();
-
-    const d = {
-      code: String(item?.code||'').trim(),
-      name: String(item?.name||'').trim(),
-      dept: String(item?.department||item?.dept||'').trim(),
-      loc : String(item?.location||item?.loc||'').trim(),
-      price: (item?.price!=null) ? `¥${fmt(item.price)}` : '',
-      stock: Number(item?.stock||0),
-      min  : Number(item?.min||0),
-      img  : item?.img||''
-    };
-
-    document.getElementById('pv-code').textContent  = d.code || '-';
-    document.getElementById('pv-name').textContent  = d.name || '(名称未設定)';
-    document.getElementById('pv-dept').textContent  = d.dept || '-';
-    document.getElementById('pv-loc').textContent   = d.loc  || '-';
-    document.getElementById('pv-price').textContent = d.price || '¥0';
-    document.getElementById('pv-stock').textContent = String(d.stock);
-    document.getElementById('pv-min').textContent   = String(d.min);
-
-    const st = document.getElementById('pv-status');
-    st.className = 'badge';
-    if (d.stock <= 0) { st.classList.add('bg-secondary'); st.textContent = '在庫ゼロ'; }
-    else if (d.stock <= d.min) { st.classList.add('bg-danger'); st.textContent = '要補充'; }
-    else { st.classList.add('bg-success'); st.textContent = '十分'; }
-
-    const pvImg = document.getElementById('pv-img');
-    if (d.img) { pvImg.src = d.img; pvImg.style.display = ''; } else { pvImg.style.display = 'none'; }
-
-    const qrBox = document.getElementById('pv-qr');
-    qrBox.innerHTML = '';
-    (async ()=>{
-      try{
-        const url = await invGenerateQr(`ITEM|${d.code}`, 128);
-        if (url) {
-          const im=new Image(); im.src=url; im.width=128; im.height=128; im.alt=d.code;
-          qrBox.appendChild(im);
-        } else {
-          qrBox.textContent = d.code || '(QR)';
-        }
-      }catch{
-        qrBox.textContent = d.code || '(QR)';
+  async function loadItemHistory(code) {
+    try {
+      ensurePreviewHistoryArea();
+      const tb = document.getElementById("pv-history-body");
+      if (tb) {
+        tb.innerHTML = `<tr><td colspan="5" class="text-muted">読み込み中…</td></tr>`;
       }
-    })();
-
-    document.getElementById('pv-edit').onclick  = ()=> {
-      try{ invOpenEditItem(d.code); }catch(e){ alert('編集を開けませんでした'); }
-    };
-    document.getElementById('pv-print').onclick = async ()=>{
-      try{
-        const url = await invMakeItemLabel(item);
-        const w = window.open('', '_blank', 'width=900,height=700');
-        if(!w){ alert('ポップアップがブロックされました。'); return; }
-        w.document.write('<meta charset="utf-8"><title>ラベル印刷</title>');
-        w.document.write('<style>body{margin:0;padding:16px;font-family:sans-serif} img{max-width:100%;display:block;margin:0 auto} @media print{img{page-break-inside:avoid;}}</style>');
-        w.document.write(`<img src="${url}" alt="${d.code}">`);
-        w.document.close(); w.focus(); setTimeout(()=>{ try{ w.print(); }catch(_){ } }, 500);
-      }catch(e){ alert('ラベル生成に失敗しました'); }
-    };
-
-    const modalEl = document.getElementById('preview-modal');
-    if (window.bootstrap && window.bootstrap.Modal) {
-      bootstrap.Modal.getOrCreateInstance(modalEl).show();
-      try { loadItemHistory(d.code); } catch (e) {}
-    } else {
-      modalEl.style.display = 'block';
-      try { loadItemHistory(d.code); } catch (e) {}
+      const res = await invApi("historyByCode", {
+        method: "POST",
+        body: { code, limit: 10 },
+        silent: true
+      });
+      const rows = (res && res.ok && Array.isArray(res.rows)) ? res.rows : [];
+      if (!rows.length) {
+        if (tb) {
+          tb.innerHTML = `<tr><td colspan="5" class="text-muted">履歴はありません</td></tr>`;
+        }
+        return;
+      }
+      if (tb) {
+        tb.innerHTML = rows.map(r => `
+          <tr>
+            <td>${escapeHtml(r.date || "")}</td>
+            <td>${escapeHtml(r.userId || "")}</td>
+            <td>${escapeHtml(r.type || "")}</td>
+            <td class="text-end">${fmt(r.qty || 0)} ${escapeHtml(r.unit || "")}</td>
+            <td>${escapeHtml(r.note || "")}</td>
+          </tr>`).join("");
+      }
+    } catch (e) {
+      const tb = document.getElementById("pv-history-body");
+      if (tb) {
+        tb.innerHTML = `<tr><td colspan="5" class="text-danger">履歴の取得に失敗</td></tr>`;
+      }
     }
-
-  }catch(e){
-    console.error('showItemPreview()', e);
-    alert('プレビューを開けませんでした。');
   }
-}
 
-// Untuk Lot / gambar dataURL saja
-function openPreview(url){
-  try{
+  // Ambil data dari <tr> kalau item object dari cache tidak tersedia
+  function extractRowData(tr) {
+    const get = sel => tr.querySelector(sel);
+    const codeCell = get("td:nth-child(3) .small, td:nth-child(3)");
+    const code = (tr.getAttribute("data-code") ||
+                 (codeCell ? codeCell.textContent : "") ||
+                 "").trim();
+    const name = (get(".td-name")?.textContent || "").trim();
+    const imgEl = get("td:nth-child(4) img");
+    const priceText = (get("td:nth-child(5)")?.textContent || "").trim();
+    const stockText = (get("td:nth-child(6)")?.textContent || "0").replace(/[^0-9.-]/g, "");
+    const minText   = (get("td:nth-child(7)")?.textContent || "0").replace(/[^0-9.-]/g, "");
+    const dept  = (get("td:nth-child(8)")?.textContent || "").trim();
+    const loc   = (get("td:nth-child(9)")?.textContent || "").trim();
+    return {
+      code,
+      name,
+      img: imgEl?.getAttribute("src") || "",
+      price: priceText,
+      stock: Number(stockText || 0),
+      min: Number(minText || 0),
+      department: dept,
+      location: loc
+    };
+  }
+
+  // --------- Fungsi utama untuk preview item ---------
+  function showItemPreview(item) {
+    try {
+      ensurePreviewModal();
+
+      const d = {
+        code: String(item?.code || "").trim(),
+        name: String(item?.name || "").trim(),
+        dept: String(item?.department || item?.dept || "").trim(),
+        loc : String(item?.location || item?.loc || "").trim(),
+        priceNum: Number(item?.price || 0),
+        stock: Number(item?.stock || 0),
+        min  : Number(item?.min || 0),
+        img  : item?.img || ""
+      };
+
+      const elCode  = document.getElementById("pv-code");
+      const elName  = document.getElementById("pv-name");
+      const elDept  = document.getElementById("pv-dept");
+      const elLoc   = document.getElementById("pv-loc");
+      const elPrice = document.getElementById("pv-price");
+      const elStock = document.getElementById("pv-stock");
+      const elMin   = document.getElementById("pv-min");
+      const elImg   = document.getElementById("pv-img");
+      const elStatus= document.getElementById("pv-status");
+      const qrBox   = document.getElementById("pv-qr");
+
+      if (elCode)  elCode.textContent  = d.code || "-";
+      if (elName)  elName.textContent  = d.name || "(名称未設定)";
+      if (elDept)  elDept.textContent  = d.dept || "-";
+      if (elLoc)   elLoc.textContent   = d.loc  || "-";
+      if (elPrice) elPrice.textContent = "¥" + fmt(d.priceNum || 0);
+      if (elStock) elStock.textContent = String(d.stock);
+      if (elMin)   elMin.textContent   = String(d.min);
+
+      if (elStatus) {
+        elStatus.className = "badge";
+        if (d.stock <= 0) {
+          elStatus.classList.add("bg-secondary");
+          elStatus.textContent = "在庫ゼロ";
+        } else if (d.stock <= d.min) {
+          elStatus.classList.add("bg-danger");
+          elStatus.textContent = "要補充";
+        } else {
+          elStatus.classList.add("bg-success");
+          elStatus.textContent = "十分";
+        }
+      }
+
+      if (elImg) {
+        if (d.img) {
+          elImg.src = d.img;
+          elImg.style.display = "";
+        } else {
+          elImg.style.display = "none";
+        }
+      }
+
+      if (qrBox) {
+        qrBox.innerHTML = "";
+        (async () => {
+          try {
+            const url = await invGenerateQr(`ITEM|${d.code}`, 128);
+            if (url) {
+              const im = new Image();
+              im.src = url;
+              im.width = 128;
+              im.height = 128;
+              im.alt = d.code;
+              qrBox.appendChild(im);
+            } else {
+              qrBox.textContent = d.code || "(QR)";
+            }
+          } catch {
+            qrBox.textContent = d.code || "(QR)";
+          }
+        })();
+      }
+
+      const btnEdit  = document.getElementById("pv-edit");
+      const btnPrint = document.getElementById("pv-print");
+
+      if (btnEdit) {
+        btnEdit.onclick = () => {
+          try { invOpenEditItem(d.code); }
+          catch (e) { alert("編集を開けませんでした"); }
+        };
+      }
+
+      if (btnPrint) {
+        btnPrint.onclick = async () => {
+          try {
+            const url = await invMakeItemLabel(item);
+            const w = window.open("", "_blank", "width=900,height=700");
+            if (!w) {
+              alert("ポップアップがブロックされました。");
+              return;
+            }
+            w.document.write("<meta charset='utf-8'><title>ラベル印刷</title>");
+            w.document.write("<style>body{margin:0;padding:16px;font-family:sans-serif} img{max-width:100%;display:block;margin:0 auto} @media print{img{page-break-inside:avoid;}}</style>");
+            w.document.write(`<img src="${url}" alt="${d.code}">`);
+            w.document.close();
+            w.focus();
+            setTimeout(() => { try { w.print(); } catch (_) {} }, 500);
+          } catch (e) {
+            alert("ラベル生成に失敗しました");
+          }
+        };
+      }
+
+      const modalEl = document.getElementById("preview-modal");
+      if (window.bootstrap && window.bootstrap.Modal && modalEl) {
+        window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      } else if (modalEl) {
+        modalEl.style.display = "block";
+      }
+
+      try { loadItemHistory(d.code); } catch (_e) {}
+
+    } catch (e) {
+      console.error("showItemPreview()", e);
+      alert("プレビューを開けませんでした。");
+    }
+  }
+
+  // Untuk Lot / dataURL saja
+  function openPreview(url) {
+    try {
+      ensurePreviewModal();
+      const modalEl = document.getElementById("preview-modal");
+      if (!modalEl) return;
+
+      const imgEl   = modalEl.querySelector("#pv-img");
+      const qrBox   = modalEl.querySelector("#pv-qr");
+      const nameEl  = modalEl.querySelector("#pv-name");
+      const codeEl  = modalEl.querySelector("#pv-code");
+      const deptEl  = modalEl.querySelector("#pv-dept");
+      const locEl   = modalEl.querySelector("#pv-loc");
+      const priceEl = modalEl.querySelector("#pv-price");
+      const stockEl = modalEl.querySelector("#pv-stock");
+      const minEl   = modalEl.querySelector("#pv-min");
+      const statusEl= modalEl.querySelector("#pv-status");
+
+      if (nameEl)  nameEl.textContent  = "";
+      if (codeEl)  codeEl.textContent  = "";
+      if (deptEl)  deptEl.textContent  = "";
+      if (locEl)   locEl.textContent   = "";
+      if (priceEl) priceEl.textContent = "";
+      if (stockEl) stockEl.textContent = "";
+      if (minEl)   minEl.textContent   = "";
+      if (statusEl) { statusEl.className = "badge"; statusEl.textContent = ""; }
+      if (qrBox)   qrBox.innerHTML     = "";
+
+      if (imgEl) {
+        imgEl.src = url || "";
+        imgEl.style.display = url ? "block" : "none";
+      }
+
+      if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      } else {
+        modalEl.style.display = "block";
+      }
+    } catch (e) {
+      console.error("openPreview failed:", e);
+      alert("プレビューを開けませんでした。");
+    }
+  }
+
+  // Binding tombol preview di tabel 商品一覧
+  function bindPreviewButtons() {
+    const tbl = document.getElementById("tbl-items");
+    if (!tbl || tbl.__pvBound) return;
+    tbl.__pvBound = true;
+
     ensurePreviewModal();
-    const modalEl = document.getElementById('preview-modal');
-    const imgEl   = modalEl.querySelector('#pv-img');
-    const qrBox   = modalEl.querySelector('#pv-qr');
-    const nameEl  = modalEl.querySelector('#pv-name');
-    const codeEl  = modalEl.querySelector('#pv-code');
-    const deptEl  = modalEl.querySelector('#pv-dept');
-    const locEl   = modalEl.querySelector('#pv-loc');
-    const priceEl = modalEl.querySelector('#pv-price');
-    const stockEl = modalEl.querySelector('#pv-stock');
-    const minEl   = modalEl.querySelector('#pv-min');
 
-    if (nameEl)  nameEl.textContent  = '';
-    if (codeEl)  codeEl.textContent  = '';
-    if (deptEl)  deptEl.textContent  = '';
-    if (locEl)   locEl.textContent   = '';
-    if (priceEl) priceEl.textContent = '';
-    if (stockEl) stockEl.textContent = '';
-    if (minEl)   minEl.textContent   = '';
-    if (qrBox)   qrBox.innerHTML     = '';
+    // klik tombol プレビュー (fallback kalau IIFE utama tidak memanggil showItemPreview langsung)
+    tbl.addEventListener("click", (ev) => {
+      const btn = ev.target.closest(".btn-preview");
+      if (!btn) return;
+      ev.preventDefault();
+      const tr = btn.closest("tr");
+      if (!tr) return;
+      const data = extractRowData(tr);
+      showItemPreview(data);
+    });
 
-    if (imgEl){
-      imgEl.src = url || '';
-      imgEl.style.display = url ? 'block' : 'none';
-    }
+    // klik nama item
+    tbl.addEventListener("click", (ev) => {
+      const a = ev.target.closest(".link-item");
+      if (!a) return;
+      ev.preventDefault();
+      const tr = a.closest("tr");
+      if (!tr) return;
+      const data = extractRowData(tr);
+      showItemPreview(data);
+    });
 
-    const modal = (window.bootstrap && window.bootstrap.Modal)
-      ? bootstrap.Modal.getOrCreateInstance(modalEl)
-      : null;
-    if (modal) modal.show();
-    else modalEl.style.display = 'block';
-  }catch(e){
-    console.error('openPreview failed:', e);
-    alert('プレビューを開けませんでした。');
+    // alias lain kalau nanti ada
+    tbl.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-action='detail'], [data-role='preview']");
+      if (!btn) return;
+      ev.preventDefault();
+      const tr = btn.closest("tr");
+      if (!tr) return;
+      const data = extractRowData(tr);
+      showItemPreview(data);
+    });
   }
-}
 
-// Binding tombol preview di tabel 商品一覧
-function bindPreviewButtons(){
-  const tbl = document.getElementById('tbl-items');
-  if(!tbl) return;
-  ensurePreviewModal();
-
-  // klik tombol プレビュー
-  tbl.addEventListener('click', (ev)=>{
-    const btn = ev.target.closest('.btn-preview');
-    if(!btn) return;
-    ev.preventDefault();
-    const tr = btn.closest('tr');
-    const code = tr?.getAttribute('data-code') || '';
-    const item = (window._ITEMS_CACHE || []).find(x => String(x.code) === String(code)) || extractRowData(tr);
-    showItemPreview(item);
+  // Filter badge cepat (low / zero / img / all)
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest(".js-filter");
+    if (!a) return;
+    const f = a.dataset.f;
+    const rows = document.querySelectorAll("#tbl-items tr[data-code]");
+    rows.forEach(tr => {
+      const d = extractRowData(tr);
+      let show = true;
+      if (f === "low")  show = d.stock > 0 && d.stock <= d.min;
+      if (f === "zero") show = d.stock <= 0;
+      if (f === "img")  show = !!d.img;
+      if (f === "all")  show = true;
+      tr.style.display = show ? "" : "none";
+    });
   });
 
-  // klik nama item
-  tbl.addEventListener('click', (ev)=>{
-    const a = ev.target.closest('.link-item');
-    if(!a) return;
-    ev.preventDefault();
-    const tr = a.closest('tr');
-    tr?.querySelector('.btn-preview')?.click();
-  });
-
-  // alias lain (kalau nanti ada)
-  tbl.addEventListener('click', (ev)=>{
-    const btn = ev.target.closest('[data-action="detail"], [data-role="preview"]');
-    if(!btn) return;
-    ev.preventDefault();
-    const tr = btn.closest('tr');
-    tr?.querySelector('.btn-preview')?.click();
-  });
-}
-
-// Filter cepat via badge (zero/low/img/all)
-document.addEventListener('click',(e)=>{
-  const a = e.target.closest('.js-filter'); if(!a) return;
-  const f = a.dataset.f;
-  const rows = document.querySelectorAll('#tbl-items tr[data-code]');
-  rows.forEach(tr=>{
-    const d = extractRowData(tr);
-    let show = true;
-    if(f==='low')  show = d.stock>0 && d.stock<=d.min;
-    if(f==='zero') show = d.stock<=0;
-    if(f==='img')  show = !!d.img;
-    if(f==='all')  show = true;
-    tr.style.display = show ? '' : 'none';
-  });
-});
-
-  // PATCH: expose helper preview ke global agar bisa dipakai dari IIFE utama
+  // Expose helper ke global agar bisa dipakai dari IIFE utama
   window.showItemPreview    = showItemPreview;
   window.openPreview        = openPreview;
   window.bindPreviewButtons = bindPreviewButtons;
