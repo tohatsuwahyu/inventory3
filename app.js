@@ -1487,6 +1487,7 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
   });
 
   // --- 確定（在庫更新 ＋ 棚卸シート保存） ---
+   // --- 確定（在庫更新 ＋ 棚卸シート保存） ---
   const btnCommit = $("#st-commit");
   if (btnCommit && !btnCommit.__bound) {
     btnCommit.__bound = true;
@@ -1494,38 +1495,66 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
       e.preventDefault();
 
       const rows = [...ST.rows.values()];
-      if (!rows.length) return toast("棚卸データがありません。");
+      if (!rows.length) {
+        toast("棚卸データがありません。");
+        return;
+      }
 
       const who = getCurrentUser();
-      if (!who) return toast("ログイン情報がありません。");
+      if (!who) {
+        toast("ログイン情報がありません。");
+        return;
+      }
 
       if (!confirm("帳簿在庫を更新し、棚卸結果を保存しますか？")) return;
 
       btnCommit.disabled = true;
 
-         try {
-      for (const r of rows) {
-        const code   = r.code;
-        const book   = Number(r.book || 0);   // ← stok buku saat ini
-        const diff   = Number(r.diff || 0);   // ← selisih (実在 − 帳簿)
-        const realQty = Number(r.qty || 0);   // ← 实在（実在在庫）
+      try {
+        // siapkan payload untuk GAS → fungsi tanaCommit()
+        const payloadRows = rows.map(r => ({
+          code      : r.code,
+          name      : r.name,
+          qty       : Number(r.qty || 0),
+          book      : Number(r.book || 0),
+          diff      : Number(r.diff || 0),
+          unit      : "pcs",
+          department: r.department || ""
+        }));
 
-        // 1) 在庫調整（履歴に log）
-        if (diff !== 0) {
-          const type = diff > 0 ? "IN" : "OUT";
-          const qty  = Math.abs(diff);
-          await api("log", {
-            method: "POST",
-            body: {
-              userId: who.id,
-              code,
-              qty,
-              unit: "pcs",
-              type,
-              note: "棚卸調整"
-            }
-          });
+        const res = await api("tanaCommit", {
+          method: "POST",
+          body: {
+            userId: who.id,
+            rows : payloadRows
+          }
+        });
+
+        if (!res || !res.ok) {
+          throw new Error((res && res.error) || "tanaCommit failed");
         }
+
+        toast(`棚卸を確定しました（在庫更新 ${res.updated || 0} 件）`);
+
+        // bersihkan data lokal + draft
+        ST.rows = new Map();
+        renderShelfTable();
+        clearShelfDraft();
+
+        // refresh daftar, items, dan dashboard (kalau gagal, di-ignore)
+        try { await loadTanaList(); } catch (_) {}
+        try { await renderItems(); } catch (_) {}
+        renderDashboard();
+
+      } catch (err) {
+        console.error("tanaCommit error", err);
+        toast("棚卸の確定に失敗しました。");
+      } finally {
+        btnCommit.disabled = false;
+      }
+    });
+  }
+
 
        /* -------------------- Tanaoroshi List (menu baru) -------------------- */
 
