@@ -2266,7 +2266,7 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     openEditItem
   });
 
-  /* -------------------- Boot -------------------- */
+    /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
     const logo = document.getElementById("brand-logo");
     if (logo && window.CONFIG && CONFIG.LOGO_URL) {
@@ -2295,6 +2295,11 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     startLiveReload();
   });
 
+})();  // ← TAMBAHKAN BARIS INI, PENUTUP IIFE
+
+/* -------------------- Preview Modal & Preview helpers -------------------- */
+
+/* -------------------- Preview Modal & Preview helpers -------------------- */
 
 
 /* -------------------- Preview Modal & Preview helpers -------------------- */
