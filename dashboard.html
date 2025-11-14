@@ -234,18 +234,27 @@
           </div>
         </section>
 
-        <!-- ============ 棚卸一覧（rekap/export/import） ============ -->
-       <section id="view-shelf-list" class="d-none">
+     <!-- ============ 棚卸一覧（rekap/export/import） ============ -->
+<section id="view-shelf-list" class="d-none">
   <div class="items-toolbar d-flex justify-content-between align-items-center mb-2">
     <div class="left">
-      <h2 class="h5 mb-0">棚卸一覧</h2>
+      <!-- ubah judul di dalam section supaya tidak sama persis dengan page-title -->
+      <div class="fw-semibold">棚卸結果一覧</div>
     </div>
-    <div class="right d-flex align-items-center gap-2">
-      <!-- Export CSV -->
+    <div class="right d-flex align-items-center gap-2 flex-wrap">
+      <!-- Filter bulan -->
+      <div class="d-flex align-items-center gap-1">
+        <label for="tana-month" class="small text-muted mb-0">月フィルタ</label>
+        <input id="tana-month" type="month" class="form-control form-control-sm" style="width:auto;">
+        <button id="tana-month-clear" class="btn btn-sm btn-outline-secondary">全件</button>
+      </div>
+
+      <!-- Export CSV (per bulan / semua) -->
       <button id="tana-exp" class="btn btn-sm btn-outline-secondary">
         CSVエクスポート
       </button>
-      <!-- Import CSV -->
+
+      <!-- Import CSV (tetap) -->
       <label class="btn btn-sm btn-outline-secondary mb-0">
         CSVインポート
         <input id="input-tana-imp" type="file" accept=".csv" hidden>
@@ -265,6 +274,8 @@
               <th>品名</th>
               <th class="text-end">数量</th>
               <th>単位</th>
+              <th class="text-end">単価</th>
+              <th class="text-end">金額</th>
               <th>場所</th>
               <th>部門</th>
               <th>担当者</th>
@@ -274,16 +285,20 @@
           </thead>
           <tbody>
             <tr>
-              <td colspan="11" class="text-muted py-4 text-center">
+              <td colspan="13" class="text-muted py-4 text-center">
                 棚卸データを読み込み中…
               </td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <!-- rekap bulanan akan diisi dari JS -->
+      <div id="tana-summary" class="mt-2 small text-muted"></div>
     </div>
   </div>
 </section>
+
 
 
         <!-- ============ 商品一覧 / ユーザー / 履歴 ============ -->
