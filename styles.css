@@ -360,3 +360,100 @@ td[data-editable]{ cursor:text; }
   }
   #view-shelf .st-controls .btn{ flex:1 1 0; font-size:.8rem; padding-top:.4rem; padding-bottom:.4rem; }
 }
+/* === TOP SCROLLBAR untuk tabel items === */
+#items-scroll-top{
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 12px;
+  margin-bottom: 6px;
+}
+#items-scroll-top > div{ height: 1px; }
+
+/* === Items table: layout & alignment === */
+#view-items table.items-table{ table-layout: fixed; width: 100%; }
+#view-items table.items-table th,
+#view-items table.items-table td{ vertical-align: middle; white-space: nowrap; padding: .6rem .7rem; }
+
+/* Nama item (kolom 3) dipotong elegan */
+#view-items .td-name{
+  max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Perataan kolom */
+#view-items table.items-table thead th:nth-child(2),
+#view-items table.items-table tbody td:nth-child(2), /* QR */
+#view-items table.items-table thead th:nth-child(4),
+#view-items table.items-table tbody td:nth-child(4){  /* 画像 */
+  text-align: center;
+}
+#view-items table.items-table thead th:nth-child(5),
+#view-items table.items-table thead th:nth-child(6),
+#view-items table.items-table thead th:nth-child(7),
+#view-items table.items-table tbody td:nth-child(5),
+#view-items table.items-table tbody td:nth-child(6),
+#view-items table.items-table tbody td:nth-child(7){ /* 価格/在庫/最小 */
+  text-align: right;
+}
+#view-items table.items-table thead th:nth-child(3),
+#view-items table.items-table tbody td:nth-child(3), /* コード/名称 */
+#view-items table.items-table thead th:nth-child(8),
+#view-items table.items-table tbody td:nth-child(8), /* 部門 */
+#view-items table.items-table thead th:nth-child(9),
+#view-items table.items-table tbody td:nth-child(9){ /* 置場 */
+  text-align: left;
+}
+
+/* Kolom "操作" sticky di kanan */
+#view-items table.items-table thead th:last-child,
+#view-items table.items-table tbody td:last-child{
+  position: sticky; right: 0; background: #fff;
+  box-shadow: -8px 0 16px rgba(15,23,42,.06);
+  z-index: 3; text-align: center;
+}
+
+/* Grid tombol 操作 rapat */
+#view-items table.items-table td:last-child .act-grid{
+  display: grid; grid-template-columns: repeat(5, 28px); gap: 6px;
+  justify-content: end; min-width: 160px;
+}
+#tbl-items .act-grid .btn{
+  width: 28px; height: 28px; padding: 0;
+  display: inline-grid; place-items: center; border-radius: 8px;
+}
+
+/* QR kecil proporsional */
+#view-items .tbl-qr-box canvas,
+#view-items .tbl-qr-box img{ width: 64px; height: 64px; }
+
+/* ===== Responsif: SEMBUNYIKAN BERTAHAP (部門 tetap tampil) ===== */
+/* Urutan kolom: [□][QR][名称][画像][価格][在庫][最小][部門][置場][操作] */
+@media (max-width: 1400px){
+  /* Sembunyikan 置場 dulu */
+  .items-table thead th:nth-child(9),
+  .items-table tbody td:nth-child(9){ display: none; }
+}
+@media (max-width: 1200px){
+  /* Lalu 最小 */
+  .items-table thead th:nth-child(7),
+  .items-table tbody td:nth-child(7){ display: none; }
+}
+@media (max-width: 992px){
+  /* Terakhir 画像 */
+  .items-table thead th:nth-child(4),
+  .items-table tbody td:nth-child(4){ display: none; }
+}
+
+/* Tablet/HP: kecilkan kolom angka, nama lebih pendek */
+@media (max-width: 768px){
+  .items-table thead th:nth-child(5){ width: 90px; } /* 価格 */
+  .items-table thead th:nth-child(6){ width: 90px; } /* 在庫 */
+  #view-items .td-name{ max-width: 260px; }
+}
+
+/* Opsional: nama 2 baris di HP kecil */
+@media (max-width: 576px){
+  #view-items .td-name{
+    white-space: normal; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+}
