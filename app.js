@@ -475,52 +475,74 @@
   }
 
   // THEAD sinkron 10 kolom
-  function ensureItemsHeader() {
-    const tbody = document.getElementById("tbl-items");
-    if (!tbody) return;
-    const table = tbody.closest("table");
-    if (!table) return;
+  // === HEADER & COLGROUP sinkron ke jumlah kolom body ===
+function ensureItemsHeader() {
+  const tbody = document.getElementById("tbl-items");
+  if (!tbody) return;
+  const table = tbody.closest("table");
+  if (!table) return;
 
-    const thead = table.querySelector("thead") || table.createTHead();
-    let tr = thead.querySelector("tr");
-    if (!tr) { tr = document.createElement("tr"); thead.appendChild(tr); }
+  const bodyCols = (tbody.querySelector("tr")?.children.length) || 0;
+  const thead = table.tHead || table.createTHead();
+  let tr = thead.rows[0] || thead.insertRow();
 
-    const heads = ["", "QR", "コード / 名称", "画像", "価格", "在庫", "最小", "部門", "置場", "操作"];
-    if (tr.children.length !== heads.length) {
-      tr.innerHTML = heads.map((h, i) => {
-        if (i === 9) return `<th style="min-width:220px; text-align:right">${h}</th>`;
-        return `<th>${h}</th>`;
-      }).join("");
-    } else {
-      const last = tr.lastElementChild;
-      if (last && !/操作/.test(last.textContent)) last.textContent = "操作";
-      if (last) { last.style.minWidth = "220px"; last.style.textAlign = "right"; }
+  // Label default per indeks (fallback kalau header kosong)
+  const defaultHeads = ["", "QR", "コード / 名称", "画像", "価格", "在庫", "最小", "部門", "置場", "操作"];
+
+  // Tambah th sampai jumlahnya = bodyCols
+  while (tr.children.length < bodyCols) {
+    const th = document.createElement("th");
+    const i = tr.children.length;
+    th.textContent = defaultHeads[i] ?? "";
+    if (i === bodyCols - 1) { // kolom terakhir = 操作
+      th.textContent = "操作";
+      th.style.minWidth = "220px";
+      th.style.textAlign = "right";
     }
+    tr.appendChild(th);
   }
 
-  // Colgroup untuk layout
-  function ensureItemsColgroup() {
-    const tbody = document.getElementById("tbl-items");
-    if (!tbody) return;
-    const table = tbody.closest("table");
-    if (!table || table.__colgroupOK) return;
-
-    const cg = document.createElement("colgroup");
-    cg.innerHTML = `
-      <col style="width:36px">
-      <col style="width:110px">
-      <col>
-      <col style="width:72px">
-      <col style="width:110px">
-      <col style="width:120px">
-      <col style="width:100px">
-      <col style="width:120px">
-      <col style="width:100px">
-      <col style="width:220px">
-    `;
-    table.insertBefore(cg, table.firstChild);
-    table.__colgroupOK = true;
+  // Update kolom terakhir agar pasti “操作” + style
+  if (tr.children.length) {
+    const last = tr.children[tr.children.length - 1];
+    last.textContent = "操作";
+    last.style.minWidth = "220px";
+    last.style.textAlign = "right";
   }
+}
+
+function ensureItemsColgroup() {
+  const tbody = document.getElementById("tbl-items");
+  if (!tbody) return;
+  const table = tbody.closest("table");
+  if (!table) return;
+
+  const bodyCols = (tbody.querySelector("tr")?.children.length) || 0;
+
+  // Buang colgroup lama biar nggak bentrok
+  table.querySelectorAll("colgroup").forEach(cg => cg.remove());
+
+  const widths = [
+    "36px",   // checkbox
+    "110px",  // QR
+    "",       // コード/名称
+    "72px",   // 画像
+    "110px",  // 価格
+    "120px",  // 在庫
+    "100px",  // 最小
+    "120px",  // 部門
+    "100px",  // 置場
+    "220px"   // 操作
+  ];
+
+  const cg = document.createElement("colgroup");
+  for (let i = 0; i < bodyCols; i++) {
+    const col = document.createElement("col");
+    if (widths[i]) col.style.width = widths[i];
+    cg.appendChild(col);
+  }
+  table.insertBefore(cg, table.firstChild);
+}
 
   async function renderItems(){
     const tbody = $("#tbl-items");
@@ -549,27 +571,38 @@
         });
       };
 
-      async function renderPage(){
-        const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
+     async function renderPage(){
+  const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
 
-        if (page === 0) {
-          tbody.innerHTML = slice.map(tplItemRow).join("");
-          ensureItemsHeader();
-          ensureItemsColgroup();
-        } else {
-          tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
-        }
-        page++;
+  // render halaman saat ini
+  if (page === 0) {
+    tbody.innerHTML = slice.map(tplItemRow).join("");
+  } else {
+    tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
+  }
 
-        highlightLow();
+  // halaman sudah dirender → increment dulu
+  page++;
 
-        // QR untuk baris yang baru dirender
-        try { await ensureQRCode(); } catch(_) {}
-        renderRowQRCodes(slice);
+  // highlight low stock
+  highlightLow();
 
-        // tombol "操作" versi mobile
-        ensureMobileActions();
-      }
+  // QR untuk baris yang baru dirender
+  try { await ensureQRCode(); } catch(_) {}
+  renderRowQRCodes(slice);
+
+  // tombol "操作" versi mobile
+  ensureMobileActions();
+
+  // untuk first paint: bikin THEAD & COLGROUP setelah DOM jadi
+  if (page === 1) {
+    ensureItemsHeader();
+    ensureItemsColgroup();
+    // jalan paling akhir di microtask (kalau ada script lain yang overwrite)
+    queueMicrotask(() => { ensureItemsHeader(); ensureItemsColgroup(); });
+  }
+}
+
 
       await renderPage();
 
