@@ -369,7 +369,8 @@
 
   /* -------------------- Items -------------------- */
   // ukuran tetap untuk tombol agar “操作” simetris
-  const ACT_GRID_STYLE = 'display:grid;grid-template-columns:repeat(5,32px);gap:8px;min-width:200px;justify-content:end;';
+  const ACT_GRID_STYLE = 'display:grid;grid-template-columns:repeat(5,28px);gap:6px;min-width:160px;justify-content:end;';
+
 
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
@@ -416,7 +417,7 @@
         '<td class="text-end">', fmt(min), '</td>',
         '<td>', dept, '</td>',
         '<td>', loc, '</td>',
-        '<td style="text-align:right;min-width:220px">',
+        '<td style="text-align:right;min-width:160px">',
           '<div class="act-grid d-inline-grid" style="grid-auto-flow:column;gap:.25rem;vertical-align:middle">',
             actions,
           '</div>',
@@ -482,6 +483,7 @@
 
     const table = host.tagName === "TABLE" ? host : host.closest("table");
     if (!table) return;
+table.classList.add('table','items-table');
 
     const tbody = host.tagName === "TBODY" ? host
                 : (table.tBodies[0] || table.querySelector("tbody") || table.createTBody());
