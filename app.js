@@ -374,6 +374,7 @@
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
 
+  // === PATCHED: tplItemRow: paksa cell aksi rata kanan & min-width ===
   function tplItemRow(it){
     const qrid  = `qr-${safeId(it.code)}`;
     const stock = Number(it.stock || 0);
@@ -415,8 +416,8 @@
         '<td class="text-end">', fmt(min), '</td>',
         '<td>', dept, '</td>',
         '<td>', loc, '</td>',
-        '<td>',
-          '<div class="act-grid" style="display:grid;grid-auto-flow:column;gap:.25rem;place-content:center">',
+        '<td style="text-align:right;min-width:220px">',
+          '<div class="act-grid d-inline-grid" style="grid-auto-flow:column;gap:.25rem;vertical-align:middle">',
             actions,
           '</div>',
         '</td>',
@@ -474,75 +475,77 @@
     });
   }
 
-  // THEAD sinkron 10 kolom
-  // === HEADER & COLGROUP sinkron ke jumlah kolom body ===
-function ensureItemsHeader() {
-  const tbody = document.getElementById("tbl-items");
-  if (!tbody) return;
-  const table = tbody.closest("table");
-  if (!table) return;
+  // === HEADER & COLGROUP sinkron ke jumlah kolom body (kuat untuk TABLE/TBODY) ===
+  function ensureItemsHeader() {
+    const host = document.getElementById("tbl-items");
+    if (!host) return;
 
-  const bodyCols = (tbody.querySelector("tr")?.children.length) || 0;
-  const thead = table.tHead || table.createTHead();
-  let tr = thead.rows[0] || thead.insertRow();
+    const table = host.tagName === "TABLE" ? host : host.closest("table");
+    if (!table) return;
 
-  // Label default per indeks (fallback kalau header kosong)
-  const defaultHeads = ["", "QR", "コード / 名称", "画像", "価格", "在庫", "最小", "部門", "置場", "操作"];
+    const tbody = host.tagName === "TBODY" ? host
+                : (table.tBodies[0] || table.querySelector("tbody") || table.createTBody());
 
-  // Tambah th sampai jumlahnya = bodyCols
-  while (tr.children.length < bodyCols) {
-    const th = document.createElement("th");
-    const i = tr.children.length;
-    th.textContent = defaultHeads[i] ?? "";
-    if (i === bodyCols - 1) { // kolom terakhir = 操作
-      th.textContent = "操作";
-      th.style.minWidth = "220px";
-      th.style.textAlign = "right";
+    const thead = table.tHead || table.createTHead();
+    const tr    = thead.rows[0] || thead.insertRow();
+
+    const sample = tbody.querySelector("tr[data-code], tbody tr") || null;
+    const bodyCols = sample ? sample.children.length : 10;
+
+    const defaultHeads = ["", "QR", "コード / 名称", "画像", "価格", "在庫", "最小", "部門", "置場", "操作"];
+
+    while (tr.children.length < bodyCols) {
+      const th = document.createElement("th");
+      const i = tr.children.length;
+      th.textContent = defaultHeads[i] ?? "";
+      tr.appendChild(th);
     }
-    tr.appendChild(th);
+    while (tr.children.length > bodyCols) tr.lastElementChild.remove();
+
+    if (tr.children.length) {
+      const last = tr.children[tr.children.length - 1];
+      last.textContent = "操作";
+      last.style.minWidth = "220px";
+      last.style.textAlign = "right";
+    }
   }
 
-  // Update kolom terakhir agar pasti “操作” + style
-  if (tr.children.length) {
-    const last = tr.children[tr.children.length - 1];
-    last.textContent = "操作";
-    last.style.minWidth = "220px";
-    last.style.textAlign = "right";
+  function ensureItemsColgroup() {
+    const host = document.getElementById("tbl-items");
+    if (!host) return;
+
+    const table = host.tagName === "TABLE" ? host : host.closest("table");
+    if (!table) return;
+
+    const tbody = host.tagName === "TBODY" ? host
+                : (table.tBodies[0] || table.querySelector("tbody") || table.createTBody());
+
+    const sample = tbody.querySelector("tr[data-code], tbody tr") || null;
+    const bodyCols = sample ? sample.children.length : 10;
+
+    table.querySelectorAll("colgroup").forEach(cg => cg.remove());
+
+    const widths = [
+      "36px",   // checkbox
+      "110px",  // QR
+      "",       // コード/名称
+      "72px",   // 画像
+      "110px",  // 価格
+      "120px",  // 在庫
+      "100px",  // 最小
+      "120px",  // 部門
+      "100px",  // 置場
+      "220px"   // 操作
+    ];
+
+    const cg = document.createElement("colgroup");
+    for (let i = 0; i < bodyCols; i++) {
+      const col = document.createElement("col");
+      if (widths[i]) col.style.width = widths[i];
+      cg.appendChild(col);
+    }
+    table.insertBefore(cg, table.firstChild);
   }
-}
-
-function ensureItemsColgroup() {
-  const tbody = document.getElementById("tbl-items");
-  if (!tbody) return;
-  const table = tbody.closest("table");
-  if (!table) return;
-
-  const bodyCols = (tbody.querySelector("tr")?.children.length) || 0;
-
-  // Buang colgroup lama biar nggak bentrok
-  table.querySelectorAll("colgroup").forEach(cg => cg.remove());
-
-  const widths = [
-    "36px",   // checkbox
-    "110px",  // QR
-    "",       // コード/名称
-    "72px",   // 画像
-    "110px",  // 価格
-    "120px",  // 在庫
-    "100px",  // 最小
-    "120px",  // 部門
-    "100px",  // 置場
-    "220px"   // 操作
-  ];
-
-  const cg = document.createElement("colgroup");
-  for (let i = 0; i < bodyCols; i++) {
-    const col = document.createElement("col");
-    if (widths[i]) col.style.width = widths[i];
-    cg.appendChild(col);
-  }
-  table.insertBefore(cg, table.firstChild);
-}
 
   async function renderItems(){
     const tbody = $("#tbl-items");
@@ -571,42 +574,32 @@ function ensureItemsColgroup() {
         });
       };
 
-     async function renderPage(){
-  const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
+      async function renderPage(){
+        const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
 
-  // render halaman saat ini
-  if (page === 0) {
-    tbody.innerHTML = slice.map(tplItemRow).join("");
-  } else {
-    tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
-  }
+        if (page === 0) {
+          tbody.innerHTML = slice.map(tplItemRow).join("");
+        } else {
+          tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
+        }
 
-  // halaman sudah dirender → increment dulu
-  page++;
+        page++;
 
-  // highlight low stock
-  highlightLow();
+        highlightLow();
 
-  // QR untuk baris yang baru dirender
-  try { await ensureQRCode(); } catch(_) {}
-  renderRowQRCodes(slice);
+        try { await ensureQRCode(); } catch(_) {}
+        renderRowQRCodes(slice);
 
-  // tombol "操作" versi mobile
-  ensureMobileActions();
+        ensureMobileActions();
 
-  // untuk first paint: bikin THEAD & COLGROUP setelah DOM jadi
-  if (page === 1) {
-    ensureItemsHeader();
-    ensureItemsColgroup();
-    // jalan paling akhir di microtask (kalau ada script lain yang overwrite)
-    queueMicrotask(() => { ensureItemsHeader(); ensureItemsColgroup(); });
-  }
-}
-
+        // ⬇ selalu sinkronkan header & colgroup setelah render halaman
+        ensureItemsHeader();
+        ensureItemsColgroup();
+        queueMicrotask(() => { ensureItemsHeader(); ensureItemsColgroup(); });
+      }
 
       await renderPage();
 
-      // tombol "Load more" jika data banyak
       if (_ITEMS_CACHE.length > size) {
         const more = document.createElement("div");
         more.className = "text-center my-3";
@@ -671,7 +664,6 @@ function ensureItemsColgroup() {
       tbody.__bound = true;
     }
 
-    // samakan lebar header 「操作」
     try{
       const th = tbody?.closest("table")?.querySelector("thead tr th:last-child");
       if (th) th.style.minWidth = "220px";
@@ -863,7 +855,7 @@ function ensureItemsColgroup() {
       let tries = 0;
       (function waitRender() {
         const url = grab();
-        if (url || tries >= 15) { // lebih sabar
+        if (url || tries >= 15) {
           document.body.removeChild(tmp);
           resolve(url || "");
           return;
@@ -1597,7 +1589,7 @@ function ensureItemsColgroup() {
     });
 
     // NOTE: tombol #st-commit (確定) belum diubah — sesuaikan ke endpoint bila perlu
-  } // ⬅️ PENTING: Penutup bindShelf() supaya blok Tanaoroshi tidak ikut ke dalamnya
+  } // ⬅️ Penutup bindShelf()
 
   /* -------------------- Tanaoroshi List (棚卸一覧) -------------------- */
 
