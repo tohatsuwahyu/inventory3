@@ -493,103 +493,148 @@
       firstCell.appendChild(wrap);
     });
   }
+// --- Fix: table column widths untuk 商品一覧 + cegah error ReferenceError ---
+// --- Fix layout kolom & render daftar items (QR + tombol "操作") ---
+function ensureItemsColgroup() {
+  const tbody = document.getElementById("tbl-items");
+  if (!tbody) return;
+  const table = tbody.closest("table");
+  if (!table || table.__colgroupOK) return;
 
-  async function renderItems(){
-    const tbody = $("#tbl-items");
+  const cg = document.createElement("colgroup");
+  cg.innerHTML = `
+    <col style="width:36px">     <!-- checkbox -->
+    <col style="width:110px">    <!-- QR -->
+    <col>                        <!-- コード / 名称 -->
+    <col style="width:72px">     <!-- 画像 -->
+    <col style="width:110px">    <!-- 価格 -->
+    <col style="width:120px">    <!-- 在庫 -->
+    <col style="width:100px">    <!-- 最小 -->
+    <col style="width:120px">    <!-- 部門 -->
+    <col style="width:100px">    <!-- 置場 -->
+    <col style="width:220px">    <!-- 操作 -->
+  `;
+  table.insertBefore(cg, table.firstChild);
+  table.__colgroupOK = true;
+}
 
-    if (CONFIG.FEATURES && CONFIG.FEATURES.SKELETON) {
-      tbody.innerHTML = '<tr><td colspan="10"><div class="skel" style="height:120px"></div></td></tr>';
-    }
+async function renderItems(){
+  const tbody = $("#tbl-items");
+  if (!tbody) return;
 
-    try {
-      const listAll = await api("items", { method: "GET" });
-      _ITEMS_CACHE = Array.isArray(listAll) ? listAll : (Array.isArray(listAll?.data) ? listAll.data : []);
-
-      let page = 0, size = 100;
-      function renderPage(){
-        const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
-        if (page === 0) {
-          tbody.innerHTML = slice.map(tplItemRow).join("");
-          ensureItemsColgroup();
-        } else {
-          tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
-        }
-
-        page++;
-
-        // highlight low-stock
-        var rows = $$("#tbl-items tr");
-        rows.forEach(function(tr){
-          var stock = Number((tr.children[5] && tr.children[5].textContent || "0").replace(/[,¥]/g, ""));
-          var min   = Number((tr.children[6] && tr.children[6].textContent || "0").replace(/[,¥]/g, ""));
-          tr.classList.toggle("row-low", stock <= min);
-        });
-      }
-      renderPage();
-
-      if (_ITEMS_CACHE.length > size) {
-        var more = document.createElement("div");
-        more.className = "text-center my-3";
-        more.innerHTML = '<button id="btn-load-more" class="btn btn-outline-secondary btn-sm">Load more</button>';
-        tbody.parentElement.appendChild(more);
-        more.addEventListener("click", function(e){
-          e.preventDefault();
-          renderPage();
-          ensureMobileActions();
-          if (page*size >= _ITEMS_CACHE.length) more.remove();
-        });
-      }
-
-      await ensureQRCode();
-      renderRowQRCodes(_ITEMS_CACHE.slice(0, Math.min(size, _ITEMS_CACHE.length)));
-
-    } catch (e) {
-      console.error("renderItems()", e);
-      toast("商品一覧の読み込みに失敗しました。");
-    }
-
-    // === Event delegation untuk kolom 「操作」
-    tbody?.addEventListener("click", async (ev)=>{
-      const btn = ev.target.closest("button"); if(!btn) return;
-      const code = btn.getAttribute("data-code"); if(!code) return;
-      const item = _ITEMS_CACHE.find(x => String(x.code) === String(code));
-      if (btn.classList.contains("btn-edit")) { openEditItem(code); return; }
-      if (btn.classList.contains("btn-del")) {
-        if (!isAdmin()) return toast("Akses ditolak (admin only)");
-        if (!confirm("削除してもよろしいですか？")) return;
-        try{
-          const r = await api("deleteItem", { method:"POST", body:{ code }});
-          if (r?.ok) { toast("削除しました"); renderItems(); }
-          else toast(r?.error || "削除失敗");
-        }catch(e){ toast("削除失敗: " + (e?.message||e)); }
-        return;
-      }
-      if (btn.classList.contains("btn-dl")) {
-        if (!item) return;
-        const url = await makeItemLabel62mmDataURL(item);
-        const a = document.createElement("a");
-        a.href = url; a.download = `label_${sanitizeFilename(item.code)}.png`; a.click();
-        return;
-      }
-      if (btn.classList.contains("btn-lotqr")) {
-        if (!item) return;
-        openLotQRModal(item);
-        return;
-      }
-      if (btn.classList.contains("btn-preview")) {
-        if (!item) return;
-        showItemPreview(item);
-        return;
-      }
-    });
-
-    // simetrikan header kolom terakhir (「操作」)
-    try{
-      const th = tbody?.closest("table")?.querySelector("thead tr th:last-child");
-      if (th) th.style.minWidth = "220px";
-    }catch{}
-    try { bindPreviewButtons(); } catch(e) {}
+  if (CONFIG.FEATURES && CONFIG.FEATURES.SKELETON) {
+    tbody.innerHTML = '<tr><td colspan="10"><div class="skel" style="height:120px"></div></td></tr>';
   }
+
+  try {
+    const listAll = await api("items", { method: "GET" });
+    _ITEMS_CACHE = Array.isArray(listAll) ? listAll
+                  : (Array.isArray(listAll?.data) ? listAll.data : []);
+
+    let page = 0, size = 100;
+
+    const highlightLow = () => {
+      $$("#tbl-items tr").forEach(tr => {
+        const stock = Number((tr.children[5]?.textContent || "0").replace(/[,¥]/g, ""));
+        const min   = Number((tr.children[6]?.textContent || "0").replace(/[,¥]/g, ""));
+        tr.classList.toggle("row-low", stock <= min);
+      });
+    };
+
+    async function renderPage(){
+      const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
+
+      if (page === 0) {
+        tbody.innerHTML = slice.map(tplItemRow).join("");
+        ensureItemsColgroup();             // pastikan layout kolom stabil
+      } else {
+        tbody.insertAdjacentHTML("beforeend", slice.map(tplItemRow).join(""));
+      }
+      page++;
+
+      highlightLow();
+
+      // QR untuk baris yang baru dirender
+      try { await ensureQRCode(); } catch(_) {}
+      renderRowQRCodes(slice);
+
+      // tombol "操作" versi mobile
+      ensureMobileActions();
+    }
+
+    await renderPage();
+
+    // tombol "Load more" jika data banyak
+    if (_ITEMS_CACHE.length > size) {
+      const more = document.createElement("div");
+      more.className = "text-center my-3";
+      more.innerHTML = '<button id="btn-load-more" class="btn btn-outline-secondary btn-sm">Load more</button>';
+      tbody.parentElement.appendChild(more);
+
+      more.addEventListener("click", async (e)=>{
+        e.preventDefault();
+        await renderPage();
+        if (page*size >= _ITEMS_CACHE.length) more.remove();
+      });
+    }
+
+  } catch (e) {
+    console.error("renderItems()", e);
+    toast("商品一覧の読み込みに失敗しました。");
+  }
+
+  // Delegasi klik untuk kolom 「操作」
+  tbody?.addEventListener("click", async (ev)=>{
+    const btn  = ev.target.closest("button");
+    if (!btn) return;
+    const code = btn.getAttribute("data-code");
+    if (!code) return;
+
+    const item = _ITEMS_CACHE.find(x => String(x.code) === String(code));
+
+    if (btn.classList.contains("btn-edit")) { openEditItem(code); return; }
+
+    if (btn.classList.contains("btn-del")) {
+      if (!isAdmin()) return toast("Akses ditolak (admin only)");
+      if (!confirm("削除してもよろしいですか？")) return;
+      try{
+        const r = await api("deleteItem", { method:"POST", body:{ code }});
+        if (r?.ok) { toast("削除しました"); renderItems(); }
+        else toast(r?.error || "削除失敗");
+      }catch(e){ toast("削除失敗: " + (e?.message||e)); }
+      return;
+    }
+
+    if (btn.classList.contains("btn-dl")) {
+      if (!item) return;
+      const url = await makeItemLabel62mmDataURL(item);
+      const a = document.createElement("a");
+      a.href = url; a.download = `label_${sanitizeFilename(item.code)}.png`; a.click();
+      return;
+    }
+
+    if (btn.classList.contains("btn-lotqr")) {
+      if (!item) return;
+      openLotQRModal(item);
+      return;
+    }
+
+    if (btn.classList.contains("btn-preview")) {
+      if (!item) return;
+      showItemPreview(item);
+      return;
+    }
+  });
+
+  // samakan lebar header 「操作」
+  try{
+    const th = tbody?.closest("table")?.querySelector("thead tr th:last-child");
+    if (th) th.style.minWidth = "220px";
+  }catch{}
+
+  try { bindPreviewButtons(); } catch(e) {}
+}
+
 
   // === render QR di tiap baris items ===
   function renderRowQRCodes(items){
