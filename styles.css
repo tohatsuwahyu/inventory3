@@ -305,27 +305,30 @@ td[data-editable]{ cursor:text; }
   background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:600;
 }
 
-/* ---------- Responsif kolom: sembunyikan bertahap ---------- */
+/* ---------- Responsif kolom: sembunyikan bertahap (部門 TETAP TAMPIL) ---------- */
+/* Urutan kolom: [□][QR][名称][画像][価格][在庫][最小][部門][置場][操作] */
 @media (max-width:1400px){
-  .items-table thead th:nth-child(8),
-  .items-table tbody td:nth-child(8), /* 部門 */
+  /* Sembunyikan dulu LOKASI (置場) saja */
   .items-table thead th:nth-child(9),
   .items-table tbody td:nth-child(9){ /* 置場 */
     display:none;
   }
 }
 @media (max-width:1200px){
+  /* Lalu sembunyikan MIN (最小) */
   .items-table thead th:nth-child(7),
   .items-table tbody td:nth-child(7){ /* 最小 */
     display:none;
   }
 }
 @media (max-width:992px){
+  /* Terakhir, gambar supaya lebih lega di tablet/HP */
   .items-table thead th:nth-child(4),
   .items-table tbody td:nth-child(4){ /* 画像 */
     display:none;
   }
 }
+
 @media (max-width:768px){
   .items-table thead th:nth-child(5){ width:90px; } /* 価格 */
   .items-table thead th:nth-child(6){ width:90px; } /* 在庫 */
