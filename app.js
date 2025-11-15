@@ -2304,15 +2304,16 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
   "use strict";
 
   // escapeHtml lokal (modul preview berdiri sendiri dari IIFE utama)
-  function escapeHtml(s) {
-    return String(s || "").replace(/[&<>"']/g, (m) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      "\"": "&quot;",
-      "'": "&#39;"
-    }[m]));
-  }
+ function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[m]));
+}
+
 
   // Bridge ke helper inti di dalam IIFE utama (lihat window.__INV_APP__)
   function __invCore() {
