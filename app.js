@@ -1496,74 +1496,73 @@ function setManualHints({ autoFromLot } = { autoFromLot:false }){
     clearShelfDraft();
   });
 
-  // --- 確定（在庫更新 ＋ 棚卸シート保存） ---
-   // --- 確定（在庫更新 ＋ 棚卸シート保存） ---
-  const btnCommit = $("#st-commit");
-  if (btnCommit && !btnCommit.__bound) {
-    btnCommit.__bound = true;
-    btnCommit.addEventListener("click", async (e) => {
-      e.preventDefault();
+  // ---- Tambahan aman: stub supaya pemanggilan tidak error ----
+function ensureItemsColgroup(){ /* no-op; tambahkan logika jika perlu */ }
 
-      const rows = [...ST.rows.values()];
-      if (!rows.length) {
-        toast("棚卸データがありません。");
-        return;
-      }
+// ---- Potongan akhir bindShelf() (biarkan kode di atasnya tetap) ----
+const btnCommit = $("#st-commit");
+if (btnCommit && !btnCommit.__bound) {
+  btnCommit.__bound = true;
+  btnCommit.addEventListener("click", async (e) => {
+    e.preventDefault();
 
-      const who = getCurrentUser();
-      if (!who) {
-        toast("ログイン情報がありません。");
-        return;
-      }
+    const rows = [...ST.rows.values()];
+    if (!rows.length) {
+      toast("棚卸データがありません。");
+      return;
+    }
 
-      if (!confirm("帳簿在庫を更新し、棚卸結果を保存しますか？")) return;
+    const who = getCurrentUser();
+    if (!who) {
+      toast("ログイン情報がありません。");
+      return;
+    }
 
-      btnCommit.disabled = true;
+    if (!confirm("帳簿在庫を更新し、棚卸結果を保存しますか？")) return;
 
-      try {
-        // siapkan payload untuk GAS → fungsi tanaCommit()
-        const payloadRows = rows.map(r => ({
-          code      : r.code,
-          name      : r.name,
-          qty       : Number(r.qty || 0),
-          book      : Number(r.book || 0),
-          diff      : Number(r.diff || 0),
-          unit      : "pcs",
-          department: r.department || ""
-        }));
+    btnCommit.disabled = true;
 
-        const res = await api("tanaCommit", {
-          method: "POST",
-          body: {
-            userId: who.id,
-            rows : payloadRows
-          }
-        });
+    try {
+      const payloadRows = rows.map(r => ({
+        code      : r.code,
+        name      : r.name,
+        qty       : Number(r.qty || 0),
+        book      : Number(r.book || 0),
+        diff      : Number(r.diff || 0),
+        unit      : "pcs",
+        department: r.department || ""
+      }));
 
-        if (!res || !res.ok) {
-          throw new Error((res && res.error) || "tanaCommit failed");
-        }
+      const res = await api("tanaCommit", {
+        method: "POST",
+        body: { userId: who.id, rows: payloadRows }
+      });
 
-        toast(`棚卸を確定しました（在庫更新 ${res.updated || 0} 件）`);
+      if (!res || !res.ok) { throw new Error((res && res.error) || "tanaCommit failed"); }
 
-        // bersihkan data lokal + draft
-        ST.rows = new Map();
-        renderShelfTable();
-        clearShelfDraft();
+      toast(`棚卸を確定しました（在庫更新 ${res.updated || 0} 件）`);
 
-        // refresh daftar, items, dan dashboard (kalau gagal, di-ignore)
-        try { await loadTanaList(); } catch (_) {}
-        try { await renderItems(); } catch (_) {}
-        renderDashboard();
+      ST.rows = new Map();
+      renderShelfTable();
+      clearShelfDraft();
 
-      } catch (err) {
-        console.error("tanaCommit error", err);
-        toast("棚卸の確定に失敗しました。");
-      } finally {
-        btnCommit.disabled = false;
-      }
-    });
-  }
+      try { await loadTanaList(); } catch (_) {}
+      try { await renderItems(); } catch (_) {}
+      renderDashboard();
+
+    } catch (err) {
+      console.error("tanaCommit error", err);
+      toast("棚卸の確定に失敗しました。");
+    } finally {
+      btnCommit.disabled = false;
+    }
+  });
+}
+
+// <<< PENUTUP bindShelf() dipindah ke sini >>>
+} 
+
+
 
 
         /* -------------------- Tanaoroshi List (棚卸一覧) -------------------- */
