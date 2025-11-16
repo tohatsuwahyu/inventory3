@@ -225,7 +225,7 @@
       if (id === "view-users") renderUsers();
       if (id === "view-history") renderHistory();
       if (id === "view-shelf") { renderShelfTable(); }
-      // 棚卸一覧：リスト + 集計は loadTanaList の中で行う
+      // 棚卸一覧：リスト + 集計は loadTanaList の dalam
       if (id === "view-shelf-list") { loadTanaList(); }
     });
   })();
@@ -371,7 +371,6 @@
   // ukuran tetap untuk tombol agar “操作” simetris
   const ACT_GRID_STYLE = 'display:grid;grid-template-columns:repeat(5,28px);gap:6px;min-width:160px;justify-content:end;';
 
-
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
 
@@ -483,7 +482,7 @@
 
     const table = host.tagName === "TABLE" ? host : host.closest("table");
     if (!table) return;
-table.classList.add('table','items-table');
+    table.classList.add('table','items-table');
 
     const tbody = host.tagName === "TBODY" ? host
                 : (table.tBodies[0] || table.querySelector("tbody") || table.createTBody());
@@ -555,6 +554,7 @@ table.classList.add('table','items-table');
 
     if (CONFIG.FEATURES && CONFIG.FEATURES.SKELETON) {
       tbody.innerHTML = '<tr><td colspan="10"><div class="skel" style="height:120px"></div></td></tr>';
+      setupTopScrollbar();
     }
 
     try {
@@ -598,6 +598,10 @@ table.classList.add('table','items-table');
         ensureItemsHeader();
         ensureItemsColgroup();
         queueMicrotask(() => { ensureItemsHeader(); ensureItemsColgroup(); });
+
+        // --- sinkronisasi top scrollbar setiap selesai render halaman
+        setupTopScrollbar();
+        if (typeof window.__resyncTopScroll === "function") window.__resyncTopScroll();
       }
 
       await renderPage();
@@ -611,6 +615,8 @@ table.classList.add('table','items-table');
         more.addEventListener("click", async (e)=>{
           e.preventDefault();
           await renderPage();
+          // setelah nambah baris, resync
+          if (typeof window.__resyncTopScroll === "function") window.__resyncTopScroll();
           if (page*size >= _ITEMS_CACHE.length) more.remove();
         });
       }
@@ -2748,3 +2754,70 @@ table.classList.add('table','items-table');
   window.bindPreviewButtons = bindPreviewButtons;
 
 })();
+
+/* =========================================================
+ * TOP SCROLLBAR — sinkronisasi dengan tabel items
+ * =======================================================*/
+function setupTopScrollbar(){
+  const top  = document.getElementById("items-scroll-top");
+  const wrap = document.getElementById("items-table-wrap");
+  if (!top || !wrap) return;
+
+  // pastikan ada inner bar
+  let inner = top.firstElementChild;
+  if (!inner) { inner = document.createElement("div"); top.appendChild(inner); }
+  inner.style.height = "1px";
+
+  const getTableWidth = () => {
+    const tbl = wrap.querySelector("table");
+    // fallback ke scrollWidth wrap kalau tabel belum ada
+    return (tbl?.scrollWidth || wrap.scrollWidth || 0);
+  };
+
+  const syncSize = () => {
+    inner.style.width = getTableWidth() + "px";
+    // Samakan posisi scroll
+    if (Math.abs(top.scrollLeft - wrap.scrollLeft) > 1) {
+      top.scrollLeft = wrap.scrollLeft;
+    }
+  };
+
+  // Bi-directional scroll
+  if (!wrap.__topSyncBound) {
+    wrap.__topSyncBound = true;
+    wrap.addEventListener("scroll", () => { top.scrollLeft = wrap.scrollLeft; }, { passive: true });
+  }
+  if (!top.__wrapSyncBound) {
+    top.__wrapSyncBound = true;
+    top.addEventListener("scroll", () => { wrap.scrollLeft = top.scrollLeft; }, { passive: true });
+  }
+
+  // Resize & DOM changes observer → auto-resize saat isi berubah
+  top.__resizeObs?.disconnect?.();
+  top.__mutObs?.disconnect?.();
+
+  const ro = new ResizeObserver(syncSize);
+  ro.observe(wrap);
+  const tbl = wrap.querySelector("table");
+  if (tbl) ro.observe(tbl);
+  top.__resizeObs = ro;
+
+  const mo = new MutationObserver((muts) => {
+    // kalau ada perubahan baris/kolom, resync
+    let need = false;
+    for (const m of muts) {
+      if (m.type === "childList" || m.type === "attributes") { need = true; break; }
+    }
+    if (need) syncSize();
+  });
+  mo.observe(wrap, { childList: true, subtree: true, attributes: true });
+  top.__mutObs = mo;
+
+  // init
+  syncSize();
+  setTimeout(syncSize, 0);
+  window.addEventListener("resize", syncSize);
+
+  // helper publik untuk dipanggil setelah render page
+  window.__resyncTopScroll = syncSize;
+}
