@@ -328,27 +328,29 @@
             </div>
           </div>
 
-          <div class="card p-3">
-            <div class="table-responsive" id="items-table-wrap">
-<table class="table table-hover align-middle table-items">
-                <thead>
-  <tr>
-    <th style="width:36px"> </th>            <!-- checkbox -->
-    <th style="width:110px">QR</th>          <!-- QR -->
-    <th style="width:220px">コード / 名称</th><!-- gabungan -->
-    <th style="width:72px">画像</th>          <!-- image -->
-    <th style="width:110px">価格</th>         <!-- price -->
-    <th style="width:90px">在庫</th>          <!-- stock -->
-    <th style="width:80px">最小</th>          <!-- min -->
-    <th style="width:110px">部門</th>         <!-- department -->
-    <th style="width:100px">置場</th>         <!-- location -->
-    <th style="width:220px">操作</th>         <!-- actions -->
-  </tr>
-</thead>
-<tbody id="tbl-items"></tbody>
+         <!-- TOP SCROLLBAR (baru) -->
+<div id="items-scroll-top"><div></div></div>
 
-              </table>
-            </div>
+<!-- WRAPPER TABEL -->
+<div id="items-table-wrap" class="table-responsive">
+  <table class="table items-table">
+    <thead>
+      <tr>
+        <th></th>                <!-- checkbox -->
+        <th>QR</th>
+        <th>コード / 名称</th>
+        <th>画像</th>
+        <th>価格</th>
+        <th>在庫</th>
+        <th>最小</th>
+        <th>部門</th>           <!-- ← WAJIB ada -->
+        <th>置場</th>
+        <th>操作</th>           <!-- ← kolom paling kanan -->
+      </tr>
+    </thead>
+    <tbody id="tbl-items"><!-- baris diisi oleh JS --></tbody>
+  </table>
+</div>
 
             <div id="card-item-detail" class="card p-3 mt-3 d-none">
               <div class="d-flex justify-content-between align-items-center mb-2">
