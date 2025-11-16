@@ -457,3 +457,17 @@ td[data-editable]{ cursor:text; }
     -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
 }
+#items-scroll-top{
+  height:12px;
+  overflow-x:auto; overflow-y:hidden;
+  background:#f8fafc;
+  border:1px solid var(--border);
+  border-radius:8px;
+  margin:6px 0 10px;
+  position:sticky;
+  top:0;
+  z-index:5;
+}
+#items-scroll-top > div{ height:1px; }
+
+#items-table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
