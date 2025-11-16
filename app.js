@@ -1,3 +1,4 @@
+
 /* =========================================================
  * app.js — Inventory (GAS backend)
  * =======================================================*/
@@ -416,9 +417,8 @@
         '<td class="text-end">', fmt(min), '</td>',
         '<td>', dept, '</td>',
         '<td>', loc, '</td>',
-        '<td class="td-actions" style="text-align:right;min-width:160px">',
-  <div class="act-grid actions">
-
+     '<td class="td-actions" style="text-align:right;min-width:160px">',
+  '<div class="act-grid actions">',   // ✅ di dalam string
     actions,
   '</div>',
 '</td>',
