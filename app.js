@@ -417,7 +417,8 @@
         '<td>', dept, '</td>',
         '<td>', loc, '</td>',
         '<td class="td-actions" style="text-align:right;min-width:160px">',
-  '<div class="act-grid actions d-inline-grid" style="grid-auto-flow:column;gap:.25rem;vertical-align:middle">',
+  <div class="act-grid actions">
+
     actions,
   '</div>',
 '</td>',
