@@ -683,3 +683,29 @@ td[data-editable]{ cursor:text; }
     width: 44px; height: 44px; padding: 0; border-radius: 12px;
   }
 }
+/* === PATCH: 商品一覧 → kolom 「操作」 jadi 2-grid di layar kecil === */
+@media (max-width: 768px) {
+  /* 1) Bebaskan lebar yang dipaksa oleh JS (th/td & colgroup) */
+  #view-items table.items-table thead th:last-child {
+    min-width: auto !important;
+    text-align: right;
+  }
+  #view-items table.items-table td.td-actions {
+    min-width: auto !important;
+    white-space: normal;         /* boleh membungkus */
+  }
+  #view-items table.items-table col:last-child {
+    width: auto !important;      /* singkirkan width 220px dari colgroup */
+  }
+
+  /* 2) Jadikan tombol 2 kolom x n baris (override inline "grid-auto-flow:column") */
+  #view-items table.items-table td:last-child .act-grid.actions{
+    grid-template-columns: repeat(2, 44px) !important; /* 2 kolom */
+    grid-auto-flow: row !important;                     /* isi per baris */
+    gap: 6px 10px;
+    justify-content: end;
+  }
+  #view-items .act-grid.actions .btn{
+    width: 44px; height: 44px; border-radius: 12px;    /* target nyaman jempol */
+  }
+}
