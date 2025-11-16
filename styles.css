@@ -657,3 +657,29 @@ td[data-editable]{ cursor:text; }
     width: 44px; height: 44px; padding: 0; border-radius: 12px;
   }
 }
+/* ==== Patch HP: kolom 「操作」 jadi 2 kolom rapi ==== */
+@media (max-width:576px){
+  /* sel terakhir (操作) boleh membungkus & gak dipaksa lebar */
+  #view-items table.items-table td:last-child{
+    white-space: normal;
+    min-width: auto !important;
+  }
+
+  /* header '操作' jangan lebar */
+  #view-items table.items-table thead th:last-child{
+    min-width: auto !important;
+    text-align: right;
+  }
+
+  /* PENTING: pakai selector yang pasti ada di markup sekarang */
+  #view-items table.items-table td:last-child .act-grid{
+    grid-template-columns: repeat(2, 44px) !important;  /* 2 kolom */
+    grid-auto-flow: row;
+    gap: 6px 10px;
+    justify-content: end;
+  }
+
+  #view-items table.items-table td:last-child .act-grid .btn{
+    width: 44px; height: 44px; padding: 0; border-radius: 12px;
+  }
+}
