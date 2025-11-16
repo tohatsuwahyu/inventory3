@@ -416,64 +416,19 @@
         '<td class="text-end">', fmt(min), '</td>',
         '<td>', dept, '</td>',
         '<td>', loc, '</td>',
-        '<td style="text-align:right;min-width:160px">',
-          '<div class="act-grid d-inline-grid" style="grid-auto-flow:column;gap:.25rem;vertical-align:middle">',
-            actions,
-          '</div>',
-        '</td>',
+        '<td class="td-actions" style="text-align:right;min-width:160px">',
+  '<div class="act-grid actions">',
+    actions,
+  '</div>',
+'</td>',
+  
       '</tr>'
     ].join('');
   }
 
   // === Mobile mini "操作" button renderer (HP only) ===
-  function ensureMobileActions(){
-    if (window.matchMedia('(min-width:577px)').matches) return;
+  function ensureMobileActions(){ /* disabled: no floating action bubble on mobile */ }
 
-    document.querySelectorAll('#tbl-items tr[data-code]').forEach(tr=>{
-      if (tr.querySelector('.mobile-ops')) return;
-
-      const firstCell = tr.querySelector('td'); if (!firstCell) return;
-      const opsCell   = tr.querySelector('td:last-child'); if (!opsCell) return;
-      const opsGroup  = opsCell.querySelector('.row-actions, .btn-group, .act-grid') || opsCell;
-
-      const wrap = document.createElement('div');
-      wrap.className = 'mobile-ops d-inline-block ms-1';
-      wrap.innerHTML = '<button type="button" class="btn btn-sm btn-primary">操作</button>';
-
-      const btn = wrap.querySelector('button');
-      btn.addEventListener('click', ()=>{
-        const open = opsGroup.classList.toggle('show');
-        if (open){
-          opsGroup.style.position   = 'absolute';
-          opsGroup.style.right      = '8px';
-          opsGroup.style.top        = '50%';
-          opsGroup.style.transform  = 'translateY(-50%)';
-          opsGroup.style.background = '#fff';
-          opsGroup.style.padding    = '6px';
-          opsGroup.style.border     = '1px solid var(--bs-border-color)';
-          opsGroup.style.borderRadius = '.5rem';
-          opsGroup.style.boxShadow  = '0 8px 26px rgba(15,23,42,.06)';
-          opsGroup.style.zIndex     = '5';
-          opsGroup.classList.add('d-inline-flex');
-          opsGroup.style.gap = '.25rem';
-        }else{
-          opsGroup.removeAttribute('style');
-          opsGroup.classList.add('d-inline-flex');
-        }
-      });
-
-      // klik di luar = tutup
-      document.addEventListener('click', (e)=>{
-        if (!wrap.contains(e.target) && !opsGroup.contains(e.target)) {
-          opsGroup.classList.remove('show');
-          opsGroup.removeAttribute('style');
-        }
-      });
-
-      firstCell.style.position = 'relative';
-      firstCell.appendChild(wrap);
-    });
-  }
 
   // === HEADER & COLGROUP sinkron ke jumlah kolom body (kuat untuk TABLE/TBODY) ===
   function ensureItemsHeader() {
@@ -593,7 +548,7 @@
         try { await ensureQRCode(); } catch(_) {}
         renderRowQRCodes(slice);
 
-        ensureMobileActions();
+        
 
         // ⬇ selalu sinkronkan header & colgroup setelah render halaman
         ensureItemsHeader();
