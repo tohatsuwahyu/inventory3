@@ -284,10 +284,15 @@ td[data-editable]{ cursor:text; }
 }
 
 /* Grid tombol 操作 rapat */
-#view-items table.items-table td:last-child .act-grid{
-  display:grid; grid-template-columns:repeat(5,28px);
-  gap:6px; justify-content:end; min-width:160px;
+/* Desktop default */
+#view-items table.items-table td:last-child .act-grid.actions{
+  display:grid;
+  grid-template-columns:repeat(5,28px);
+  gap:6px;
+  justify-content:end;
+  min-width:160px;
 }
+
 #tbl-items .act-grid .btn{
   width:28px; height:28px; padding:0;
   display:inline-grid; place-items:center; border-radius:8px;
@@ -470,36 +475,158 @@ td[data-editable]{ cursor:text; }
 }
 #items-scroll-top > div{ height:1px; }
 
-#items-table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
-/* === Actions grid (desktop default) === */
-#view-items .act-grid.actions{
-  display: grid;
-  grid-template-columns: repeat(5, 32px);
-  gap: 8px;
-  justify-content: end;
-}
-#view-items .act-grid.actions .btn{
-  width: 32px; height: 32px; padding: 0; border-radius: 10px;
+/* =========================================================
+ *  商品一覧 — FINAL (konsisten: .items-table)
+ * =======================================================*/
+
+/* Wrapper scroll horizontal + top scrollbar sinkron (JS: setupTopScrollbar) */
+#items-table-wrap{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
 }
 
-/* === HP: jadikan 2 kolom x beberapa baris === */
-@media (max-width: 576px){
-  /* biar sel aksi boleh multi-baris */
-  #view-items td.td-actions{ white-space: normal; }
+#items-scroll-top{
+  position:sticky;
+  top:94px;               /* sesuaikan jika tinggi appbar-mu beda */
+  z-index:5;
+  height:12px;
+  background:#f8fafc;
+  border:1px solid var(--border);
+  border-radius:8px;
+  margin:6px 0 10px;
+  overflow-x:auto; 
+  overflow-y:hidden;
+}
+#items-scroll-top > div{ height:1px; }
 
+/* Tabel items */
+#view-items table.items-table{
+  table-layout:fixed;
+  width:100%;
+}
+#view-items table.items-table th,
+#view-items table.items-table td{
+  vertical-align:middle;
+  white-space:nowrap;
+  padding:.6rem .7rem;
+}
+
+/* Nama item (kolom 3) potong elegan */
+#view-items .td-name{
+  max-width:420px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* Perataan kolom:
+   [1□][2QR][3名称][4画像][5価格][6在庫][7最小][8部門][9置場][10操作] */
+#view-items table.items-table thead th:nth-child(2),
+#view-items table.items-table tbody td:nth-child(2){ /* QR */
+  text-align:center;
+}
+#view-items table.items-table thead th:nth-child(4),
+#view-items table.items-table tbody td:nth-child(4){ /* 画像 */
+  text-align:center;
+}
+#view-items table.items-table thead th:nth-child(5),
+#view-items table.items-table thead th:nth-child(6),
+#view-items table.items-table thead th:nth-child(7),
+#view-items table.items-table tbody td:nth-child(5),
+#view-items table.items-table tbody td:nth-child(6),
+#view-items table.items-table tbody td:nth-child(7){ /* 価格/在庫/最小 */
+  text-align:right;
+}
+#view-items table.items-table thead th:nth-child(3),
+#view-items table.items-table tbody td:nth-child(3), /* 名称 */
+#view-items table.items-table thead th:nth-child(8),
+#view-items table.items-table tbody td:nth-child(8), /* 部門 */
+#view-items table.items-table thead th:nth-child(9),
+#view-items table.items-table tbody td:nth-child(9){ /* 置場 */
+  text-align:left;
+}
+
+/* Kolom "操作" sticky di kanan + rata kanan (bukan center) */
+#view-items table.items-table thead th:last-child,
+#view-items table.items-table tbody td:last-child{
+  position:sticky; right:0; background:#fff;
+  box-shadow:-8px 0 16px rgba(15,23,42,.06);
+  z-index:3; text-align:right;
+}
+
+/* Grid tombol 操作 — desktop default */
+#view-items table.items-table td:last-child .act-grid.actions{
+  display:grid;
+  grid-template-columns:repeat(5,28px);
+  gap:6px;
+  justify-content:end;
+  min-width:160px;
+}
+#tbl-items .act-grid .btn{
+  width:28px; height:28px; padding:0;
+  display:inline-grid; place-items:center; border-radius:8px;
+}
+
+/* QR kecil proporsional */
+#view-items .tbl-qr-box canvas,
+#view-items .tbl-qr-box img{
+  width:64px; height:64px;
+}
+
+/* Chip badge */
+#view-items .badge.rounded-pill.text-bg-light{
+  background:#fef9c3; color:#854d0e; border:1px solid #fde68a; font-weight:600;
+}
+#view-items .badge.rounded-pill.bg-body-secondary{
+  background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:600;
+}
+
+/* Sembunyikan bertahap (部門 tetap tampil) */
+@media (max-width:1400px){
+  .items-table thead th:nth-child(9),
+  .items-table tbody td:nth-child(9){ /* 置場 */
+    display:none;
+  }
+}
+@media (max-width:1200px){
+  .items-table thead th:nth-child(7),
+  .items-table tbody td:nth-child(7){ /* 最小 */
+    display:none;
+  }
+}
+@media (max-width:992px){
+  .items-table thead th:nth-child(4),
+  .items-table tbody td:nth-child(4){ /* 画像 */
+    display:none;
+  }
+}
+
+/* Kompres angka & nama di tablet/HP */
+@media (max-width:768px){
+  .items-table thead th:nth-child(5){ width:90px; } /* 価格 */
+  .items-table thead th:nth-child(6){ width:90px; } /* 在庫 */
+  #view-items .td-name{ max-width:260px; }
+}
+
+/* HP kecil: tombol 操作 jadi grid 2 kolom, dan sel boleh membungkus */
+@media (max-width:576px){
+  #view-items td.td-actions{
+    white-space:normal;
+    min-width:auto !important;   /* override inline JS jika ada */
+  }
+  #view-items table.items-table thead th:last-child{
+    min-width:auto !important;   /* header tidak memaksa lebar */
+  }
   #view-items .act-grid.actions{
-    grid-template-columns: repeat(2, 44px);  /* 2 kolom */
-    grid-auto-flow: row;                      /* isi per baris */
-    gap: 6px 10px;
-    justify-content: end;                     /* tetap rata kanan */
+    grid-template-columns:repeat(2,44px);
+    grid-auto-flow:row;
+    gap:6px 10px;
+    justify-content:end;
   }
   #view-items .act-grid.actions .btn{
-    width: 44px; height: 44px; padding: 0; border-radius: 12px;
+    width:44px; height:44px; border-radius:12px;
   }
-
-  /* kalau kolom 操作 kamu sticky, pastikan muat tingginya */
-  #view-items table.items-table thead th:last-child,
-  #view-items table.items-table tbody td:last-child{
-    position: sticky; right: 0; background: #fff; z-index: 3;
+  /* opsional: judul 2 baris */
+  #view-items .td-name{
+    white-space:normal; display:-webkit-box;
+    -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
   }
 }
