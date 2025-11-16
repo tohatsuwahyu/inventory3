@@ -527,17 +527,18 @@
     table.querySelectorAll("colgroup").forEach(cg => cg.remove());
 
     const widths = [
-      "36px",   // checkbox
-      "110px",  // QR
-      "",       // コード/名称
-      "72px",   // 画像
-      "110px",  // 価格
-      "120px",  // 在庫
-      "100px",  // 最小
-      "120px",  // 部門
-      "100px",  // 置場
-      "220px"   // 操作
-    ];
+  "36px",    // checkbox
+  "110px",   // QR
+  "320px",   // コード/名称  <-- kasih ruang
+  "72px",    // 画像
+  "110px",   // 価格
+  "120px",   // 在庫
+  "100px",   // 最小
+  "120px",   // 部門
+  "120px",   // 置場 (boleh 100–140)
+  "220px"    // 操作
+];
+
 
     const cg = document.createElement("colgroup");
     for (let i = 0; i < bodyCols; i++) {
