@@ -1062,8 +1062,7 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
     wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
   }
 
-  /* -------------------- History -------------------- */
-/* -------------------- History -------------------- */
+ 
 async function renderHistory() {
   try {
     const raw  = await api("history", { method: "GET" });
@@ -1087,12 +1086,26 @@ async function renderHistory() {
       
       ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
 
-      // Sembunyikan header kolom 修正 untuk non-admin
-      const table = tbody.closest("table") || document.querySelector("#tbl-history");
-      const thLast = table?.querySelector("thead tr th:last-child");
-      if (!admin && thLast) thLast.style.display = "none";
-      return;
-    }
+          // Header 「修正」 disembunyikan untuk non-admin
+    const table = tbody.closest("table") || document.querySelector("#tbl-history");
+    const thLast = table?.querySelector("thead tr th:last-child");
+    if (!admin && thLast) thLast.style.display = "none";
+
+    // Jaga-jaga: untuk non-admin, sembunyikan juga seluruh sel terakhir di <tbody>
+    if (!admin) table?.querySelectorAll("tbody tr td:last-child")
+                     .forEach(td => td.style.display = "none");
+
+    // ⬇️ PENTING: pasang event handler untuk tombol 修正
+    bindHistoryFix();   // <-- BARIS INI YANG BELUM ADA DI KODE KAMU
+
+    // Auto-refresh menu untuk tab history
+    ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
+  } catch (e) {
+    console.error("renderHistory() error:", e);
+    toast("履歴の読み込みに失敗しました。");
+  }
+}
+
 
     // Build baris; kolom terakhir (修正) hanya jika admin
     tbody.innerHTML = recent.map(h => `
