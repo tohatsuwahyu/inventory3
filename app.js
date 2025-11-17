@@ -267,7 +267,7 @@
 
            if (id === "view-items") renderItems();
       if (id === "view-users") renderUsers();
-      if (id === "view-history") ;
+      if (id === "view-history") renderHistory();
       if (id === "view-shelf") { renderShelfTable(); }
       // 棚卸一覧：リスト + 集計は loadTanaList の dalam
       if (id === "view-shelf-list") { loadTanaList(); }
@@ -420,7 +420,7 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
           _ITEMS_CACHE = Array.isArray(list) ? list : (list?.data || []);
         }).catch(()=>{});
         if (active === "view-dashboard")    renderDashboard();
-        if (active === "view-history")      ;
+        if (active === "view-history")      renderHistory();
         if (active === "view-shelf-list")   loadTanaList();
       } catch (e) {}
     }, LIVE_SEC * 1000);
@@ -1121,117 +1121,7 @@ async function renderHistory() {
   } catch (e) {
     console.error("renderHistory() error:", e);
     toast("履歴の読み込みに失敗しました。");
-    // delegasi klik tombol 修正
-const table = tbody.closest("table") || document.querySelector("#tbl-history");
-if (!table.__histFixBound) {
-  table.__histFixBound = true;
-  table.addEventListener('click', (e)=>{
-    const btn = e.target.closest('.btn-hist-fix'); if(!btn) return;
-    // cari baris & mapping kolom sesuai render
-    const tr = btn.closest('tr'); if(!tr) return;
-    const cells = [...tr.children];
-    const payload = {
-      timestamp: cells[0]?.textContent?.trim() || '',
-      userId   : cells[1]?.textContent?.trim() || '',
-      userName : cells[2]?.textContent?.trim() || '',
-      code     : cells[3]?.textContent?.trim() || '',
-      itemName : cells[4]?.textContent?.trim() || '',
-      qty      : Number((cells[5]?.textContent||'').replace(/,/g,'')) || 0,
-      unit     : cells[6]?.textContent?.trim() || 'pcs',
-      type     : cells[7]?.textContent?.trim() || 'IN',
-      note     : cells[8]?.textContent?.trim() || '',
-      _row     : btn.getAttribute('data-row') ? Number(btn.getAttribute('data-row')) : undefined
-    };
-    // kalau backend mengembalikan _row di list history → sematkan di data-row saat render
-    if (!payload._row) {
-      // fallback: panggil ulang /history lalu cari entri yang cocok untuk ambil _row
-      (async ()=>{
-        try{
-          const all = pickRows(await api('history', { method:'GET', silent:true }));
-          const found = all.slice(-400).reverse().find(h =>
-            String(h.timestamp||h.date||h.datetime||'')===payload.timestamp &&
-            String(h.code||'')===payload.code &&
-            Number(h.qty||h.quantity||0)===payload.qty
-          );
-          if(found && found._row) { payload._row = Number(found._row); }
-        }catch(_){}
-        openEditHistoryModal(payload);
-      })();
-    } else {
-      openEditHistoryModal(payload);
-    }
-  });
-}
-
   }
-}
-// Modal sederhana untuk edit history
-function openEditHistoryModal(rowPayload){
-  const wrap = document.createElement('div');
-  wrap.className = 'modal fade';
-  wrap.innerHTML = `
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">履歴 修正</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <div class="mb-2 small text-muted">${escapeHtml(rowPayload.timestamp)} / ${escapeHtml(rowPayload.code)} / ${escapeHtml(rowPayload.itemName||'')}</div>
-        <div class="row g-2">
-          <div class="col-6">
-            <label class="form-label">数量</label>
-            <input id="hx-qty" type="number" class="form-control" value="${Number(rowPayload.qty||0)}">
-          </div>
-          <div class="col-6">
-            <label class="form-label">単位</label>
-            <input id="hx-unit" class="form-control" value="${escapeAttr(rowPayload.unit||'pcs')}">
-          </div>
-          <div class="col-6">
-            <label class="form-label">種別</label>
-            <select id="hx-type" class="form-select">
-              <option ${String(rowPayload.type).toUpperCase()==='IN'?'selected':''}>IN</option>
-              <option ${String(rowPayload.type).toUpperCase()==='OUT'?'selected':''}>OUT</option>
-            </select>
-          </div>
-          <div class="col-12">
-            <label class="form-label">備考</label>
-            <input id="hx-note" class="form-control" value="${escapeAttr(rowPayload.note||'')}">
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="hx-save" type="button" class="btn btn-primary btn-sm">保存</button>
-        <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">閉じる</button>
-      </div>
-    </div>
-  </div>`;
-  document.body.appendChild(wrap);
-  const modal = new bootstrap.Modal(wrap); modal.show();
-
-  $("#hx-save", wrap)?.addEventListener("click", async ()=>{
-    const qty  = Number($("#hx-qty", wrap).value || 0);
-    const unit = $("#hx-unit", wrap).value || 'pcs';
-    const type = $("#hx-type", wrap).value || 'IN';
-    const note = $("#hx-note", wrap).value || '';
-    if (!(qty>0)) return toast('数量を入力してください。');
-    try{
-      const r = await api('updateHistory', { method:'POST', body:{
-        userId: getCurrentUser()?.id || '',  // untuk isAdmin_
-        row: rowPayload._row, qty, unit, type, note
-      }});
-      if (r?.ok){
-        toast('修正しました。');
-        modal.hide(); wrap.remove();
-        // refresh tampilan yg relevan
-        renderDashboard();
-        const hv = document.getElementById("view-history");
-        if (hv && hv.classList.contains("active")) await renderHistory();
-      }else{
-        toast(r?.error || '修正失敗');
-      }
-    }catch(e){ toast('修正失敗: '+(e?.message||e)); }
-  });
-
-  wrap.addEventListener("hidden.bs.modal", ()=> wrap.remove(), { once:true });
 }
 
 
