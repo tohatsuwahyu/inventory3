@@ -32,6 +32,8 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = filename; a.click();
+    // bebaskan memori
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   // File helpers
@@ -65,7 +67,7 @@ async function api(action, opts = {}) {
       ? { mode: 'cors', cache: 'no-cache', signal: ctrl.signal, headers: { 'Accept': 'application/json' } }
       : {
           method: 'POST', mode: 'cors', signal: ctrl.signal,
-          headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Accept': 'application/json' },
+          headers: { 'Content-Type': 'application/json;charset=utf-8', 'Accept': 'application/json' },
           body: JSON.stringify({ ...(body || {}), apikey: CONFIG.API_KEY })
         };
 
@@ -89,7 +91,7 @@ async function api(action, opts = {}) {
     }
   } catch (e) {
     const offline   = !navigator.onLine;
-    const isTimeout = e?.name === 'AbortError' || e === 'timeout';
+    const isTimeout = e?.name === 'AbortError' || e === 'timeout' || /time(out)?/i.test(e?.message||'');
     const pretty = offline
       ? 'オフラインです。通信状況をご確認ください。'
       : (isTimeout ? 'タイムアウトしました。電波を確認してください。' : (e?.message || 'Failed to fetch'));
@@ -185,7 +187,7 @@ async function api(action, opts = {}) {
            .find(b => /全件ラベルを印刷/.test((b.textContent||'').trim()));
     if (!btn) return;
 
-    btn.addEventListener('click', async ()=>{
+   btn.addEventListener('click', async ()=>{
       try{
         btn.disabled = true;
         const orig = btn.textContent;
@@ -222,7 +224,7 @@ async function api(action, opts = {}) {
         alert('印刷用ラベルの生成に失敗しました。');
         try{ btn.disabled=false; }catch(_){}
       }
-    }, { once:true });
+    });
   }
 
   /* -------------------- Sidebar + Router -------------------- */
@@ -266,6 +268,24 @@ async function api(action, opts = {}) {
       if (id === "view-shelf-list") { loadTanaList(); }
     });
   })();
+// --- Helper: ambil array baris dari berbagai bentuk respons API
+function pickRows(raw) {
+  if (Array.isArray(raw)) return raw;
+
+  // Langsung cek properti umum
+  for (const k of ['rows', 'history', 'data', 'logs', 'list', 'items', 'values']) {
+    const v = raw?.[k];
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object' && Array.isArray(v.rows)) return v.rows; // bentuk nested: {data:{rows:[]}}
+  }
+
+  // Beberapa backend mengirim {ok:true, result:[...]} / {ok:true, result:{rows:[...]}}
+  const r = raw?.result || raw?.payload || raw?.body;
+  if (Array.isArray(r)) return r;
+  if (r && typeof r === 'object' && Array.isArray(r.rows)) return r.rows;
+
+  return [];
+}
 
   /* -------------------- Dashboard -------------------- */
   let chartLine = null, chartPie = null;
@@ -284,10 +304,7 @@ async function api(action, opts = {}) {
       const items   = Array.isArray(itemsRaw) ? itemsRaw : [];
       const users   = Array.isArray(usersRaw) ? usersRaw : [];
       const series  = Array.isArray(seriesRaw) ? seriesRaw : [];
-      const history = Array.isArray(historyRaw)
-        ? historyRaw
-        : (Array.isArray(historyRaw?.history) ? historyRaw.history
-          : (Array.isArray(historyRaw?.data) ? historyRaw.data : []));
+     const history = pickRows(historyRaw);
 
       // metric
       $("#metric-total-items").textContent = items.length;
@@ -604,7 +621,10 @@ async function api(action, opts = {}) {
         const more = document.createElement("div");
         more.className = "text-center my-3";
         more.innerHTML = '<button id="btn-load-more" class="btn btn-outline-secondary btn-sm">Load more</button>';
-        tbody.parentElement.appendChild(more);
+        // taruh di luar <table>, ideal di wrapper horizontal yang memang ada di CSS
+        const table = tbody.closest('table');
+        const host  = document.getElementById('items-table-wrap') || table?.parentElement || document.body;
+        host.appendChild(more);  // tampil setelah tabel, masih di dalam wrapper
 
         more.addEventListener("click", async (e)=>{
           e.preventDefault();
@@ -1038,32 +1058,52 @@ async function api(action, opts = {}) {
   }
 
   /* -------------------- History -------------------- */
-  async function renderHistory() {
-    try {
-      const raw = await api("history", { method: "GET" });
-      const list = Array.isArray(raw) ? raw
-        : Array.isArray(raw?.history) ? raw.history
-          : Array.isArray(raw?.data) ? raw.data
-            : [];
-      const tbody = $("#tbl-history");
-      const recent = list.slice(-400).reverse();
-      tbody.innerHTML = recent.map(h => `
-        <tr>
-          <td>${escapeHtml(h.timestamp || h.date || "")}</td>
-          <td>${escapeHtml(h.userId || "")}</td>
-          <td>${escapeHtml(h.userName || "")}</td>
-          <td>${escapeHtml(h.code || "")}</td>
-          <td>${escapeHtml(h.itemName || h.name || "")}</td>
-          <td class="text-end">${fmt(h.qty || 0)}</td>
-          <td>${escapeHtml(h.unit || "")}</td>
-          <td>${escapeHtml(h.type || "")}</td>
-          <td>${escapeHtml(h.note || "")}</td>
-          <td></td>
-        </tr>
-      `).join("");
+async function renderHistory() {
+  try {
+    const raw  = await api("history", { method: "GET" });
+    const list = pickRows(raw);
+
+    // Cari TBODY terlebih dahulu; fallback ke elemen dengan id=tbl-history
+    const tbody =
+      document.querySelector("#tbl-history tbody") ||
+      document.getElementById("tbl-history");
+
+    if (!tbody) {
+      console.warn("Elemen #tbl-history tidak ditemukan");
+      return;
+    }
+
+    // Tampilkan 400 terakhir (paling baru di atas)
+    const recent = list.slice(-400).reverse();
+
+    // Jika kosong, beri baris kosong ramah pengguna
+    if (!recent.length) {
+      tbody.innerHTML = `<tr><td colspan="10" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
       ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
-    } catch (e) { toast("履歴の読み込みに失敗しました。"); }
+      return;
+    }
+
+    tbody.innerHTML = recent.map(h => `
+      <tr>
+        <td>${escapeHtml(h.timestamp || h.date || h.datetime || "")}</td>
+        <td>${escapeHtml(h.userId || h.user_id || "")}</td>
+        <td>${escapeHtml(h.userName || h.user_name || h.user || "")}</td>
+        <td>${escapeHtml(h.code || "")}</td>
+        <td>${escapeHtml(h.itemName || h.name || "")}</td>
+        <td class="text-end">${fmt(h.qty || h.quantity || 0)}</td>
+        <td>${escapeHtml(h.unit || "")}</td>
+        <td>${escapeHtml(h.type || h.kind || "")}</td>
+        <td>${escapeHtml(h.note || h.remarks || "")}</td>
+        <td></td>
+      </tr>
+    `).join("");
+
+    ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
+  } catch (e) {
+    console.error("renderHistory() error:", e);
+    toast("履歴の読み込みに失敗しました。");
   }
+}
 
   // --- Tambahan: hint visual untuk input manual di 入出荷 ---
   function setManualHints({ autoFromLot } = { autoFromLot:false }){
@@ -1187,7 +1227,7 @@ async function api(action, opts = {}) {
       if (btn) { btn.__busy = true; btn.disabled = true; }
 
       try {
-        const r = await api("log", { method: "POST", body: { userId: who.id, code, qty, unit, type } });
+        const r = await api("log", { method: "POST", body: { userId: who.id, userName: who.name || "",  code, qty, unit, type } });
         if (r?.ok) {
           const msgType = (type === "IN") ? "入庫" : "出庫";
           toast(`${msgType}として登録しました（${code} × ${qty} ${unit}）`);
@@ -1202,6 +1242,11 @@ async function api(action, opts = {}) {
         toast("登録失敗: " + (err?.message || err));
       } finally {
         if (btn) { btn.disabled = false; btn.__busy = false; }
+      const hv = document.getElementById("view-history");
+ if (hv && hv.classList.contains("active")) {
+   await renderHistory(); // refresh langsung jika sedang di tab 履歴
+ }
+
       }
     });
 
@@ -2512,6 +2557,7 @@ function keepBackendWarm(){
     const name = (get(".td-name")?.textContent || "").trim();
     const imgEl = get("td:nth-child(4) img");
     const priceText = (get("td:nth-child(5)")?.textContent || "").trim();
+    const priceNum  = Number(priceText.replace(/[^\d.-]/g, "")) || 0;
     const stockText = (get("td:nth-child(6)")?.textContent || "0").replace(/[^0-9.-]/g, "");
     const minText   = (get("td:nth-child(7)")?.textContent || "0").replace(/[^0-9.-]/g, "");
     const dept  = (get("td:nth-child(8)")?.textContent || "").trim();
@@ -2816,7 +2862,10 @@ function setupTopScrollbar(){
   // init
   syncSize();
   setTimeout(syncSize, 0);
-  window.addEventListener("resize", syncSize);
+  if (!top.__winResizeBound) {
+    window.addEventListener("resize", syncSize);
+    top.__winResizeBound = true;
+  }
 
   // helper publik untuk dipanggil setelah render page
   window.__resyncTopScroll = syncSize;
