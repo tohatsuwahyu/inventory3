@@ -62,17 +62,31 @@ async function api(action, opts = {}) {
 
   try {
     const init = (method === 'GET')
-      ? { mode: 'cors', cache: 'no-cache', signal: ctrl.signal }
+      ? { mode: 'cors', cache: 'no-cache', signal: ctrl.signal, headers: { 'Accept': 'application/json' } }
       : {
           method: 'POST', mode: 'cors', signal: ctrl.signal,
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Accept': 'application/json' },
           body: JSON.stringify({ ...(body || {}), apikey: CONFIG.API_KEY })
         };
 
     const res = await fetch(url, init);
-    if (!res.ok) throw new Error(`[${res.status}] ${res.statusText}`);
-    return await res.json();
+    const ctype = res.headers.get('content-type') || '';
 
+    // jika status bukan 2xx → lempar error dengan detail
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`[${res.status}] ${res.statusText}${txt ? ' — ' + txt.slice(0, 160) : ''}`);
+    }
+
+    // parse aman
+    if (ctype.includes('application/json')) {
+      return await res.json();
+    } else {
+      const txt = await res.text();
+      // Apps Script kadang kirim 'OK' sederhana → kembalikan bentuk seragam
+      if (txt.trim().toUpperCase() === 'OK') return { ok: true };
+      throw new Error(`Unexpected response (non‑JSON): ${txt.slice(0, 160)}`);
+    }
   } catch (e) {
     const offline   = !navigator.onLine;
     const isTimeout = e?.name === 'AbortError' || e === 'timeout';
@@ -81,11 +95,10 @@ async function api(action, opts = {}) {
       : (isTimeout ? 'タイムアウトしました。電波を確認してください。' : (e?.message || 'Failed to fetch'));
 
     if (retry > 0) {
-      await new Promise(r => setTimeout(r, 800));  // backoff singkat
+      await new Promise(r => setTimeout(r, 800));
       return api(action, { ...opts, retry: retry - 1 });
     }
     throw new Error(pretty);
-
   } finally {
     clearTimeout(t);
     if (!silent) setLoading(false);
@@ -440,7 +453,7 @@ async function api(action, opts = {}) {
         '<td class="text-end">', fmt(min), '</td>',
         '<td>', dept, '</td>',
         '<td>', loc, '</td>',
-     '<td class="td-actions" style="text-align:right;min-width:160px">',
+     '<td class="td-actions" style="text-align:right">',
   '<div class="act-grid actions">',   // ✅ di dalam string
     actions,
   '</div>',
@@ -516,7 +529,7 @@ async function api(action, opts = {}) {
   "100px",   // 最小
   "120px",   // 部門
   "120px",   // 置場 (boleh 100–140)
-  "220px"    // 操作
+  ""    // 操作
 ];
 
 
