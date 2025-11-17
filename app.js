@@ -51,8 +51,9 @@
   }
 
  /* === API helper (timeout + retry + pesan error jelas) === */
-async function api(action, opts = {}) {
-  const { method = 'GET', body = null, silent = false, timeout = 12000, retry = 1 } = opts;
+ async function api(action, opts = {}) {
+   // timeout & retry agak longgar di jaringan seluler
+   const { method = 'GET', body = null, silent = false, timeout = 20000, retry = 2 } = opts;
   if (!window.CONFIG || !CONFIG.BASE_URL) throw new Error('config.js BASE_URL belum di-set');
 
   const apikey = encodeURIComponent(CONFIG.API_KEY || '');
@@ -67,8 +68,9 @@ async function api(action, opts = {}) {
       ? { mode: 'cors', cache: 'no-cache', signal: ctrl.signal, headers: { 'Accept': 'application/json' } }
       : {
           method: 'POST', mode: 'cors', signal: ctrl.signal,
-          headers: { 'Content-Type': 'application/json;charset=utf-8', 'Accept': 'application/json' },
-          body: JSON.stringify({ ...(body || {}), apikey: CONFIG.API_KEY })
+                 // Pakai text/plain supaya tidak preflight (OPTIONS) → menghindari "Failed to fetch" di HP
+         headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Accept': 'application/json' },
+         body: JSON.stringify({ ...(body || {}), apikey: CONFIG.API_KEY })
         };
 
     const res = await fetch(url, init);
@@ -91,10 +93,13 @@ async function api(action, opts = {}) {
     }
   } catch (e) {
     const offline   = !navigator.onLine;
+   const looksLikeCors = /Failed to fetch|NetworkError|TypeError/i.test(String(e && (e.message || e)));
     const isTimeout = e?.name === 'AbortError' || e === 'timeout' || /time(out)?/i.test(e?.message||'');
     const pretty = offline
       ? 'オフラインです。通信状況をご確認ください。'
-      : (isTimeout ? 'タイムアウトしました。電波を確認してください。' : (e?.message || 'Failed to fetch'));
+    : (isTimeout ? 'タイムアウトしました。電波を確認してください。'
+                  : (looksLikeCors ? '通信に失敗しました（ネットワーク／CORS）。電波やWi‑Fiを確認の上、再実行してください。'
+                                   : (e?.message || 'Failed to fetch')));
 
     if (retry > 0) {
       await new Promise(r => setTimeout(r, 800));
@@ -1058,64 +1063,59 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
   }
 
   /* -------------------- History -------------------- */
+/* -------------------- History -------------------- */
 async function renderHistory() {
   try {
     const raw  = await api("history", { method: "GET" });
     const list = pickRows(raw);
 
-    // Cari TBODY terlebih dahulu; fallback ke elemen dengan id=tbl-history
+    // TBODY: prioritaskan #tbl-history tbody; fallback: elemen #tbl-history itu sendiri
     const tbody =
       document.querySelector("#tbl-history tbody") ||
       document.getElementById("tbl-history");
+    if (!tbody) { console.warn("Elemen #tbl-history tidak ditemukan"); return; }
 
-    if (!tbody) {
-      console.warn("Elemen #tbl-history tidak ditemukan");
-      return;
-    }
+    // Ambil role user sekarang
+    const admin = isAdmin();
 
-    // Tampilkan 400 terakhir (paling baru di atas)
+    // Ambil 400 terakhir (baru → atas)
     const recent = list.slice(-400).reverse();
 
-    // Jika kosong, beri baris kosong ramah pengguna
+    // Kosong → pesan ramah
     if (!recent.length) {
-      tbody.innerHTML = `<tr><td colspan="10" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${admin ? 10 : 9}" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
       ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
+
+      // Sembunyikan header kolom 修正 untuk non-admin
+      const table = tbody.closest("table") || document.querySelector("#tbl-history");
+      const thLast = table?.querySelector("thead tr th:last-child");
+      if (!admin && thLast) thLast.style.display = "none";
       return;
     }
-const admin = isAdmin();   // ⬅️ tambahkan ini di awal renderHistory()
 
-tbody.innerHTML = recent.map(h => `
-  <tr>
-    <td>${escapeHtml(h.timestamp || h.date || h.datetime || "")}</td>
-    <td>${escapeHtml(h.userId || h.user_id || "")}</td>
-    <td>${escapeHtml(h.userName || h.user_name || h.user || "")}</td>
-    <td>${escapeHtml(h.code || "")}</td>
-    <td>${escapeHtml(h.itemName || h.name || "")}</td>
-    <td class="text-end">${fmt(h.qty || h.quantity || 0)}</td>
-    <td>${escapeHtml(h.unit || "")}</td>
-    <td>${escapeHtml(h.type || h.kind || "")}</td>
-    <td>${escapeHtml(h.note || h.remarks || "")}</td>
-    <!-- kolom 修正 -->
-    <td class="col-edit">
-      ${ admin ? '' : '' } 
-      <!-- nanti kalau ada tombol edit, letakkan di sini dan hanya render saat admin -->
-    </td>
-  </tr>
-`).join("");
+    // Build baris; kolom terakhir (修正) hanya jika admin
+    tbody.innerHTML = recent.map(h => `
+      <tr>
+        <td>${escapeHtml(h.timestamp || h.date || h.datetime || "")}</td>
+        <td>${escapeHtml(h.userId || h.user_id || "")}</td>
+        <td>${escapeHtml(h.userName || h.user_name || h.user || "")}</td>
+        <td>${escapeHtml(h.code || "")}</td>
+        <td>${escapeHtml(h.itemName || h.name || "")}</td>
+        <td class="text-end">${fmt(h.qty || h.quantity || 0)}</td>
+        <td>${escapeHtml(h.unit || "")}</td>
+        <td>${escapeHtml(h.type || h.kind || "")}</td>
+        <td>${escapeHtml(h.note || h.remarks || "")}</td>
+        ${admin ? `<td class="text-end"><button class="btn btn-sm btn-outline-primary btn-hist-fix" data-code="${escapeAttr(h.code||"")}">修正</button></td>` : ""}
+      </tr>
+    `).join("");
 
-// ⬇️ Sembunyikan/ tampilkan kolom 修正 sesuai role
-const view = document.getElementById("view-history");
-if (view) {
-  // header "修正" = th terakhir di tabel history
-  const thLast = view.querySelector("thead tr th:last-child");
-  if (thLast) thLast.style.display = admin ? "" : "none";
+    // Header 「修正」 disembunyikan untuk non-admin
+    const table = tbody.closest("table") || document.querySelector("#tbl-history");
+    const thLast = table?.querySelector("thead tr th:last-child");
+    if (!admin && thLast) thLast.style.display = "none";
 
-  // semua sel "修正" yang kita tandai dengan .col-edit
-  view.querySelectorAll("td.col-edit").forEach(td => {
-    td.style.display = admin ? "" : "none";
-  });
-}
-
+    // Jaga-jaga: untuk non-admin, sembunyikan juga seluruh sel terakhir di <tbody>
+    if (!admin) table?.querySelectorAll("tbody tr td:last-child").forEach(td => td.style.display = "none");
 
     ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
   } catch (e) {
@@ -1123,6 +1123,7 @@ if (view) {
     toast("履歴の読み込みに失敗しました。");
   }
 }
+
 
   // --- Tambahan: hint visual untuk input manual di 入出荷 ---
   function setManualHints({ autoFromLot } = { autoFromLot:false }){
