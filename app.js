@@ -379,7 +379,7 @@ function pickRows(raw) {
     const nama = who?.name || who?.id || "ユーザー";
     const roleRaw = (who?.role || "user").toLowerCase();
     const roleJP  = roleRaw === "admin" ? "管理者" : "ユーザー";
-
+document.body.classList.toggle("is-admin", roleRaw === "admin");
     const banner = document.getElementById("welcome-banner");
     if (banner) {
       banner.innerHTML = `ようこそ、<b>${escapeHtml(nama)}</b> さん。<span class="badge-soft" style="margin-left:.4rem">${roleJP}</span>
@@ -1082,21 +1082,40 @@ async function renderHistory() {
       ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
       return;
     }
+const admin = isAdmin();   // ⬅️ tambahkan ini di awal renderHistory()
 
-    tbody.innerHTML = recent.map(h => `
-      <tr>
-        <td>${escapeHtml(h.timestamp || h.date || h.datetime || "")}</td>
-        <td>${escapeHtml(h.userId || h.user_id || "")}</td>
-        <td>${escapeHtml(h.userName || h.user_name || h.user || "")}</td>
-        <td>${escapeHtml(h.code || "")}</td>
-        <td>${escapeHtml(h.itemName || h.name || "")}</td>
-        <td class="text-end">${fmt(h.qty || h.quantity || 0)}</td>
-        <td>${escapeHtml(h.unit || "")}</td>
-        <td>${escapeHtml(h.type || h.kind || "")}</td>
-        <td>${escapeHtml(h.note || h.remarks || "")}</td>
-        <td></td>
-      </tr>
-    `).join("");
+tbody.innerHTML = recent.map(h => `
+  <tr>
+    <td>${escapeHtml(h.timestamp || h.date || h.datetime || "")}</td>
+    <td>${escapeHtml(h.userId || h.user_id || "")}</td>
+    <td>${escapeHtml(h.userName || h.user_name || h.user || "")}</td>
+    <td>${escapeHtml(h.code || "")}</td>
+    <td>${escapeHtml(h.itemName || h.name || "")}</td>
+    <td class="text-end">${fmt(h.qty || h.quantity || 0)}</td>
+    <td>${escapeHtml(h.unit || "")}</td>
+    <td>${escapeHtml(h.type || h.kind || "")}</td>
+    <td>${escapeHtml(h.note || h.remarks || "")}</td>
+    <!-- kolom 修正 -->
+    <td class="col-edit">
+      ${ admin ? '' : '' } 
+      <!-- nanti kalau ada tombol edit, letakkan di sini dan hanya render saat admin -->
+    </td>
+  </tr>
+`).join("");
+
+// ⬇️ Sembunyikan/ tampilkan kolom 修正 sesuai role
+const view = document.getElementById("view-history");
+if (view) {
+  // header "修正" = th terakhir di tabel history
+  const thLast = view.querySelector("thead tr th:last-child");
+  if (thLast) thLast.style.display = admin ? "" : "none";
+
+  // semua sel "修正" yang kita tandai dengan .col-edit
+  view.querySelectorAll("td.col-edit").forEach(td => {
+    td.style.display = admin ? "" : "none";
+  });
+}
+
 
     ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
   } catch (e) {
