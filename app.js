@@ -267,7 +267,7 @@
 
            if (id === "view-items") renderItems();
       if (id === "view-users") renderUsers();
-      if (id === "view-") render();
+      if (id === "view-history") renderHistory();
       if (id === "view-shelf") { renderShelfTable(); }
       // 棚卸一覧：リスト + 集計は loadTanaList の dalam
       if (id === "view-shelf-list") { loadTanaList(); }
@@ -278,7 +278,7 @@ function pickRows(raw) {
   if (Array.isArray(raw)) return raw;
 
   // Langsung cek properti umum
-  for (const k of ['rows', '', 'data', 'logs', 'list', 'items', 'values']) {
+  for (const k of ['rows', 'history', 'data', 'logs', 'list', 'items', 'values']) {
     const v = raw?.[k];
     if (Array.isArray(v)) return v;
     if (v && typeof v === 'object' && Array.isArray(v.rows)) return v.rows; // bentuk nested: {data:{rows:[]}}
@@ -293,117 +293,90 @@ function pickRows(raw) {
 }
 
   /* -------------------- Dashboard -------------------- */
-/* -------------------- Dashboard -------------------- */
-let chartLine = null, chartPie = null;
+  let chartLine = null, chartPie = null;
+  async function renderDashboard() {
+    const who = getCurrentUser();
+    if (who) $("#who").textContent = `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`;
 
-async function renderDashboard() {
-  const who = getCurrentUser();
-  if (who) {
-    $("#who").textContent =
-      `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`;
-  }
+    try {
+     const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
+       api("items", { method: "GET", silent: true }).catch(() => []),
+        api("users", { method: "GET", silent: true }).catch(() => []),
+         api("statsMonthlySeries", { method: "GET", silent: true }).catch(() => []),
+        api("history", { method: "GET", silent: true }).catch(() => [])
+      ]);
 
-  try {
-    // Ambil data untuk kartu + grafik + hitung transaksi 30 hari
-    const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
-      api("items",             { method: "GET", silent: true }).catch(() => []),
-      api("users",             { method: "GET", silent: true }).catch(() => []),
-      api("statsMonthlySeries",{ method: "GET", silent: true }).catch(() => []),
-      api("history",           { method: "GET", silent: true }).catch(() => []),
-    ]);
+      const items   = Array.isArray(itemsRaw) ? itemsRaw : [];
+      const users   = Array.isArray(usersRaw) ? usersRaw : [];
+      const series  = Array.isArray(seriesRaw) ? seriesRaw : [];
+     const history = pickRows(historyRaw);
 
-    const items   = Array.isArray(itemsRaw)  ? itemsRaw  : [];
-    const users   = Array.isArray(usersRaw)  ? usersRaw  : [];
-    const series  = Array.isArray(seriesRaw) ? seriesRaw : [];
-    const history = pickRows(historyRaw);   // ✅ pakai helper pickRows
+      // metric
+      $("#metric-total-items").textContent = items.length;
+      const low = items.filter(it => Number(it.stock || 0) <= Number(it.min || 0)).length;
+      $("#metric-low-stock").textContent = low;
+      $("#metric-users").textContent = users.length;
 
-    // ---- metric di kartu atas ----
-    $("#metric-total-items").textContent = items.length;
-
-    const low = items.filter(it =>
-      Number(it.stock || 0) <= Number(it.min || 0)
-    ).length;
-    $("#metric-low-stock").textContent = low;
-
-    $("#metric-users").textContent = users.length;
-
-    // ---- 直近30日の取引数 ----
-    const now   = new Date();
-    const limit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    let count30 = 0;
-
-    for (const h of history) {             // ✅ loop ke array yang bener
-      const raw = h.timestamp || h.date || "";
-      if (!raw) continue;
-
-      let dt;
-      if (raw instanceof Date) {
-        dt = raw;
-      } else {
-        dt = new Date(String(raw).replace(" ", "T"));
+      // 直近30日 txn
+      const now   = new Date();
+      const limit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      let count30 = 0;
+      for (const h of history) {
+        const raw = h.timestamp || h.date || "";
+        if (!raw) continue;
+        let dt;
+        if (raw instanceof Date) dt = raw;
+        else dt = new Date(String(raw).replace(" ", "T"));
+        if (isNaN(dt)) continue;
+        if (dt >= limit && dt <= now) count30++;
       }
-      if (isNaN(dt)) continue;
-      if (dt >= limit && dt <= now) count30++;
-    }
+      const elTxn = $("#metric-txn");
+      if (elTxn) elTxn.textContent = count30;
 
-    const elTxn = $("#metric-txn");
-    if (elTxn) elTxn.textContent = count30;
+      // line
+      const ctx1 = $("#chart-monthly");
+      if (ctx1 && window.Chart) {
+        chartLine?.destroy();
+        chartLine = new Chart(ctx1, {
+          type: "line",
+          data: {
+            labels: series.map(s => s.month || ""),
+            datasets: [
+              { label: "IN",  data: series.map(s => Number(s.in  || 0)), borderWidth: 2 },
+              { label: "OUT", data: series.map(s => Number(s.out || 0)), borderWidth: 2 }
+            ]
+          },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
 
-    // ---- Line chart 月次IN/OUT ----
-    const ctx1 = $("#chart-monthly");
-    if (ctx1 && window.Chart) {
-      chartLine?.destroy();
-      chartLine = new Chart(ctx1, {
-        type: "line",
-        data: {
-          labels: series.map(s => s.month || ""),
-          datasets: [
-            { label: "IN",  data: series.map(s => Number(s.in  || 0)), borderWidth: 2 },
-            { label: "OUT", data: series.map(s => Number(s.out || 0)), borderWidth: 2 },
-          ],
-        },
-        options: { responsive: true, maintainAspectRatio: false },
-      });
-    }
+      // pie
+      const ctx2 = $("#chart-pie");
+      if (ctx2 && window.Chart) {
+        chartPie?.destroy();
+        const last = series.length ? series[series.length - 1] : { in: 0, out: 0 };
+        chartPie = new Chart(ctx2, {
+          type: "pie",
+          data: {
+            labels: ["IN", "OUT"],
+            datasets: [{ data: [Number(last.in || 0), Number(last.out || 0)] }]
+          },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
 
-    // ---- Pie chart 当月 IN/OUT 比率 ----
-    const ctx2 = $("#chart-pie");
-    if (ctx2 && window.Chart) {
-      chartPie?.destroy();
-      const last = series.length ? series[series.length - 1] : { in: 0, out: 0 };
-      chartPie = new Chart(ctx2, {
-        type: "pie",
-        data: {
-          labels: ["IN", "OUT"],
-          datasets: [
-            { data: [Number(last.in || 0), Number(last.out || 0)] },
-          ],
-        },
-        options: { responsive: true, maintainAspectRatio: false },
-      });
-    }
-
-    // ---- Export CSV 月次IN/OUT ----
-    $("#btn-export-mov")?.addEventListener(
-      "click",
-      () => {
-        const heads = ["月", "IN", "OUT"];
+      $("#btn-export-mov")?.addEventListener("click", () => {
+        const heads = ["月","IN","OUT"];
         const csv = [heads.join(",")]
-          .concat(
-            series.map(s =>
-              [s.month, s.in || 0, s.out || 0].join(",")
-            )
-          )
+          .concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(",")))
           .join("\n");
         downloadCSV_JP("月次INOUT.csv", csv);
-      },
-      { once: true }
-    );
-  } catch (e) {
-    console.error("renderDashboard()", e);
-    toast("ダッシュボードの読み込みに失敗しました。");
+      }, { once: true });
+    } catch (e) {
+      console.error("renderDashboard()", e);
+      toast("ダッシュボードの読み込みに失敗しました。");
+    }
   }
-}
 
   // --- GANTI fungsi lama updateWelcomeBanner ---
   function updateWelcomeBanner() {
@@ -447,7 +420,7 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
           _ITEMS_CACHE = Array.isArray(list) ? list : (list?.data || []);
         }).catch(()=>{});
         if (active === "view-dashboard")    renderDashboard();
-        if (active === "view-")      render();
+        if (active === "view-history")      renderHistory();
         if (active === "view-shelf-list")   loadTanaList();
       } catch (e) {}
     }, LIVE_SEC * 1000);
@@ -1089,28 +1062,8 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
     wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
   }
 
- 
+  /* -------------------- History -------------------- */
 /* -------------------- History -------------------- */
-
-let HISTORY_FIX_BOUND = false;
-
-// Ambil array baris dari berbagai bentuk respons API
-function pickRows(raw) {
-  if (Array.isArray(raw)) return raw;
-
-  for (const k of ["rows", "history", "data", "logs", "list", "items", "values"]) {
-    const v = raw?.[k];
-    if (Array.isArray(v)) return v;
-    if (v && typeof v === "object" && Array.isArray(v.rows)) return v.rows;
-  }
-
-  const r = raw?.result || raw?.payload || raw?.body;
-  if (Array.isArray(r)) return r;
-  if (r && typeof r === "object" && Array.isArray(r.rows)) return r.rows;
-
-  return [];
-}
-
 async function renderHistory() {
   try {
     const raw  = await api("history", { method: "GET" });
@@ -1120,37 +1073,28 @@ async function renderHistory() {
     const tbody =
       document.querySelector("#tbl-history tbody") ||
       document.getElementById("tbl-history");
-    if (!tbody) {
-      console.warn("Elemen #tbl-history tidak ditemukan");
-      return;
-    }
+    if (!tbody) { console.warn("Elemen #tbl-history tidak ditemukan"); return; }
 
-    const admin  = isAdmin();
-    const recent = list.slice(-400).reverse(); // 400 terakhir, terbaru di atas
+    // Ambil role user sekarang
+    const admin = isAdmin();
 
-    // --- kalau tidak ada data ---
+    // Ambil 400 terakhir (baru → atas)
+    const recent = list.slice(-400).reverse();
+
+    // Kosong → pesan ramah
     if (!recent.length) {
-      tbody.innerHTML =
-        `<tr><td colspan="${admin ? 10 : 9}" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${admin ? 10 : 9}" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
+      ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
 
+      // Sembunyikan header kolom 修正 untuk non-admin
       const table = tbody.closest("table") || document.querySelector("#tbl-history");
       const thLast = table?.querySelector("thead tr th:last-child");
       if (!admin && thLast) thLast.style.display = "none";
-      if (!admin) {
-        table
-          ?.querySelectorAll("tbody tr td:last-child")
-          .forEach((td) => (td.style.display = "none"));
-      }
-
-      bindHistoryFix();
-      ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
       return;
     }
 
-    // --- ada data: build baris; kolom terakhir (修正) hanya jika admin ---
-    tbody.innerHTML = recent
-      .map(
-        (h) => `
+    // Build baris; kolom terakhir (修正) hanya jika admin
+    tbody.innerHTML = recent.map(h => `
       <tr>
         <td>${escapeHtml(h.timestamp || h.date || h.datetime || "")}</td>
         <td>${escapeHtml(h.userId || h.user_id || "")}</td>
@@ -1161,22 +1105,9 @@ async function renderHistory() {
         <td>${escapeHtml(h.unit || "")}</td>
         <td>${escapeHtml(h.type || h.kind || "")}</td>
         <td>${escapeHtml(h.note || h.remarks || "")}</td>
-        ${
-          admin
-            ? `
-        <td class="text-end">
-          <button
-            class="btn btn-sm btn-outline-primary btn-hist-fix"
-            data-row="${h.row || ""}"
-            data-code="${escapeAttr(h.code || "")}">
-            修正
-          </button>
-        </td>`
-            : ""
-        }
-      </tr>`
-      )
-      .join("");
+        ${admin ? `<td class="text-end"><button class="btn btn-sm btn-outline-primary btn-hist-fix" data-code="${escapeAttr(h.code||"")}">修正</button></td>` : ""}
+      </tr>
+    `).join("");
 
     // Header 「修正」 disembunyikan untuk non-admin
     const table = tbody.closest("table") || document.querySelector("#tbl-history");
@@ -1184,106 +1115,13 @@ async function renderHistory() {
     if (!admin && thLast) thLast.style.display = "none";
 
     // Jaga-jaga: untuk non-admin, sembunyikan juga seluruh sel terakhir di <tbody>
-    if (!admin) {
-      table
-        ?.querySelectorAll("tbody tr td:last-child")
-        .forEach((td) => (td.style.display = "none"));
-    }
+    if (!admin) table?.querySelectorAll("tbody tr td:last-child").forEach(td => td.style.display = "none");
 
-    // pasang handler klik untuk tombol「修正」（sekali saja）
-    bindHistoryFix();
-
-    // auto-refresh menu untuk tab history
     ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
   } catch (e) {
     console.error("renderHistory() error:", e);
     toast("履歴の読み込みに失敗しました。");
   }
-}
-
-function bindHistoryFix() {
-  const table = document.getElementById("tbl-history");
-  if (!table || HISTORY_FIX_BOUND) return;
-  HISTORY_FIX_BOUND = true;
-
-  table.addEventListener("click", async (ev) => {
-    const btn = ev.target.closest(".btn-hist-fix");
-    if (!btn) return;
-
-    ev.preventDefault();
-
-    // Safety: hanya admin
-    if (!isAdmin()) {
-      toast("修正は管理者のみ可能です。");
-      return;
-    }
-
-    const rowNo = Number(btn.dataset.row || "");
-    if (!rowNo) {
-      toast("行番号が取得できませんでした。");
-      return;
-    }
-
-    const tr = btn.closest("tr");
-    if (!tr) {
-      toast("対象行が見つかりませんでした。");
-      return;
-    }
-
-    const cells = tr.children;
-    const current = {
-      date    : (cells[0]?.textContent || "").trim(),
-      userId  : (cells[1]?.textContent || "").trim(),
-      userName: (cells[2]?.textContent || "").trim(),
-      code    : (cells[3]?.textContent || "").trim(),
-      itemName: (cells[4]?.textContent || "").trim(),
-      qty     : Number((cells[5]?.textContent || "").replace(/[^\d.-]/g, "")) || 0,
-      unit    : (cells[6]?.textContent || "").trim() || "pcs",
-      type    : (cells[7]?.textContent || "").trim() || "IN",
-      note    : (cells[8]?.textContent || "").trim()
-    };
-
-    // Untuk versi sederhana: edit 数量, 種別, 備考
-    const qtyStr = window.prompt(`数量（現在: ${current.qty}）`, String(current.qty || ""));
-    if (qtyStr === null) return; // cancel
-    const qty = Number(qtyStr);
-    if (!Number.isFinite(qty) || qty <= 0) {
-      toast("数量を正しく入力してください。");
-      return;
-    }
-
-    let typeInput = window.prompt(`種別（IN または OUT）`, (current.type || "IN").toUpperCase());
-    if (typeInput === null) return;
-    typeInput = String(typeInput).trim().toUpperCase();
-    if (typeInput !== "IN" && typeInput !== "OUT") {
-      toast("種別は IN または OUT で入力してください。");
-      return;
-    }
-
-    const note = window.prompt("備考（任意）", current.note || "") ?? current.note || "";
-
-    try {
-      const res = await api("historyEdit", {
-        method: "POST",
-        body: {
-          row : rowNo,
-          qty,
-          unit: current.unit,
-          type: typeInput,
-          note
-        }
-      });
-      if (res && res.ok) {
-        toast("履歴を修正しました。");
-        await renderHistory();  // refresh daftar history
-      } else {
-        toast(res?.error || "履歴の修正に失敗しました。");
-      }
-    } catch (e) {
-      console.error("historyEdit failed", e);
-      toast("履歴の修正に失敗しました。");
-    }
-  });
 }
 
 
