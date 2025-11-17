@@ -48,27 +48,50 @@
     else el.classList.add("d-none");
   }
 
-  async function api(action, { method = "GET", body = null, silent = false } = {}) {
-    if (!window.CONFIG || !CONFIG.BASE_URL) { throw new Error("config.js BASE_URL belum di-set"); }
-    const apikey = encodeURIComponent(CONFIG.API_KEY || "");
-    const url = `${CONFIG.BASE_URL}?action=${encodeURIComponent(action)}&apikey=${apikey}&_=${Date.now()}`;
-    if (!silent) setLoading(true);
-    try {
-      if (method === "GET") {
-        const r = await fetch(url, { mode: "cors", cache: "no-cache" });
-        if (!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
-        return await r.json();
-      } else {
-        const r = await fetch(url, {
-          method: "POST", mode: "cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
+ /* === API helper (timeout + retry + pesan error jelas) === */
+async function api(action, opts = {}) {
+  const { method = 'GET', body = null, silent = false, timeout = 12000, retry = 1 } = opts;
+  if (!window.CONFIG || !CONFIG.BASE_URL) throw new Error('config.js BASE_URL belum di-set');
+
+  const apikey = encodeURIComponent(CONFIG.API_KEY || '');
+  const url = `${CONFIG.BASE_URL}?action=${encodeURIComponent(action)}&apikey=${apikey}&_=${Date.now()}`;
+  if (!silent) setLoading(true);
+
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort('timeout'), timeout);
+
+  try {
+    const init = (method === 'GET')
+      ? { mode: 'cors', cache: 'no-cache', signal: ctrl.signal }
+      : {
+          method: 'POST', mode: 'cors', signal: ctrl.signal,
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ ...(body || {}), apikey: CONFIG.API_KEY })
-        });
-        if (!r.ok) throw new Error(`[${r.status}] ${r.statusText}`);
-        return await r.json();
-      }
-    } finally { if (!silent) setLoading(false); }
+        };
+
+    const res = await fetch(url, init);
+    if (!res.ok) throw new Error(`[${res.status}] ${res.statusText}`);
+    return await res.json();
+
+  } catch (e) {
+    const offline   = !navigator.onLine;
+    const isTimeout = e?.name === 'AbortError' || e === 'timeout';
+    const pretty = offline
+      ? 'オフラインです。通信状況をご確認ください。'
+      : (isTimeout ? 'タイムアウトしました。電波を確認してください。' : (e?.message || 'Failed to fetch'));
+
+    if (retry > 0) {
+      await new Promise(r => setTimeout(r, 800));  // backoff singkat
+      return api(action, { ...opts, retry: retry - 1 });
+    }
+    throw new Error(pretty);
+
+  } finally {
+    clearTimeout(t);
+    if (!silent) setLoading(false);
   }
+}
+
 
   function loadScriptOnce(src) {
     return new Promise((resolve, reject) => {
@@ -238,11 +261,11 @@
     if (who) $("#who").textContent = `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`;
 
     try {
-      const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
-        api("items", { method: "GET" }).catch(() => []),
-        api("users", { method: "GET" }).catch(() => []),
-        api("statsMonthlySeries", { method: "GET" }).catch(() => []),
-        api("history", { method: "GET" }).catch(() => [])
+     const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
+       api("items", { method: "GET", silent: true }).catch(() => []),
+        api("users", { method: "GET", silent: true }).catch(() => []),
+         api("statsMonthlySeries", { method: "GET", silent: true }).catch(() => []),
+        api("history", { method: "GET", silent: true }).catch(() => [])
       ]);
 
       const items   = Array.isArray(itemsRaw) ? itemsRaw : [];
@@ -2247,6 +2270,11 @@
     makeItemLabelDataURL,
     openEditItem
   });
+function keepBackendWarm(){
+  if (!CONFIG?.FEATURES?.HEALTH_PING) return;
+  const ms = Number(CONFIG.HEALTH_PING_MS || 15000);
+  setInterval(() => { api('ping', { method:'GET', silent:true }).catch(()=>{}); }, ms);
+}
 
   /* -------------------- Boot -------------------- */
   window.addEventListener("DOMContentLoaded", () => {
@@ -2267,6 +2295,7 @@
     updateWelcomeBanner();
     renderDashboard();
     bindPrintAllLabels();
+    keepBackendWarm();
     $("#btn-logout")?.addEventListener("click", logout);
 
     // Preload QR lib & aktifkan Preview
