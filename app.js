@@ -1067,6 +1067,23 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
 
 let HISTORY_FIX_BOUND = false;
 
+// Ambil array baris dari berbagai bentuk respons API
+function pickRows(raw) {
+  if (Array.isArray(raw)) return raw;
+
+  for (const k of ["rows", "history", "data", "logs", "list", "items", "values"]) {
+    const v = raw?.[k];
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === "object" && Array.isArray(v.rows)) return v.rows;
+  }
+
+  const r = raw?.result || raw?.payload || raw?.body;
+  if (Array.isArray(r)) return r;
+  if (r && typeof r === "object" && Array.isArray(r.rows)) return r.rows;
+
+  return [];
+}
+
 async function renderHistory() {
   try {
     const raw  = await api("history", { method: "GET" });
@@ -1092,8 +1109,11 @@ async function renderHistory() {
       const table = tbody.closest("table") || document.querySelector("#tbl-history");
       const thLast = table?.querySelector("thead tr th:last-child");
       if (!admin && thLast) thLast.style.display = "none";
-      if (!admin) table?.querySelectorAll("tbody tr td:last-child")
-                       .forEach(td => td.style.display = "none");
+      if (!admin) {
+        table
+          ?.querySelectorAll("tbody tr td:last-child")
+          .forEach((td) => (td.style.display = "none"));
+      }
 
       bindHistoryFix();
       ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
@@ -1101,7 +1121,9 @@ async function renderHistory() {
     }
 
     // --- ada data: build baris; kolom terakhir (修正) hanya jika admin ---
-    tbody.innerHTML = recent.map(h => `
+    tbody.innerHTML = recent
+      .map(
+        (h) => `
       <tr>
         <td>${escapeHtml(h.timestamp || h.date || h.datetime || "")}</td>
         <td>${escapeHtml(h.userId || h.user_id || "")}</td>
@@ -1112,7 +1134,9 @@ async function renderHistory() {
         <td>${escapeHtml(h.unit || "")}</td>
         <td>${escapeHtml(h.type || h.kind || "")}</td>
         <td>${escapeHtml(h.note || h.remarks || "")}</td>
-        ${admin ? `
+        ${
+          admin
+            ? `
         <td class="text-end">
           <button
             class="btn btn-sm btn-outline-primary btn-hist-fix"
@@ -1120,19 +1144,26 @@ async function renderHistory() {
             data-code="${escapeAttr(h.code || "")}">
             修正
           </button>
-        </td>` : ""}
-      </tr>
-    `).join("");
+        </td>`
+            : ""
+        }
+      </tr>`
+      )
+      .join("");
 
+    // Header 「修正」 disembunyikan untuk non-admin
     const table = tbody.closest("table") || document.querySelector("#tbl-history");
     const thLast = table?.querySelector("thead tr th:last-child");
     if (!admin && thLast) thLast.style.display = "none";
+
+    // Jaga-jaga: untuk non-admin, sembunyikan juga seluruh sel terakhir di <tbody>
     if (!admin) {
-      table?.querySelectorAll("tbody tr td:last-child")
-           .forEach(td => td.style.display = "none");
+      table
+        ?.querySelectorAll("tbody tr td:last-child")
+        .forEach((td) => (td.style.display = "none"));
     }
 
-    // pasang handler klik untuk tombol「修正」（once）
+    // pasang handler klik untuk tombol「修正」（sekali saja）
     bindHistoryFix();
 
     // auto-refresh menu untuk tab history
@@ -1154,6 +1185,7 @@ function bindHistoryFix() {
 
     ev.preventDefault();
 
+    // Safety: hanya admin
     if (!isAdmin()) {
       toast("修正は管理者のみ可能です。");
       return;
@@ -1184,8 +1216,9 @@ function bindHistoryFix() {
       note    : (cells[8]?.textContent || "").trim()
     };
 
+    // Untuk versi sederhana: edit 数量, 種別, 備考
     const qtyStr = window.prompt(`数量（現在: ${current.qty}）`, String(current.qty || ""));
-    if (qtyStr === null) return;
+    if (qtyStr === null) return; // cancel
     const qty = Number(qtyStr);
     if (!Number.isFinite(qty) || qty <= 0) {
       toast("数量を正しく入力してください。");
@@ -1205,11 +1238,17 @@ function bindHistoryFix() {
     try {
       const res = await api("historyEdit", {
         method: "POST",
-        body: { row: rowNo, qty, unit: current.unit, type: typeInput, note }
+        body: {
+          row : rowNo,
+          qty,
+          unit: current.unit,
+          type: typeInput,
+          note
+        }
       });
       if (res && res.ok) {
         toast("履歴を修正しました。");
-        await renderHistory();
+        await renderHistory();  // refresh daftar history
       } else {
         toast(res?.error || "履歴の修正に失敗しました。");
       }
@@ -1219,7 +1258,6 @@ function bindHistoryFix() {
     }
   });
 }
-
 
 
   // --- Tambahan: hint visual untuk input manual di 入出荷 ---
