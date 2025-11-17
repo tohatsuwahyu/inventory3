@@ -1063,6 +1063,10 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
   }
 
  
+/* -------------------- History -------------------- */
+
+let HISTORY_FIX_BOUND = false;
+
 async function renderHistory() {
   try {
     const raw  = await api("history", { method: "GET" });
@@ -1072,39 +1076,73 @@ async function renderHistory() {
     const tbody =
       document.querySelector("#tbl-history tbody") ||
       document.getElementById("tbl-history");
-    if (!tbody) { console.warn("Elemen #tbl-history tidak ditemukan"); return; }
+    if (!tbody) {
+      console.warn("Elemen #tbl-history tidak ditemukan");
+      return;
+    }
 
-    // Ambil role user sekarang
-    const admin = isAdmin();
+    const admin  = isAdmin();
+    const recent = list.slice(-400).reverse(); // 400 terakhir, terbaru di atas
 
-    // Ambil 400 terakhir (baru → atas)
-    const recent = list.slice(-400).reverse();
-
-    // Kosong → pesan ramah
+    // --- kalau tidak ada data ---
     if (!recent.length) {
-      tbody.innerHTML = `<tr><td colspan="${admin ? 10 : 9}" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
-      
-      ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
+      tbody.innerHTML =
+        `<tr><td colspan="${admin ? 10 : 9}" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
 
-          // Header 「修正」 disembunyikan untuk non-admin
+      const table = tbody.closest("table") || document.querySelector("#tbl-history");
+      const thLast = table?.querySelector("thead tr th:last-child");
+      if (!admin && thLast) thLast.style.display = "none";
+      if (!admin) table?.querySelectorAll("tbody tr td:last-child")
+                       .forEach(td => td.style.display = "none");
+
+      bindHistoryFix();
+      ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
+      return;
+    }
+
+    // --- ada data: build baris; kolom terakhir (修正) hanya jika admin ---
+    tbody.innerHTML = recent.map(h => `
+      <tr>
+        <td>${escapeHtml(h.timestamp || h.date || h.datetime || "")}</td>
+        <td>${escapeHtml(h.userId || h.user_id || "")}</td>
+        <td>${escapeHtml(h.userName || h.user_name || h.user || "")}</td>
+        <td>${escapeHtml(h.code || "")}</td>
+        <td>${escapeHtml(h.itemName || h.name || "")}</td>
+        <td class="text-end">${fmt(h.qty || h.quantity || 0)}</td>
+        <td>${escapeHtml(h.unit || "")}</td>
+        <td>${escapeHtml(h.type || h.kind || "")}</td>
+        <td>${escapeHtml(h.note || h.remarks || "")}</td>
+        ${admin ? `
+        <td class="text-end">
+          <button
+            class="btn btn-sm btn-outline-primary btn-hist-fix"
+            data-row="${h.row || ""}"
+            data-code="${escapeAttr(h.code || "")}">
+            修正
+          </button>
+        </td>` : ""}
+      </tr>
+    `).join("");
+
     const table = tbody.closest("table") || document.querySelector("#tbl-history");
     const thLast = table?.querySelector("thead tr th:last-child");
     if (!admin && thLast) thLast.style.display = "none";
+    if (!admin) {
+      table?.querySelectorAll("tbody tr td:last-child")
+           .forEach(td => td.style.display = "none");
+    }
 
-    // Jaga-jaga: untuk non-admin, sembunyikan juga seluruh sel terakhir di <tbody>
-    if (!admin) table?.querySelectorAll("tbody tr td:last-child")
-                     .forEach(td => td.style.display = "none");
+    // pasang handler klik untuk tombol「修正」（once）
+    bindHistoryFix();
 
-    // ⬇️ PENTING: pasang event handler untuk tombol 修正
-    bindHistoryFix();   // <-- BARIS INI YANG BELUM ADA DI KODE KAMU
-
-    // Auto-refresh menu untuk tab history
+    // auto-refresh menu untuk tab history
     ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
   } catch (e) {
     console.error("renderHistory() error:", e);
     toast("履歴の読み込みに失敗しました。");
   }
 }
+
 
 
     // Build baris; kolom terakhir (修正) hanya jika admin
