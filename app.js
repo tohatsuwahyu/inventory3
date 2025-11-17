@@ -1069,33 +1069,27 @@ async function renderHistory() {
     const raw  = await api("history", { method: "GET" });
     const list = pickRows(raw);
 
-    // TBODY: prioritaskan #tbl-history tbody; fallback: elemen #tbl-history itu sendiri
     const tbody =
       document.querySelector("#tbl-history tbody") ||
       document.getElementById("tbl-history");
     if (!tbody) { console.warn("Elemen #tbl-history tidak ditemukan"); return; }
 
-    // Ambil role user sekarang
     const admin = isAdmin();
-
-    // Ambil 400 terakhir (baru → atas)
     const recent = list.slice(-400).reverse();
 
-    // Kosong → pesan ramah
     if (!recent.length) {
       tbody.innerHTML = `<tr><td colspan="${admin ? 10 : 9}" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
       ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
 
-      // Sembunyikan header kolom 修正 untuk non-admin
       const table = tbody.closest("table") || document.querySelector("#tbl-history");
       const thLast = table?.querySelector("thead tr th:last-child");
       if (!admin && thLast) thLast.style.display = "none";
       return;
     }
 
-    // Build baris; kolom terakhir (修正) hanya jika admin
+    // 🔻 di sini kita tambahkan data-row untuk menyimpan nomor baris sheet
     tbody.innerHTML = recent.map(h => `
-      <tr>
+      <tr data-row="${h.row || ""}" data-code="${escapeAttr(h.code || "")}">
         <td>${escapeHtml(h.timestamp || h.date || h.datetime || "")}</td>
         <td>${escapeHtml(h.userId || h.user_id || "")}</td>
         <td>${escapeHtml(h.userName || h.user_name || h.user || "")}</td>
@@ -1105,24 +1099,70 @@ async function renderHistory() {
         <td>${escapeHtml(h.unit || "")}</td>
         <td>${escapeHtml(h.type || h.kind || "")}</td>
         <td>${escapeHtml(h.note || h.remarks || "")}</td>
-        ${admin ? `<td class="text-end"><button class="btn btn-sm btn-outline-primary btn-hist-fix" data-code="${escapeAttr(h.code||"")}">修正</button></td>` : ""}
+        ${admin ? `<td class="text-end">
+          <button class="btn btn-sm btn-outline-primary btn-hist-fix" data-code="${escapeAttr(h.code || "")}">修正</button>
+        </td>` : ""}
       </tr>
     `).join("");
 
-    // Header 「修正」 disembunyikan untuk non-admin
     const table = tbody.closest("table") || document.querySelector("#tbl-history");
     const thLast = table?.querySelector("thead tr th:last-child");
     if (!admin && thLast) thLast.style.display = "none";
-
-    // Jaga-jaga: untuk non-admin, sembunyikan juga seluruh sel terakhir di <tbody>
     if (!admin) table?.querySelectorAll("tbody tr td:last-child").forEach(td => td.style.display = "none");
 
     ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
+
+    // 🆕: binding tombol 修正 (hanya sekali)
+    if (admin && !tbody.__histBound) {
+      tbody.__histBound = true;
+      tbody.addEventListener("click", (ev) => {
+        const btn = ev.target.closest(".btn-hist-fix");
+        if (!btn) return;
+        ev.preventDefault();
+
+        const tr = btn.closest("tr");
+        if (!tr) return;
+
+        const rowNo = Number(tr.getAttribute("data-row") || "0");
+        if (!rowNo) return;
+
+        // Ambil nilai dari sel
+        const tds = tr.children;
+        const dateText  = (tds[0]?.textContent || "").trim();
+        const userId    = (tds[1]?.textContent || "").trim();
+        const userName  = (tds[2]?.textContent || "").trim();
+        const code      = (tds[3]?.textContent || "").trim();
+        const itemName  = (tds[4]?.textContent || "").trim();
+        const qtyText   = (tds[5]?.textContent || "").replace(/[,¥]/g, "").trim();
+        const unitText  = (tds[6]?.textContent || "").trim();
+        const typeText  = (tds[7]?.textContent || "").trim();
+        const noteText  = (tds[8]?.textContent || "").trim();
+
+        const currentQty   = Number(qtyText || 0) || 0;
+        const currentType  = (String(typeText).toUpperCase() === "OUT") ? "OUT" : "IN";
+        const currentUnit  = unitText || "pcs";
+
+        openHistoryEditModal({
+          row : rowNo,
+          date: dateText,
+          userId,
+          userName,
+          code,
+          itemName,
+          qty : currentQty,
+          unit: currentUnit,
+          type: currentType,
+          note: noteText
+        });
+      });
+    }
+
   } catch (e) {
     console.error("renderHistory() error:", e);
     toast("履歴の読み込みに失敗しました。");
   }
 }
+
 
 
   // --- Tambahan: hint visual untuk input manual di 入出荷 ---
@@ -1234,10 +1274,18 @@ async function renderHistory() {
       const who = getCurrentUser();
       if (!who) return toast("ログイン情報がありません。");
 
-      const code = ($("#io-code").value || "").trim();
-      const qty  = Number($("#io-qty").value || 0);
-      const unit = $("#io-unit").value || "pcs";
-      const type = $("#io-type").value || "IN";
+     const code = ($("#io-code").value || "").trim();
+const qty  = Number($("#io-qty").value || 0);
+const unit = $("#io-unit").value || "pcs";
+
+const typeRaw = $("#io-type").value || "IN";
+// Normalisasi ke hanya "IN" / "OUT"
+const type = (() => {
+  const t = String(typeRaw).toUpperCase();
+  if (t === "OUT" || t === "-1" || t === "出庫") return "OUT";
+  return "IN";
+})();
+
 
       if (!code) return toast("コードを入力またはスキャンしてください。");
       if (!Number.isFinite(qty) || qty <= 0) return toast("数量を入力してください。");
@@ -2438,6 +2486,114 @@ function keepBackendWarm(){
     }
     return core.makeItemLabelDataURL(item);
   }
+function openHistoryEditModal(h) {
+  if (!isAdmin()) {
+    toast("Akses ditolak (admin only)");
+    return;
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "modal fade";
+  wrap.innerHTML = `
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">履歴の修正</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2 small text-muted">
+            コードやユーザー情報はそのままにして、数量・種別・備考を修正できます。
+          </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">日時</label>
+              <input class="form-control" value="${escapeAttr(h.date || "")}" readonly>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">ユーザー</label>
+              <input class="form-control" value="${escapeAttr(h.userName || h.userId || "")}" readonly>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">コード</label>
+              <input class="form-control" value="${escapeAttr(h.code || "")}" readonly>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">品名</label>
+              <input class="form-control" value="${escapeAttr(h.itemName || "")}" readonly>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">数量</label>
+              <input id="hist-qty" type="number" class="form-control" value="${h.qty || 0}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">単位</label>
+              <input id="hist-unit" class="form-control" value="${escapeAttr(h.unit || "pcs")}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">種別</label>
+              <select id="hist-type" class="form-select">
+                <option value="IN"  ${h.type === "OUT" ? "" : "selected"}>IN（入庫）</option>
+                <option value="OUT" ${h.type === "OUT" ? "selected" : ""}>OUT（出庫）</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">備考</label>
+              <textarea id="hist-note" class="form-control" rows="2">${escapeHtml(h.note || "")}</textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button class="btn btn-primary" id="hist-save">保存</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+  const modal = new bootstrap.Modal(wrap);
+  modal.show();
+
+  $("#hist-save", wrap)?.addEventListener("click", async () => {
+    const qtyVal  = Number($("#hist-qty", wrap).value || 0);
+    const unitVal = ($("#hist-unit", wrap).value || "pcs").trim() || "pcs";
+    const typeVal = $("#hist-type", wrap).value || "IN";
+    const noteVal = $("#hist-note", wrap).value || "";
+
+    if (!Number.isFinite(qtyVal) || qtyVal <= 0) {
+      toast("数量を正しく入力してください。");
+      return;
+    }
+
+    try {
+      const res = await api("historyEdit", {
+        method: "POST",
+        body: {
+          row : h.row,
+          qty : qtyVal,
+          unit: unitVal,
+          type: typeVal,
+          note: noteVal
+        }
+      });
+
+      if (res?.ok) {
+        toast("履歴を修正しました。");
+        modal.hide();
+        wrap.remove();
+        // reload history & dashboard supaya tampilan dan grafik ikut update
+        await renderHistory();
+        renderDashboard();
+      } else {
+        toast(res?.error || "修正に失敗しました。");
+      }
+    } catch (e) {
+      toast("修正に失敗しました: " + (e?.message || e));
+    }
+  });
+
+  wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
+}
 
   function invOpenEditItem(code) {
     const core = __invCore();
