@@ -1084,6 +1084,7 @@ async function renderHistory() {
     // Kosong → pesan ramah
     if (!recent.length) {
       tbody.innerHTML = `<tr><td colspan="${admin ? 10 : 9}" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
+      
       ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
 
       // Sembunyikan header kolom 修正 untuk non-admin
@@ -1105,7 +1106,16 @@ async function renderHistory() {
         <td>${escapeHtml(h.unit || "")}</td>
         <td>${escapeHtml(h.type || h.kind || "")}</td>
         <td>${escapeHtml(h.note || h.remarks || "")}</td>
-        ${admin ? `<td class="text-end"><button class="btn btn-sm btn-outline-primary btn-hist-fix" data-code="${escapeAttr(h.code||"")}">修正</button></td>` : ""}
+       ${admin ? `
+  <td class="text-end">
+    <button
+      class="btn btn-sm btn-outline-primary btn-hist-fix"
+      data-row="${h.row || ""}"
+      data-code="${escapeAttr(h.code || "")}">
+      修正
+    </button>
+  </td>` : ""}
+
       </tr>
     `).join("");
 
@@ -1115,13 +1125,114 @@ async function renderHistory() {
     if (!admin && thLast) thLast.style.display = "none";
 
     // Jaga-jaga: untuk non-admin, sembunyikan juga seluruh sel terakhir di <tbody>
+       // Header 「修正」 disembunyikan untuk non-admin
+    const table = tbody.closest("table") || document.querySelector("#tbl-history");
+    const thLast = table?.querySelector("thead tr th:last-child");
+    if (!admin && thLast) thLast.style.display = "none";
+
+    // Jaga-jaga: untuk non-admin, sembunyikan juga seluruh sel terakhir di <tbody>
     if (!admin) table?.querySelectorAll("tbody tr td:last-child").forEach(td => td.style.display = "none");
+
+    // ★ pasang handler klik untuk tombol「修正」
+    bindHistoryFix(); // ★ baris yang kamu tanyakan letaknya DI SINI
 
     ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
   } catch (e) {
     console.error("renderHistory() error:", e);
     toast("履歴の読み込みに失敗しました。");
   }
+}
+
+  } catch (e) {
+    console.error("renderHistory() error:", e);
+    toast("履歴の読み込みに失敗しました。");
+  }
+}
+let HISTORY_FIX_BOUND = false;
+
+function bindHistoryFix() {
+  const table = document.getElementById("tbl-history");
+  if (!table || HISTORY_FIX_BOUND) return;
+  HISTORY_FIX_BOUND = true;
+
+  table.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest(".btn-hist-fix");
+    if (!btn) return;
+
+    ev.preventDefault();
+
+    // Safety: hanya admin
+    if (!isAdmin()) {
+      toast("修正は管理者のみ可能です。");
+      return;
+    }
+
+    const rowNo = Number(btn.dataset.row || "");
+    if (!rowNo) {
+      toast("行番号が取得できませんでした。");
+      return;
+    }
+
+    const tr = btn.closest("tr");
+    if (!tr) {
+      toast("対象行が見つかりませんでした。");
+      return;
+    }
+
+    const cells = tr.children;
+    const current = {
+      date    : (cells[0]?.textContent || "").trim(),
+      userId  : (cells[1]?.textContent || "").trim(),
+      userName: (cells[2]?.textContent || "").trim(),
+      code    : (cells[3]?.textContent || "").trim(),
+      itemName: (cells[4]?.textContent || "").trim(),
+      qty     : Number((cells[5]?.textContent || "").replace(/[^\d.-]/g, "")) || 0,
+      unit    : (cells[6]?.textContent || "").trim() || "pcs",
+      type    : (cells[7]?.textContent || "").trim() || "IN",
+      note    : (cells[8]?.textContent || "").trim()
+    };
+
+    // Untuk versi sederhana: edit 数量, 種別, 備考
+    const qtyStr = window.prompt(`数量（現在: ${current.qty}）`, String(current.qty || ""));
+    if (qtyStr === null) return; // cancel
+    const qty = Number(qtyStr);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      toast("数量を正しく入力してください。");
+      return;
+    }
+
+    let typeInput = window.prompt(`種別（IN または OUT）`, (current.type || "IN").toUpperCase());
+    if (typeInput === null) return;
+    typeInput = String(typeInput).trim().toUpperCase();
+    if (typeInput !== "IN" && typeInput !== "OUT") {
+      toast("種別は IN または OUT で入力してください。");
+      return;
+    }
+
+    const note = window.prompt("備考（任意）", current.note || "") ?? current.note || "";
+
+    try {
+      const res = await api("historyEdit", {
+        method: "POST",
+        body: {
+          row : rowNo,
+          qty,
+          unit: current.unit,
+          type: typeInput,
+          note
+        }
+      });
+      if (res && res.ok) {
+        toast("履歴を修正しました。");
+        await renderHistory();  // refresh daftar history
+      } else {
+        toast(res?.error || "履歴の修正に失敗しました。");
+      }
+    } catch (e) {
+      console.error("historyEdit failed", e);
+      toast("履歴の修正に失敗しました。");
+    }
+  });
 }
 
 
