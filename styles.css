@@ -745,3 +745,31 @@ td[data-editable]{ cursor:text; }
     grid-template-columns: repeat(2, 44px) !important;
   }
 }
+/* === Action grid: desktop 5, tablet 3, HP 2 === */
+/* Tablet dan ke bawah (≤992px): 3 kolom, tombol sedikit lebih besar */
+@media (max-width: 992px){
+  #view-items table.items-table td:last-child .act-grid.actions{
+    grid-template-columns: repeat(3, 44px) !important;
+    gap: 6px 10px;
+    justify-content: end;
+  }
+  #view-items .act-grid.actions .btn{
+    width: 44px; height: 44px; border-radius: 12px;
+  }
+}
+
+/* HP kecil (≤576px): 2 kolom, sel boleh membungkus dan tidak memaksa lebar */
+@media (max-width: 576px){
+  #view-items table.items-table td:last-child{
+    white-space: normal;
+    min-width: auto !important;
+  }
+  #view-items table.items-table thead th:last-child{
+    min-width: auto !important; text-align: right;
+  }
+  #view-items table.items-table td:last-child .act-grid.actions{
+    grid-template-columns: repeat(2, 44px) !important;
+    grid-auto-flow: row;
+    gap: 6px 10px;
+  }
+}
