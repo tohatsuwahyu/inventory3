@@ -371,6 +371,77 @@ function pickRows(raw) {
           .concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(",")))
           .join("\n");
         downloadCSV_JP("月次INOUT.csv", csv);
+              // === 当月 入出庫ランキング TOP20 ===
+      try {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth(); // 0-based
+
+        const agg = new Map();
+
+        for (const h of history) {
+          const raw = h.timestamp || h.date || h.datetime || "";
+          if (!raw) continue;
+
+          let dt;
+          if (raw instanceof Date) dt = raw;
+          else dt = new Date(String(raw).replace(" ", "T"));
+          if (!dt || isNaN(dt)) continue;
+
+          // hanya bulan & tahun yang sama dengan sekarang
+          if (dt.getFullYear() !== y || dt.getMonth() !== m) continue;
+
+          const code = String(h.code || "").trim();
+          if (!code) continue;
+
+          const name = String(h.itemName || h.name || "").trim();
+          const qty  = Number(h.qty || h.quantity || 0) || 0;
+          const type = String(h.type || h.kind || "").toUpperCase();
+
+          if (!agg.has(code)) {
+            agg.set(code, { code, name, in: 0, out: 0 });
+          }
+          const rec = agg.get(code);
+          if (type === "OUT") rec.out += qty;
+          else rec.in += qty; // treat selain OUT sebagai IN
+        }
+
+        const rows = [...agg.values()]
+          .map(r => ({ ...r, total: r.in + r.out }))
+          .filter(r => r.total > 0)
+          .sort((a, b) => b.total - a.total) // terbesar → terkecil
+          .slice(0, 20);                     // TOP 20
+
+        const tbody = document.getElementById("tbl-top-mov");
+        if (tbody) {
+          if (!rows.length) {
+            tbody.innerHTML =
+              '<tr><td colspan="5" class="text-muted text-center py-2">データがありません</td></tr>';
+          } else {
+            tbody.innerHTML = rows.map((r, idx) => `
+              <tr>
+                <td class="text-center">${idx + 1}</td>
+                <td>
+                  <div class="small text-muted">${escapeHtml(r.code)}</div>
+                  <div>${escapeHtml(r.name || "")}</div>
+                </td>
+                <td class="text-end text-primary">${fmt(r.in)}</td>
+                <td class="text-end text-danger">${fmt(r.out)}</td>
+                <td class="text-end fw-semibold">${fmt(r.total)}</td>
+              </tr>
+            `).join("");
+          }
+        }
+
+        const lbl = document.getElementById("top-mov-month-label");
+        if (lbl) {
+          const ym = `${y}-${String(m + 1).padStart(2, "0")}`;
+          lbl.textContent = ym; // contoh: 2025-11
+        }
+      } catch (e) {
+        console.error("top movers render error", e);
+      }
+
       }, { once: true });
     } catch (e) {
       console.error("renderDashboard()", e);
