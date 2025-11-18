@@ -2334,6 +2334,61 @@ function openHistoryEditModal(h) {
     const csv   = [heads.join(",")].concat(csvRows).join("\n");
     downloadCSV_JP(fname, csv);
   });
+$("#tana-exp-year")?.addEventListener("click", (e)=> {
+  e.preventDefault();
+
+  if (!_TANA_ROWS.length) {
+    alert("データがありません。");
+    return;
+  }
+
+  let year = "";
+
+  // 1) Kalau kamu punya select <select id="tana-year">, pakai dulu itu
+  const ySel = document.getElementById("tana-year");
+  if (ySel && ySel.value) {
+    year = String(ySel.value).trim();
+  } else {
+    // 2) Kalau user sudah pilih month (YYYY-MM), ambil tahunnya
+    const mVal = (document.getElementById("tana-month")?.value || "").trim();
+    if (mVal && /^\d{4}-\d{2}$/.test(mVal)) {
+      year = mVal.slice(0, 4); // "2025-11" → "2025"
+    }
+  }
+
+  // 3) Kalau masih kosong → tanya pakai prompt
+  if (!year) {
+    const nowY  = new Date().getFullYear();
+    const input = prompt("出力したい年(YYYY)を入力してください。", String(nowY));
+    if (!input) return;
+    if (!/^\d{4}$/.test(input)) {
+      alert("年は YYYY 形式で入力してください。");
+      return;
+    }
+    year = input;
+  }
+
+  // Filter data berdasarkan tahun (period = "YYYY-MM")
+  const rows = _TANA_ROWS.filter(r => String(r.period || "").slice(0, 4) === year);
+  if (!rows.length) {
+    alert("該当するデータがありません。");
+    return;
+  }
+
+  const heads = tanaJPHeaders();
+  const csvRows = rows.map(r => {
+    const jp = tanaToJPRow(r);
+    return heads.map(h => {
+      let v = jp[h] ?? "";
+      v = String(v).replace(/,/g, " ");  // amankan koma
+      return v;
+    }).join(",");
+  });
+
+  const fname = `棚卸_${year}.csv`;
+  const csv   = [heads.join(",")].concat(csvRows).join("\n");
+  downloadCSV_JP(fname, csv);
+});
 
   $("#input-tana-imp")?.addEventListener("change", async (ev)=> {
     const file = ev.target.files?.[0]; if(!file) return;
