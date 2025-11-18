@@ -239,7 +239,9 @@ function pickRows(raw) {
   if (Array.isArray(raw)) return raw;
 
   // Langsung cek properti umum
-  for (const k of ['rows', 'history', 'data', 'logs', 'list', 'items', 'values']) {
+  for (const k of [
+    'rows', 'history', 'data', 'logs', 'list',
+    'items', 'values', 'users', 'series' ]) {
     const v = raw?.[k];
     if (Array.isArray(v)) return v;
     if (v && typeof v === 'object' && Array.isArray(v.rows)) return v.rows; // bentuk nested: {data:{rows:[]}}
@@ -275,30 +277,11 @@ function setTextSafe(selector, value) {
   api("history", { method: "GET", silent: true }).catch(() => [])
 ]);
 
-// fleksibel: bisa array langsung, atau {data:[]}, {items:[]}, {rows:[]}, dll
-const items = Array.isArray(itemsRaw) ? itemsRaw
-  : Array.isArray(itemsRaw?.data)      ? itemsRaw.data
-  : Array.isArray(itemsRaw?.items)     ? itemsRaw.items
-  : pickRows(itemsRaw);   // fallback umum
-
-const users = Array.isArray(usersRaw) ? usersRaw
-  : Array.isArray(usersRaw?.data)      ? usersRaw.data
-  : Array.isArray(usersRaw?.users)     ? usersRaw.users
-  : pickRows(usersRaw);
-
-const series = Array.isArray(seriesRaw) ? seriesRaw
-  : Array.isArray(seriesRaw?.data)        ? seriesRaw.data
-  : Array.isArray(seriesRaw?.series)      ? seriesRaw.series
-  : pickRows(seriesRaw);
-
+const items   = pickRows(itemsRaw);
+const users   = pickRows(usersRaw);
+const series  = pickRows(seriesRaw);
 const history = pickRows(historyRaw);
 
-
-      // metric
-            // metric
-      const totalItems = items.length;
-      const low = items.filter(it => Number(it.stock || 0) <= Number(it.min || 0)).length;
-      const userCount = users.length;
 
       setTextSafe("#metric-total-items", fmt(totalItems));
       setTextSafe("#metric-low-stock",   fmt(low));
