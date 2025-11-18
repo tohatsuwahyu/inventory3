@@ -481,7 +481,7 @@ const ACT_GRID_STYLE =
         '<td class="text-end">', fmt(min), '</td>',
         '<td>', dept, '</td>',
         '<td>', loc, '</td>',
-     ''<td class="td-actions" style="text-align:right">',
+     '<td class="td-actions" style="text-align:right">',
   '<div class="act-grid actions" style="', ACT_GRID_STYLE, '">', // pakai grid 2 baris
     actions,
   '</div>',
