@@ -429,12 +429,12 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
   /* -------------------- Items -------------------- */
   // ukuran tetap untuk tombol agar “操作” rapi & tidak terlalu lebar
 const ACT_GRID_STYLE =
-  'display:grid;' +
-  'grid-template-columns:repeat(3,28px);' +  // 3 tombol per baris
-  'grid-auto-rows:28px;' +                  // tinggi tiap baris
-  'gap:4px;' +                              // jarak antar tombol
-  'justify-content:end;' +
-  'min-width:120px;';                       // lebih ramping
+  'display:grid;' 
+  'grid-template-columns:repeat(3,28px);'   // 3 tombol per baris
+  'grid-auto-rows:28px;'                  // tinggi tiap baris
+  'gap:4px;'                               // jarak antar tombol
+  'justify-content:end;' 
+  'min-width:140px;';                       // lebih ramping
 
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
