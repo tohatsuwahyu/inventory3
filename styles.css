@@ -1154,3 +1154,173 @@ td[data-editable]{ cursor:text; }
     transform: none !important;
   }
 }
+/* ===== Enterprise metric badges & fine-tune ===== */
+
+/* spacing baris metric */
+.metric-row{
+  margin-top: 8px;
+  margin-bottom: 18px;
+}
+
+/* perbaiki base metric-card kalau belum ada */
+.metric-card{
+  position: relative;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  box-shadow: 0 16px 40px rgba(15,23,42,.06);
+  overflow: hidden;
+  transition:
+    transform .18s ease-out,
+    box-shadow .18s ease-out,
+    background .18s ease-out;
+}
+
+.metric-card::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg,
+              rgba(96,165,250,.18),
+              rgba(244,114,182,.14));
+  mix-blend-mode: soft-light;
+  opacity: 0;
+  transform: translateX(-20%);
+  transition: opacity .18s ease-out, transform .18s ease-out;
+  pointer-events: none;
+}
+
+.metric-card:hover{
+  transform: translateY(-3px);
+  box-shadow: 0 18px 45px rgba(15,23,42,.10);
+}
+.metric-card:hover::before{
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* icon di kiri */
+.metric-icon{
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  transition: transform .18s ease-out, box-shadow .18s ease-out;
+}
+
+.metric-card:hover .metric-icon{
+  transform: scale(1.06) translateY(-1px);
+  box-shadow: 0 0 0 6px rgba(255,255,255,.45);
+}
+
+/* variasi warna icon */
+.metric-blue{
+  background: linear-gradient(135deg,#4f46e5,#6366f1);
+}
+.metric-pink{
+  background: linear-gradient(135deg,#ec4899,#f97316);
+}
+.metric-green{
+  background: linear-gradient(135deg,#10b981,#22c55e);
+}
+.metric-purple{
+  background: linear-gradient(135deg,#8b5cf6,#6366f1);
+}
+
+/* text */
+.metric-text{ min-width: 0; }
+.metric-label{
+  font-size: .78rem;
+  color: #6b7280;
+}
+.metric-value{
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.05;
+  letter-spacing: .02em;
+  transition: color .18s ease-out;
+}
+.metric-sub{
+  font-size: .7rem;
+  color: #9ca3af;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+/* badge kecil di kanan atas */
+.metric-badge{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .05rem .55rem;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+/* variasi warna badge */
+.metric-badge-neutral{
+  background: #f3f4f6;
+  color: #4b5563;
+  border-color: #e5e7eb;
+}
+.metric-badge-soft{
+  background: #eef2ff;
+  color: #4f46e5;
+  border-color: #e0e7ff;
+}
+.metric-badge-success{
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+.metric-badge-danger{
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+/* hover: angka sedikit ditebalkan warnanya */
+.metric-card:hover .metric-value{
+  color: #111827;
+}
+
+/* animasi masuk berurutan (stagger) */
+.metric-row .metric-card{
+  opacity: 0;
+  transform: translateY(6px);
+  animation: metric-fade-in .35s ease-out forwards;
+}
+.metric-row > .col-12:nth-child(1) .metric-card{ animation-delay: .02s; }
+.metric-row > .col-12:nth-child(2) .metric-card{ animation-delay: .08s; }
+.metric-row > .col-12:nth-child(3) .metric-card{ animation-delay: .14s; }
+.metric-row > .col-12:nth-child(4) .metric-card{ animation-delay: .20s; }
+
+@keyframes metric-fade-in{
+  to{
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* kalau user matikan animasi di OS */
+@media (prefers-reduced-motion: reduce){
+  .metric-card,
+  .metric-card::before,
+  .metric-icon{
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}
