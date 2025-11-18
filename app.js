@@ -233,46 +233,7 @@
   }
 
   /* -------------------- Sidebar + Router -------------------- */
-  (function navHandler() {
-    function toggleSB() { document.body.classList.toggle("sb-open"); }
-    function closeSB() { document.body.classList.remove("sb-open"); }
-
-    document.addEventListener("click", (e) => {
-      const trg = e.target.closest("[data-burger], .btn-burger, #burger, #btn-menu");
-      if (trg) { e.preventDefault(); toggleSB(); }
-      const isBackdrop = e.target.id === "sb-backdrop" || e.target.closest?.("#sb-backdrop");
-      if (isBackdrop) closeSB();
-    });
-
-    document.addEventListener("touchend", (e) => {
-      const trg = e.target.closest("[data-burger], .btn-burger, #burger, #btn-menu");
-      if (trg) { e.preventDefault(); e.stopPropagation(); toggleSB(); }
-    }, { passive: false });
-
-    document.addEventListener("click", (e) => {
-      const a = e.target.closest("aside nav a[data-view]");
-      if (!a) return; e.preventDefault();
-
-      $$("aside nav a").forEach(n => n.classList.remove("active"));
-      a.classList.add("active");
-
-      $$("main section").forEach(s => { s.classList.add("d-none"); s.classList.remove("active"); });
-      const id = a.getAttribute("data-view");
-      const sec = document.getElementById(id);
-      if (sec) { sec.classList.remove("d-none"); sec.classList.add("active"); }
-
-      const h = $("#page-title"); if (h) h.textContent = a.textContent.trim();
-
-      closeSB();
-
-           if (id === "view-items") renderItems();
-      if (id === "view-users") renderUsers();
-      if (id === "view-history") renderHistory();
-      if (id === "view-shelf") { renderShelfTable(); }
-      // 棚卸一覧：リスト + 集計は loadTanaList の dalam
-      if (id === "view-shelf-list") { loadTanaList(); }
-    });
-  })();
+ 
 // --- Helper: ambil array baris dari berbagai bentuk respons API
 function pickRows(raw) {
   if (Array.isArray(raw)) return raw;
@@ -2768,14 +2729,24 @@ $("#tana-exp-year")?.addEventListener("click", (e)=> {
   }
 
   // --- Expose core helpers for global preview block ---
+   // --- Expose core helpers for global preview block ---
   window.__INV_APP__ = window.__INV_APP__ || {};
   Object.assign(window.__INV_APP__, {
     fmt,
     api,
     generateQrDataUrl,
     makeItemLabelDataURL,
-    openEditItem
+    openEditItem,
+
+    // ⬇ biar bisa dipanggil dari initSidebar (global)
+    renderDashboard,
+    renderItems,
+    renderUsers,
+    renderHistory,
+    renderShelfTable,
+    loadTanaList
   });
+
 function keepBackendWarm(){
   if (!CONFIG?.FEATURES?.HEALTH_PING) return;
   const ms = Number(CONFIG.HEALTH_PING_MS || 15000);
@@ -3381,4 +3352,141 @@ function weatherCodeToJa(code) {
 document.addEventListener('DOMContentLoaded', () => {
   updateTodayBox();
   updateWeatherBox();
+});
+// ===============================
+// Sidebar + View Switch ala app
+// ===============================
+// ===============================
+// Sidebar + View Switch ala app
+// ===============================
+function initSidebar() {
+  const body      = document.body;
+  const sidebar   = document.getElementById('sb');
+  const backdrop  = document.getElementById('sb-backdrop');
+  const burgerBtn = document.querySelectorAll('[data-burger]');
+  const links     = sidebar ? sidebar.querySelectorAll('a[data-view]') : [];
+  const pageTitle = document.getElementById('page-title');
+
+  // akses helper / render dari IIFE utama
+  const app = window.__INV_APP__ || {};
+
+  if (!sidebar) return;
+
+  const mqDesktop = window.matchMedia('(min-width: 992px)');
+
+  const openSidebar = () => {
+    if (!mqDesktop.matches) body.classList.add('sb-open');
+  };
+  const closeSidebar = () => {
+    body.classList.remove('sb-open');
+  };
+  const toggleSidebar = () => {
+    if (mqDesktop.matches) return; // desktop: sidebar selalu tampil
+    body.classList.toggle('sb-open');
+  };
+
+  // Burger (icon kiri atas + tombol "メニュー" di HP)
+  burgerBtn.forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      toggleSidebar();
+    });
+  });
+
+  // Backdrop klik untuk tutup
+  if (backdrop) {
+    backdrop.addEventListener('click', () => {
+      closeSidebar();
+    });
+  }
+
+  // ESC juga nutup di mobile
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') {
+      closeSidebar();
+    }
+  });
+
+  // Kalau resize ke desktop, pastikan class sb-open dibersihkan
+  mqDesktop.addEventListener('change', (e) => {
+    if (e.matches) {
+      body.classList.remove('sb-open');
+    }
+  });
+
+  // Fungsi ganti view
+  function activateViewById(viewId, linkEl) {
+    if (!viewId) return;
+
+    // Nav: set active
+    links.forEach(a => a.classList.remove('active'));
+    if (linkEl) linkEl.classList.add('active');
+
+    // Section: show/hide
+    document.querySelectorAll('main section[id^="view-"]').forEach(sec => {
+      if (sec.id === viewId) {
+        sec.classList.remove('d-none');
+        sec.classList.add('active');
+      } else {
+        sec.classList.add('d-none');
+        sec.classList.remove('active');
+      }
+    });
+
+    // Judul halaman = text di sidebar
+    if (pageTitle && linkEl) {
+      pageTitle.textContent = linkEl.textContent.trim();
+    }
+
+    // Panggil renderer per view (kalau ada)
+    switch (viewId) {
+      case 'view-dashboard':
+        app.renderDashboard && app.renderDashboard();
+        break;
+      case 'view-items':
+        app.renderItems && app.renderItems();
+        break;
+      case 'view-users':
+        app.renderUsers && app.renderUsers();
+        break;
+      case 'view-history':
+        app.renderHistory && app.renderHistory();
+        break;
+      case 'view-shelf':
+        app.renderShelfTable && app.renderShelfTable();
+        break;
+      case 'view-shelf-list':
+        app.loadTanaList && app.loadTanaList();
+        break;
+    }
+
+    // Tutup sidebar setelah pilih menu (di HP)
+    if (!mqDesktop.matches) {
+      closeSidebar();
+    }
+
+    // Scroll ke atas dikit biar rapi
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Klik menu sidebar
+  links.forEach(link => {
+    link.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const viewId = link.getAttribute('data-view');
+      activateViewById(viewId, link);
+    });
+  });
+
+  // Inisialisasi awal: pakai link yang sudah .active di HTML
+  const current = sidebar.querySelector('a[data-view].active') || links[0];
+  if (current) {
+    const firstView = current.getAttribute('data-view');
+    activateViewById(firstView, current);
+  }
+}
+
+// Listener global (boleh tetap seperti ini)
+document.addEventListener('DOMContentLoaded', () => {
+  initSidebar();
 });
