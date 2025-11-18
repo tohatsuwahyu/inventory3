@@ -260,48 +260,72 @@ function setTextSafe(selector, value) {
   el.textContent = value;
 }
 
-   /* -------------------- Dashboard -------------------- */
+  /* -------------------- Dashboard -------------------- */
   let chartLine = null, chartPie = null;
   async function renderDashboard() {
     const who = getCurrentUser();
-    if (who) $("#who").textContent = `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`;
+    if (who) {
+      setTextSafe("#who", `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`);
+    }
 
     try {
-     const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
-       api("items", { method: "GET", silent: true }).catch(() => []),
-        api("users", { method: "GET", silent: true }).catch(() => []),
-         api("statsMonthlySeries", { method: "GET", silent: true }).catch(() => []),
-        api("history", { method: "GET", silent: true }).catch(() => [])
+      const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
+        api("items",             { method: "GET", silent: true }).catch(() => []),
+        api("users",             { method: "GET", silent: true }).catch(() => []),
+        api("statsMonthlySeries",{ method: "GET", silent: true }).catch(() => []),
+        api("history",           { method: "GET", silent: true }).catch(() => [])
       ]);
 
-      const items   = Array.isArray(itemsRaw) ? itemsRaw : [];
-      const users   = Array.isArray(usersRaw) ? usersRaw : [];
-      const series  = Array.isArray(seriesRaw) ? seriesRaw : [];
-     const history = pickRows(historyRaw);
+      // ==== NORMALISASI RESPON PERSIS SEPERTI renderItems() ====
+      const norm = (raw, key) => {
+        if (Array.isArray(raw)) return raw;
+        if (Array.isArray(raw?.data))  return raw.data;
+        if (key && Array.isArray(raw?.[key])) return raw[key];
+        const rows = pickRows(raw);
+        return Array.isArray(rows) ? rows : [];
+      };
 
-      // metric
-      $("#metric-total-items").textContent = items.length;
-      const low = items.filter(it => Number(it.stock || 0) <= Number(it.min || 0)).length;
-      $("#metric-low-stock").textContent = low;
-      $("#metric-users").textContent = users.length;
+      const items   = norm(itemsRaw);        // pakai aturan yg sama dg renderItems
+      const users   = norm(usersRaw, "users");
+      const series  = norm(seriesRaw, "series");
+      const history = norm(historyRaw, "history");
 
-      // 直近30日 txn
+      // isi cache kalau kosong
+      if (items.length && !_ITEMS_CACHE.length) {
+        _ITEMS_CACHE = items.slice();
+      }
+
+      // ==== METRIK KARTU ATAS ====
+      const totalItems = items.length;
+
+      let low = 0;
+      for (const it of items) {
+        const stock = Number(it.stock || 0);
+        const min   = Number(it.min   || 0);
+        if (stock <= min) low++;
+      }
+
+      const userCount = users.length;
+
+      setTextSafe("#metric-total-items", fmt(totalItems));
+      setTextSafe("#metric-low-stock",   fmt(low));
+      setTextSafe("#metric-users",       fmt(userCount));
+
+      // ==== 直近30日 取引件数 ====
       const now   = new Date();
       const limit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       let count30 = 0;
       for (const h of history) {
-        const raw = h.timestamp || h.date || "";
+        const raw = h.timestamp || h.date || h.datetime || "";
         if (!raw) continue;
-        let dt;
-        if (raw instanceof Date) dt = raw;
-        else dt = new Date(String(raw).replace(" ", "T"));
+        let dt = raw instanceof Date ? raw : new Date(String(raw).replace(" ", "T"));
         if (isNaN(dt)) continue;
         if (dt >= limit && dt <= now) count30++;
       }
       const elTxn = $("#metric-txn");
       if (elTxn) elTxn.textContent = count30;
 
-      // line
+      // ==== LINE CHART ====
       const ctx1 = $("#chart-monthly");
       if (ctx1 && window.Chart) {
         chartLine?.destroy();
@@ -318,7 +342,7 @@ function setTextSafe(selector, value) {
         });
       }
 
-      // pie
+      // ==== PIE CHART ====
       const ctx2 = $("#chart-pie");
       if (ctx2 && window.Chart) {
         chartPie?.destroy();
@@ -332,32 +356,26 @@ function setTextSafe(selector, value) {
           options: { responsive: true, maintainAspectRatio: false }
         });
       }
-      // === 当月 入出庫ランキング（TOP 20） ==========================
+
+      // ==== 当月 入出庫ランキング（TOP20） ==== (bagian ini sama seperti sebelumnya)
       const rankTbody = $("#tbl-rank-month");
       if (rankTbody) {
         const now   = new Date();
         const year  = now.getFullYear();
         const month = now.getMonth(); // 0-based
 
-        // label bulan di header
         const labelEl = $("#rank-month-label");
         if (labelEl) {
           labelEl.textContent = `${year}年${month + 1}月`;
         }
 
         const agg = new Map();
-
-        // history: object, bukan array biasa (lihat renderHistory)
         for (const h of history || []) {
           const rawDate = h.timestamp || h.date || h.datetime || "";
           if (!rawDate) continue;
 
-          let dt;
-          if (rawDate instanceof Date) dt = rawDate;
-          else dt = new Date(String(rawDate).replace(" ", "T"));
+          let dt = rawDate instanceof Date ? rawDate : new Date(String(rawDate).replace(" ", "T"));
           if (!dt || isNaN(dt)) continue;
-
-          // hanya data bulan & tahun sekarang
           if (dt.getFullYear() !== year || dt.getMonth() !== month) continue;
 
           const code = String(h.code || "").trim();
@@ -366,10 +384,8 @@ function setTextSafe(selector, value) {
           if (!code && !name) continue;
           if (!qty) continue;
 
-          // gabungkan per kode+nama
           const key = `${code}||${name}`;
           const cur = agg.get(key) || { code, name, total: 0 };
-          // IN dan OUT sama-sama dihitung sebagai pergerakan
           cur.total += Math.abs(qty);
           agg.set(key, cur);
         }
@@ -377,7 +393,7 @@ function setTextSafe(selector, value) {
         const rows = Array.from(agg.values())
           .filter(r => r.total > 0)
           .sort((a, b) => b.total - a.total)
-          .slice(0, 20); // TOP 20
+          .slice(0, 20);
 
         if (!rows.length) {
           rankTbody.innerHTML = `
@@ -421,9 +437,8 @@ function setTextSafe(selector, value) {
           .concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(",")))
           .join("\n");
         downloadCSV_JP("月次INOUT.csv", csv);
-              
-
       }, { once: true });
+
     } catch (e) {
       console.error("renderDashboard()", e);
       toast("ダッシュボードの読み込みに失敗しました。");
