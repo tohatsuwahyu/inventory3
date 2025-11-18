@@ -107,25 +107,67 @@
             </div>
           </div>
 
-          <!-- Metrik -->
-          <div class="row g-3 mb-3">
-            <div class="col-md-3"><div class="card p-3">
-              <div class="metric-head"><span class="ic3d ic-blue"><i class="bi bi-boxes"></i></span><span>アイテム数</span></div>
-              <div id="metric-total-items" class="metric-value text-primary">0</div>
-            </div></div>
-            <div class="col-md-3"><div class="card p-3">
-              <div class="metric-head"><span class="ic3d ic-red"><i class="bi bi-graph-down-arrow"></i></span><span>最小在庫以下</span></div>
-              <div id="metric-low-stock" class="metric-value text-danger">0</div>
-            </div></div>
-            <div class="col-md-3"><div class="card p-3">
-              <div class="metric-head"><span class="ic3d ic-green"><i class="bi bi-people"></i></span><span>ユーザー</span></div>
-              <div id="metric-users" class="metric-value text-success">0</div>
-            </div></div>
-            <div class="col-md-3"><div class="card p-3">
-              <div class="metric-head"><span class="ic3d ic-violet"><i class="bi bi-arrow-left-right"></i></span><span>直近30日の取引</span></div>
-              <div id="metric-txn" class="metric-value" style="color:#6366f1">0</div>
-            </div></div>
-          </div>
+         <!-- ===== Dashboard metrics row (4 cards) ===== -->
+<div class="row g-3 metric-row">
+
+  <!-- アイテム数 -->
+  <div class="col-12 col-md-3">
+    <div class="metric-card">
+      <div class="metric-icon metric-blue">
+        <i class="bi bi-box-seam"></i>
+      </div>
+      <div class="metric-text">
+        <div class="metric-label">アイテム数</div>
+        <div class="metric-value" id="metric-total-items">0</div>
+        <div class="metric-sub">登録されている商品数</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 最小在庫以下 -->
+  <div class="col-12 col-md-3">
+    <div class="metric-card">
+      <div class="metric-icon metric-pink">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+      </div>
+      <div class="metric-text">
+        <div class="metric-label">最小在庫以下</div>
+        <div class="metric-value" id="metric-low-stock">0</div>
+        <div class="metric-sub">補充が必要なアイテム</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユーザー -->
+  <div class="col-12 col-md-3">
+    <div class="metric-card">
+      <div class="metric-icon metric-green">
+        <i class="bi bi-people-fill"></i>
+      </div>
+      <div class="metric-text">
+        <div class="metric-label">ユーザー</div>
+        <div class="metric-value" id="metric-users">0</div>
+        <div class="metric-sub">登録ユーザー数</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 直近30日の取引 -->
+  <div class="col-12 col-md-3">
+    <div class="metric-card">
+      <div class="metric-icon metric-purple">
+        <i class="bi bi-arrow-repeat"></i>
+      </div>
+      <div class="metric-text">
+        <div class="metric-label">直近30日の取引</div>
+        <div class="metric-value" id="metric-txn">0</div>
+        <div class="metric-sub">入出庫の件数</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<!-- ===== /Dashboard metrics row ===== -->
 
           <!-- Chart -->
           <div class="row g-3">
