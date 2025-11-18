@@ -260,33 +260,43 @@ function setTextSafe(selector, value) {
   el.textContent = value;
 }
 
-  /* -------------------- Dashboard -------------------- */
+   /* -------------------- Dashboard -------------------- */
   let chartLine = null, chartPie = null;
   async function renderDashboard() {
-  const who = getCurrentUser();
-  if (who) {
-    setTextSafe("#who", `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`);
-  }
-
+    const who = getCurrentUser();
+    if (who) {
+      setTextSafe("#who", `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`);
+    }
 
     try {
-     const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
-  api("items", { method: "GET", silent: true }).catch(() => []),
-  api("users", { method: "GET", silent: true }).catch(() => []),
-  api("statsMonthlySeries", { method: "GET", silent: true }).catch(() => []),
-  api("history", { method: "GET", silent: true }).catch(() => [])
-]);
+      const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
+        api("items",            { method: "GET", silent: true }).catch(() => []),
+        api("users",            { method: "GET", silent: true }).catch(() => []),
+        api("statsMonthlySeries",{ method: "GET", silent: true }).catch(() => []),
+        api("history",          { method: "GET", silent: true }).catch(() => [])
+      ]);
 
-const items   = pickRows(itemsRaw);
-const users   = pickRows(usersRaw);
-const series  = pickRows(seriesRaw);
-const history = pickRows(historyRaw);
+      const items   = pickRows(itemsRaw);
+      const users   = pickRows(usersRaw);
+      const series  = pickRows(seriesRaw);
+      const history = pickRows(historyRaw);
 
+      // >>>>>>>>>>>  TAMBAHAN INI YANG KEMARIN HILANG  <<<<<<<<<<
+      const totalItems = items.length;
+
+      let low = 0;
+      for (const it of items) {
+        const stock = Number(it.stock || 0);
+        const min   = Number(it.min   || 0);
+        if (stock <= min) low++;
+      }
+
+      const userCount = users.length;
+      // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
       setTextSafe("#metric-total-items", fmt(totalItems));
       setTextSafe("#metric-low-stock",   fmt(low));
       setTextSafe("#metric-users",       fmt(userCount));
-
 
       // 直近30日 txn
       const now   = new Date();
@@ -304,7 +314,7 @@ const history = pickRows(historyRaw);
       const elTxn = $("#metric-txn");
       if (elTxn) elTxn.textContent = count30;
 
-      // line
+      // line chart
       const ctx1 = $("#chart-monthly");
       if (ctx1 && window.Chart) {
         chartLine?.destroy();
@@ -321,7 +331,7 @@ const history = pickRows(historyRaw);
         });
       }
 
-      // pie
+      // pie chart
       const ctx2 = $("#chart-pie");
       if (ctx2 && window.Chart) {
         chartPie?.destroy();
@@ -335,22 +345,21 @@ const history = pickRows(historyRaw);
           options: { responsive: true, maintainAspectRatio: false }
         });
       }
+
       // === 当月 入出庫ランキング（TOP 20） ==========================
+      // (bagian ranking kamu tadi tetap sama, tidak diubah)
       const rankTbody = $("#tbl-rank-month");
       if (rankTbody) {
         const now   = new Date();
         const year  = now.getFullYear();
         const month = now.getMonth(); // 0-based
 
-        // label bulan di header
         const labelEl = $("#rank-month-label");
         if (labelEl) {
           labelEl.textContent = `${year}年${month + 1}月`;
         }
 
         const agg = new Map();
-
-        // history: object, bukan array biasa (lihat renderHistory)
         for (const h of history || []) {
           const rawDate = h.timestamp || h.date || h.datetime || "";
           if (!rawDate) continue;
@@ -360,7 +369,6 @@ const history = pickRows(historyRaw);
           else dt = new Date(String(rawDate).replace(" ", "T"));
           if (!dt || isNaN(dt)) continue;
 
-          // hanya data bulan & tahun sekarang
           if (dt.getFullYear() !== year || dt.getMonth() !== month) continue;
 
           const code = String(h.code || "").trim();
@@ -369,10 +377,8 @@ const history = pickRows(historyRaw);
           if (!code && !name) continue;
           if (!qty) continue;
 
-          // gabungkan per kode+nama
           const key = `${code}||${name}`;
           const cur = agg.get(key) || { code, name, total: 0 };
-          // IN dan OUT sama-sama dihitung sebagai pergerakan
           cur.total += Math.abs(qty);
           agg.set(key, cur);
         }
@@ -380,7 +386,7 @@ const history = pickRows(historyRaw);
         const rows = Array.from(agg.values())
           .filter(r => r.total > 0)
           .sort((a, b) => b.total - a.total)
-          .slice(0, 20); // TOP 20
+          .slice(0, 20);
 
         if (!rows.length) {
           rankTbody.innerHTML = `
@@ -424,14 +430,14 @@ const history = pickRows(historyRaw);
           .concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(",")))
           .join("\n");
         downloadCSV_JP("月次INOUT.csv", csv);
-              
-
       }, { once: true });
+
     } catch (e) {
       console.error("renderDashboard()", e);
       toast("ダッシュボードの読み込みに失敗しました。");
     }
   }
+
 
   // --- GANTI fungsi lama updateWelcomeBanner ---
   function updateWelcomeBanner() {
