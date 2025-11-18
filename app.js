@@ -3306,3 +3306,66 @@ function setupTopScrollbar(){
   // helper publik untuk dipanggil setelah render page
   window.__resyncTopScroll = syncSize;
 }
+// === TANGGAL + HARI (JP) ===
+function updateTodayBox() {
+  const el = document.getElementById('today-text');
+  if (!el) return;
+
+  const now = new Date();
+  const days = ['日','月','火','水','木','金','土'];
+
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const w = days[now.getDay()];
+
+  el.textContent = `${y}/${m}/${d}（${w}）`;
+}
+
+// === CUACA (contoh: Tokyo, Open-Meteo, tanpa API key) ===
+async function updateWeatherBox() {
+  const el = document.getElementById('weather-text');
+  if (!el) return;
+
+  try {
+    // Koordinat Tokyo – ganti kalau mau kota lain
+    const url =
+      'https://api.open-meteo.com/v1/forecast' +
+      '?latitude=35.6895&longitude=139.6917' +
+      '&current_weather=true&timezone=Asia%2FTokyo';
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const data = await res.json();
+    const cw = data.current_weather;
+
+    const temp = Math.round(cw.temperature); // ℃
+    const code = cw.weathercode;
+
+    const label = weatherCodeToJa(code);
+    el.textContent = `${label} / ${temp}℃`;
+  } catch (err) {
+    console.error('Weather error', err);
+    el.textContent = '天気情報取得エラー';
+  }
+}
+
+// mapping sederhana weather code → JP
+function weatherCodeToJa(code) {
+  // kode Open-Meteo (disederhanakan)
+  if (code === 0) return '快晴';
+  if (code === 1 || code === 2) return '晴れ';
+  if (code === 3) return 'くもり';
+  if (code >= 51 && code <= 67) return '雨（霧雨）';
+  if (code >= 71 && code <= 77) return '雪';
+  if (code >= 80 && code <= 82) return '雨';
+  if (code >= 95) return '雷雨';
+  return '天気';
+}
+
+// Jalankan setelah DOM siap
+document.addEventListener('DOMContentLoaded', () => {
+  updateTodayBox();
+  updateWeatherBox();
+});
