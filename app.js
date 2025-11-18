@@ -269,16 +269,30 @@ function setTextSafe(selector, value) {
 
     try {
      const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
-       api("items", { method: "GET", silent: true }).catch(() => []),
-        api("users", { method: "GET", silent: true }).catch(() => []),
-         api("statsMonthlySeries", { method: "GET", silent: true }).catch(() => []),
-        api("history", { method: "GET", silent: true }).catch(() => [])
-      ]);
+  api("items", { method: "GET", silent: true }).catch(() => []),
+  api("users", { method: "GET", silent: true }).catch(() => []),
+  api("statsMonthlySeries", { method: "GET", silent: true }).catch(() => []),
+  api("history", { method: "GET", silent: true }).catch(() => [])
+]);
 
-      const items   = Array.isArray(itemsRaw) ? itemsRaw : [];
-      const users   = Array.isArray(usersRaw) ? usersRaw : [];
-      const series  = Array.isArray(seriesRaw) ? seriesRaw : [];
-     const history = pickRows(historyRaw);
+// fleksibel: bisa array langsung, atau {data:[]}, {items:[]}, {rows:[]}, dll
+const items = Array.isArray(itemsRaw) ? itemsRaw
+  : Array.isArray(itemsRaw?.data)      ? itemsRaw.data
+  : Array.isArray(itemsRaw?.items)     ? itemsRaw.items
+  : pickRows(itemsRaw);   // fallback umum
+
+const users = Array.isArray(usersRaw) ? usersRaw
+  : Array.isArray(usersRaw?.data)      ? usersRaw.data
+  : Array.isArray(usersRaw?.users)     ? usersRaw.users
+  : pickRows(usersRaw);
+
+const series = Array.isArray(seriesRaw) ? seriesRaw
+  : Array.isArray(seriesRaw?.data)        ? seriesRaw.data
+  : Array.isArray(seriesRaw?.series)      ? seriesRaw.series
+  : pickRows(seriesRaw);
+
+const history = pickRows(historyRaw);
+
 
       // metric
             // metric
