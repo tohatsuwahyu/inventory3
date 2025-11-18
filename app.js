@@ -260,7 +260,7 @@ function setTextSafe(selector, value) {
   el.textContent = value;
 }
 
-   /* -------------------- Dashboard -------------------- */
+    /* -------------------- Dashboard -------------------- */
   let chartLine = null, chartPie = null;
   async function renderDashboard() {
     const who = getCurrentUser();
@@ -270,18 +270,32 @@ function setTextSafe(selector, value) {
 
     try {
       const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
-        api("items",            { method: "GET", silent: true }).catch(() => []),
-        api("users",            { method: "GET", silent: true }).catch(() => []),
+        api("items",             { method: "GET", silent: true }).catch(() => []),
+        api("users",             { method: "GET", silent: true }).catch(() => []),
         api("statsMonthlySeries",{ method: "GET", silent: true }).catch(() => []),
-        api("history",          { method: "GET", silent: true }).catch(() => [])
+        api("history",           { method: "GET", silent: true }).catch(() => [])
       ]);
 
-      const items   = pickRows(itemsRaw);
-      const users   = pickRows(usersRaw);
-      const series  = pickRows(seriesRaw);
-      const history = pickRows(historyRaw);
+      // ==== NORMALISASI RESPON PERSIS SEPERTI renderItems() ====
+      const norm = (raw, key) => {
+        if (Array.isArray(raw)) return raw;
+        if (Array.isArray(raw?.data))  return raw.data;
+        if (key && Array.isArray(raw?.[key])) return raw[key];
+        const rows = pickRows(raw);
+        return Array.isArray(rows) ? rows : [];
+      };
 
-      // >>>>>>>>>>>  TAMBAHAN INI YANG KEMARIN HILANG  <<<<<<<<<<
+      const items   = norm(itemsRaw);        // pakai aturan yg sama dg renderItems
+      const users   = norm(usersRaw, "users");
+      const series  = norm(seriesRaw, "series");
+      const history = norm(historyRaw, "history");
+
+      // isi cache kalau kosong
+      if (items.length && !_ITEMS_CACHE.length) {
+        _ITEMS_CACHE = items.slice();
+      }
+
+      // ==== METRIK KARTU ATAS ====
       const totalItems = items.length;
 
       let low = 0;
@@ -292,29 +306,26 @@ function setTextSafe(selector, value) {
       }
 
       const userCount = users.length;
-      // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
       setTextSafe("#metric-total-items", fmt(totalItems));
       setTextSafe("#metric-low-stock",   fmt(low));
       setTextSafe("#metric-users",       fmt(userCount));
 
-      // 直近30日 txn
+      // ==== 直近30日 取引件数 ====
       const now   = new Date();
       const limit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       let count30 = 0;
       for (const h of history) {
-        const raw = h.timestamp || h.date || "";
+        const raw = h.timestamp || h.date || h.datetime || "";
         if (!raw) continue;
-        let dt;
-        if (raw instanceof Date) dt = raw;
-        else dt = new Date(String(raw).replace(" ", "T"));
+        let dt = raw instanceof Date ? raw : new Date(String(raw).replace(" ", "T"));
         if (isNaN(dt)) continue;
         if (dt >= limit && dt <= now) count30++;
       }
       const elTxn = $("#metric-txn");
       if (elTxn) elTxn.textContent = count30;
 
-      // line chart
+      // ==== LINE CHART ====
       const ctx1 = $("#chart-monthly");
       if (ctx1 && window.Chart) {
         chartLine?.destroy();
@@ -331,7 +342,7 @@ function setTextSafe(selector, value) {
         });
       }
 
-      // pie chart
+      // ==== PIE CHART ====
       const ctx2 = $("#chart-pie");
       if (ctx2 && window.Chart) {
         chartPie?.destroy();
@@ -346,8 +357,7 @@ function setTextSafe(selector, value) {
         });
       }
 
-      // === 当月 入出庫ランキング（TOP 20） ==========================
-      // (bagian ranking kamu tadi tetap sama, tidak diubah)
+      // ==== 当月 入出庫ランキング（TOP20） ==== (bagian ini sama seperti sebelumnya)
       const rankTbody = $("#tbl-rank-month");
       if (rankTbody) {
         const now   = new Date();
@@ -364,11 +374,8 @@ function setTextSafe(selector, value) {
           const rawDate = h.timestamp || h.date || h.datetime || "";
           if (!rawDate) continue;
 
-          let dt;
-          if (rawDate instanceof Date) dt = rawDate;
-          else dt = new Date(String(rawDate).replace(" ", "T"));
+          let dt = rawDate instanceof Date ? rawDate : new Date(String(rawDate).replace(" ", "T"));
           if (!dt || isNaN(dt)) continue;
-
           if (dt.getFullYear() !== year || dt.getMonth() !== month) continue;
 
           const code = String(h.code || "").trim();
