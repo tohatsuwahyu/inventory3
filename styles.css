@@ -967,3 +967,60 @@ td[data-editable]{ cursor:text; }
     #chart-pie{
       padding-top:4px;
     }
+/* Dashboard metric cards */
+.metric-row{
+  margin-bottom: 1.25rem;
+}
+
+.metric-card{
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  box-shadow: 0 16px 40px rgba(15,23,42,.06);
+}
+
+.metric-icon{
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+/* variasi warna icon */
+.metric-icon.metric-blue{
+  background: linear-gradient(135deg,#4f46e5,#6366f1);
+}
+.metric-icon.metric-pink{
+  background: linear-gradient(135deg,#ec4899,#f97316);
+}
+.metric-icon.metric-green{
+  background: linear-gradient(135deg,#10b981,#22c55e);
+}
+.metric-icon.metric-purple{
+  background: linear-gradient(135deg,#8b5cf6,#6366f1);
+}
+
+.metric-label{
+  font-size: .78rem;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+
+.metric-value{
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.metric-sub{
+  font-size: .7rem;
+  color: #9ca3af;
+}
