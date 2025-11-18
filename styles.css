@@ -773,3 +773,197 @@ td[data-editable]{ cursor:text; }
     gap: 6px 10px;
   }
 }
+    /* ==== Tema pastel ala contoh ==== */
+    :root{
+      --dash-bg:        #e6f0ff;
+      --dash-bg-soft:   #f7f8ff;
+      --dash-primary:   #5a60f5;
+      --dash-primary-d: #4347d9;
+      --dash-accent:    #ff8a5c;
+      --dash-accent-soft:#ffe2d1;
+      --dash-card:      #ffffff;
+      --dash-text-main: #1f2937;
+      --dash-text-muted:#6b7280;
+      --dash-shadow:    0 14px 30px rgba(15,23,42,.08);
+      --dash-radius:    22px;
+    }
+
+    body{
+      background:linear-gradient(135deg,#dfe9ff,#f7f8ff);
+      color:var(--dash-text-main);
+    }
+
+    .layout{
+      background:transparent;
+      padding:16px;
+      gap:18px;
+    }
+
+    main{
+      border-radius:30px;
+      background:transparent;
+    }
+
+    .content{
+      padding:18px 20px 24px;
+    }
+
+    /* ==== Sidebar kiri jadi blok ungu ==== */
+    aside{
+      background:var(--dash-primary);
+      border-radius:24px;
+      margin:8px 0 8px 4px;
+      padding-top:12px;
+      box-shadow:0 18px 40px rgba(58,63,180,.45);
+    }
+    aside .nav-link,
+    aside nav a{
+      color:#e5e9ff !important;
+      border-radius:16px;
+      margin:4px 10px;
+      padding:.65rem .8rem;
+      display:flex;
+      align-items:center;
+      gap:.55rem;
+    }
+    aside .nav-link i,
+    aside nav a i{
+      font-size:1.05rem;
+    }
+    aside nav a.active,
+    aside .nav-link.active{
+      background:#ffffff;
+      color:var(--dash-primary) !important;
+      box-shadow:0 10px 22px rgba(15,23,42,.25);
+    }
+    aside nav a:hover{
+      background:rgba(255,255,255,.12);
+      text-decoration:none;
+    }
+
+    /* ==== Header & welcome bar ala kartu ==== */
+    header.appbar{
+      background:transparent;
+      border-bottom:none;
+      padding:4px 6px 10px;
+    }
+    .welcome{
+      background:var(--dash-card);
+      border-radius:var(--dash-radius);
+      border:none;
+      box-shadow:var(--dash-shadow);
+      padding:.8rem 1rem;
+    }
+    .welcome .avatar{
+      background:linear-gradient(135deg,#ff8a5c,#ffb36b);
+    }
+
+    /* ==== Card & panel utama ==== */
+    .card{
+      border:none;
+      border-radius:var(--dash-radius);
+      background:var(--dash-card);
+      box-shadow:var(--dash-shadow);
+    }
+    .card-header{
+      border-bottom:none;
+      background:transparent;
+      padding:.75rem 1rem .35rem;
+      font-weight:600;
+    }
+    .card-body{
+      padding:0.9rem 1rem 1rem;
+    }
+
+    /* Kartu metric di atas */
+    .metric-card{
+      border-radius:var(--dash-radius);
+      background:var(--dash-card);
+      box-shadow:var(--dash-shadow);
+      padding:0.9rem 1rem;
+    }
+    .metric-card .label{
+      font-size:.8rem;
+      color:var(--dash-text-muted);
+    }
+    .metric-card .value{
+      font-size:1.6rem;
+      font-weight:700;
+    }
+
+    /* ==== Tombol & badge biar nyambung ==== */
+    .btn-primary{
+      background:var(--dash-primary);
+      border-color:var(--dash-primary);
+      border-radius:999px;
+      font-weight:600;
+      padding:.4rem 1.1rem;
+    }
+    .btn-primary:hover{
+      background:var(--dash-primary-d);
+      border-color:var(--dash-primary-d);
+    }
+    .badge-soft{
+      border-radius:999px;
+      padding:.05rem .55rem;
+      background:rgba(90,96,245,.08);
+      color:var(--dash-primary);
+      font-weight:500;
+      font-size:.75rem;
+    }
+
+    /* ==== Table & toolbar (biar lembut) ==== */
+    .items-toolbar{
+      margin-bottom:10px;
+    }
+    .items-toolbar .btn{
+      border-radius:999px;
+    }
+
+    .table{
+      border-collapse:separate;
+      border-spacing:0 4px;
+      background:transparent;
+    }
+    .table thead th{
+      border-bottom:none;
+      color:var(--dash-text-muted);
+      font-size:.78rem;
+      text-transform:uppercase;
+      letter-spacing:.06em;
+      background:transparent;
+    }
+    .table tbody tr{
+      background:var(--dash-card);
+      box-shadow:0 6px 18px rgba(15,23,42,.06);
+    }
+    .table tbody tr td{
+      border-top:none;
+    }
+    .table tbody tr:first-child td:first-child{
+      border-top-left-radius:14px;
+      border-bottom-left-radius:14px;
+    }
+    .table tbody tr td:last-child{
+      border-top-right-radius:14px;
+      border-bottom-right-radius:14px;
+    }
+
+    /* Baris stok rendah dikasih highlight */
+    tr.row-low{
+      background:linear-gradient(90deg,#fff4f1,#ffe7e0);
+    }
+
+    /* ==== Chart container ==== */
+    .chart-card{
+      background:var(--dash-card);
+      border-radius:var(--dash-radius);
+      box-shadow:var(--dash-shadow);
+      padding:1rem 1.1rem;
+    }
+
+    /* Semu-semu gradient di area atas grafik */
+    #chart-monthly,
+    #chart-pie{
+      padding-top:4px;
+    }
