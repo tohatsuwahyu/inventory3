@@ -1798,7 +1798,7 @@ function openHistoryEditModal(h) {
     }
 
     // --- 下書き保存 / 読込 / クリア ---
-    $("#st-save")?.addEventListener("click", (e) => {
+       $("#st-save")?.addEventListener("click", (e) => {
       e.preventDefault();
       saveShelfDraft();
     });
@@ -1816,8 +1816,113 @@ function openHistoryEditModal(h) {
       clearShelfDraft();
     });
 
-    // NOTE: tombol #st-commit (確定) belum diubah — sesuaikan ke endpoint bila perlu
+    // ✅ 確定（在庫更新＆棚卸記録）
+    $("#st-commit")?.addEventListener("click", async (e) => {
+      e.preventDefault();
+
+      const who = getCurrentUser();
+      if (!who) {
+        toast("ログイン情報がありません。");
+        return;
+      }
+
+      const rows = [...ST.rows.values()];
+      if (!rows.length) {
+        toast("棚卸データがありません。");
+        return;
+      }
+
+      if (!confirm(`現在の棚卸 ${rows.length} 件を確定し、在庫を更新しますか？`)) {
+        return;
+      }
+
+      const btn = e.currentTarget;
+      if (btn.__busy) return;
+      btn.__busy = true;
+      btn.disabled = true;
+
+      try {
+        // pakai cache item untuk dapat unit / location / department dll.
+        if (!_ITEMS_CACHE.length) {
+          const listAll = await api("items", { method: "GET", silent: true });
+          _ITEMS_CACHE = Array.isArray(listAll) ? listAll : (listAll?.data || []);
+        }
+        const mapItems = new Map(_ITEMS_CACHE.map(it => [String(it.code), it]));
+
+        // tampilkan loading global biar user tahu sedang proses
+        setLoading(true, "棚卸を確定しています…");
+
+        for (const r of rows) {
+          const code = String(r.code || "").trim();
+          if (!code) continue;
+
+          const qtyFinal = Number(r.qty || 0);
+          const book     = Number(r.book || 0);
+          const diff     = qtyFinal - book;
+
+          const item = mapItems.get(code) || {};
+          const unit = item.unit || "pcs";
+          const location   = item.location   || "";
+          const department = r.department || item.department || "";
+
+          // 1) koreksi stok lewat log IN/OUT (履歴＋商品在庫を自動調整)
+          if (diff !== 0) {
+            const type = diff > 0 ? "IN" : "OUT";
+            const qtyAdj = Math.abs(diff);
+            await api("log", {
+              method: "POST",
+              silent: true,
+              body: {
+                userId  : who.id,
+                userName: who.name || "",
+                code,
+                qty     : qtyAdj,
+                unit,
+                type,
+                note    : "棚卸確定"
+              }
+            });
+          }
+
+          // 2) simpan hasil棚卸 keシート棚卸 (tanaSave)
+          await api("tanaSave", {
+            method: "POST",
+            silent: true,
+            body: {
+              code,
+              name      : r.name,
+              qty       : qtyFinal,
+              unit,
+              location,
+              department,
+              userId    : who.id,
+              note      : `book:${book} diff:${diff}`
+            }
+          });
+        }
+
+        toast("棚卸を確定しました。");
+
+        // bersihkan input dan draft lokal
+        ST.rows = new Map();
+        renderShelfTable();
+        clearShelfDraft();
+
+        // refresh tampilan lain
+        renderItems();      // 商品一覧 → stok terkoreksi
+        renderDashboard();  // kartu-kartu dashboard
+        loadTanaList();     // 棚卸一覧 → langsung muncul
+      } catch (err) {
+        console.error("st-commit error", err);
+        toast("棚卸の確定に失敗しました: " + (err?.message || err));
+      } finally {
+        setLoading(false);
+        btn.disabled = false;
+        btn.__busy = false;
+      }
+    });
   } // ⬅️ Penutup bindShelf()
+
 
   /* -------------------- Tanaoroshi List (棚卸一覧) -------------------- */
 
