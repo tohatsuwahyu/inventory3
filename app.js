@@ -427,8 +427,14 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
   }
 
   /* -------------------- Items -------------------- */
-  // ukuran tetap untuk tombol agar “操作” simetris
-  const ACT_GRID_STYLE = 'display:grid;grid-template-columns:repeat(5,28px);gap:6px;min-width:160px;justify-content:end;';
+  // ukuran tetap untuk tombol agar “操作” rapi & tidak terlalu lebar
+const ACT_GRID_STYLE =
+  'display:grid;' +
+  'grid-template-columns:repeat(3,28px);' +  // 3 tombol per baris
+  'grid-auto-rows:28px;' +                  // tinggi tiap baris
+  'gap:4px;' +                              // jarak antar tombol
+  'justify-content:end;' +
+  'min-width:120px;';                       // lebih ramping
 
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
@@ -475,11 +481,12 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
         '<td class="text-end">', fmt(min), '</td>',
         '<td>', dept, '</td>',
         '<td>', loc, '</td>',
-     '<td class="td-actions" style="text-align:right">',
-  '<div class="act-grid actions">',   // ✅ di dalam string
+     ''<td class="td-actions" style="text-align:right">',
+  '<div class="act-grid actions" style="', ACT_GRID_STYLE, '">', // pakai grid 2 baris
     actions,
   '</div>',
 '</td>',
+
 
   
       '</tr>'
@@ -521,7 +528,7 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
     if (tr.children.length) {
       const last = tr.children[tr.children.length - 1];
       last.textContent = "操作";
-      last.style.minWidth = "220px";
+      last.style.minWidth = "150px";
       last.style.textAlign = "right";
     }
   }
@@ -551,7 +558,7 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
   "100px",   // 最小
   "120px",   // 部門
   "120px",   // 置場 (boleh 100–140)
-  ""    // 操作
+  "150px"    // 操作
 ];
 
 
@@ -692,9 +699,10 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
     }
 
     try{
-      const th = tbody?.closest("table")?.querySelector("thead tr th:last-child");
-      if (th) th.style.minWidth = "220px";
-    }catch{}
+  const th = tbody?.closest("table")?.querySelector("thead tr th:last-child");
+  if (th) th.style.minWidth = "150px";
+} catch{}
+
 
     try { bindPreviewButtons(); } catch(e) {}
   }
