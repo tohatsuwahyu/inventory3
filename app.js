@@ -364,6 +364,88 @@ function pickRows(raw) {
           options: { responsive: true, maintainAspectRatio: false }
         });
       }
+      // === 当月 入出庫ランキング（TOP 20） ==========================
+      const rankTbody = $("#tbl-rank-month");
+      if (rankTbody) {
+        const now   = new Date();
+        const year  = now.getFullYear();
+        const month = now.getMonth(); // 0-based
+
+        // label bulan di header
+        const labelEl = $("#rank-month-label");
+        if (labelEl) {
+          labelEl.textContent = `${year}年${month + 1}月`;
+        }
+
+        const agg = new Map();
+
+        // history: object, bukan array biasa (lihat renderHistory)
+        for (const h of history || []) {
+          const rawDate = h.timestamp || h.date || h.datetime || "";
+          if (!rawDate) continue;
+
+          let dt;
+          if (rawDate instanceof Date) dt = rawDate;
+          else dt = new Date(String(rawDate).replace(" ", "T"));
+          if (!dt || isNaN(dt)) continue;
+
+          // hanya data bulan & tahun sekarang
+          if (dt.getFullYear() !== year || dt.getMonth() !== month) continue;
+
+          const code = String(h.code || "").trim();
+          const name = String(h.itemName || h.name || "").trim();
+          const qty  = Number(h.qty || h.quantity || 0) || 0;
+          if (!code && !name) continue;
+          if (!qty) continue;
+
+          // gabungkan per kode+nama
+          const key = `${code}||${name}`;
+          const cur = agg.get(key) || { code, name, total: 0 };
+          // IN dan OUT sama-sama dihitung sebagai pergerakan
+          cur.total += Math.abs(qty);
+          agg.set(key, cur);
+        }
+
+        const rows = Array.from(agg.values())
+          .filter(r => r.total > 0)
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 20); // TOP 20
+
+        if (!rows.length) {
+          rankTbody.innerHTML = `
+            <tr>
+              <td colspan="3" class="text-center text-muted py-3">
+                当月の入出庫データがありません
+              </td>
+            </tr>`;
+        } else {
+          rankTbody.innerHTML = rows.map((r, index) => {
+            const rank = index + 1;
+
+            let icon  = "bi-award";
+            let badge = "bg-light text-muted";
+            if (rank === 1) { icon = "bi-trophy-fill"; badge = "bg-warning text-dark"; }
+            else if (rank === 2) { icon = "bi-trophy-fill"; badge = "bg-secondary"; }
+            else if (rank === 3) { icon = "bi-trophy-fill"; badge = "bg-info"; }
+
+            return `
+              <tr>
+                <td class="text-center align-middle">
+                  <span class="badge ${badge}">
+                    <i class="bi ${icon} me-1"></i>${rank}
+                  </span>
+                </td>
+                <td class="align-middle">
+                  <div class="small text-muted">${escapeHtml(r.code || "")}</div>
+                  <div class="fw-semibold">${escapeHtml(r.name || "")}</div>
+                </td>
+                <td class="text-end align-middle">
+                  <span class="fw-semibold">${fmt(r.total)}</span>
+                </td>
+              </tr>`;
+          }).join("");
+        }
+      }
 
       $("#btn-export-mov")?.addEventListener("click", () => {
         const heads = ["月","IN","OUT"];
@@ -371,76 +453,7 @@ function pickRows(raw) {
           .concat(series.map(s => [s.month, s.in || 0, s.out || 0].join(",")))
           .join("\n");
         downloadCSV_JP("月次INOUT.csv", csv);
-              // === 当月 入出庫ランキング TOP20 ===
-      try {
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = now.getMonth(); // 0-based
-
-        const agg = new Map();
-
-        for (const h of history) {
-          const raw = h.timestamp || h.date || h.datetime || "";
-          if (!raw) continue;
-
-          let dt;
-          if (raw instanceof Date) dt = raw;
-          else dt = new Date(String(raw).replace(" ", "T"));
-          if (!dt || isNaN(dt)) continue;
-
-          // hanya bulan & tahun yang sama dengan sekarang
-          if (dt.getFullYear() !== y || dt.getMonth() !== m) continue;
-
-          const code = String(h.code || "").trim();
-          if (!code) continue;
-
-          const name = String(h.itemName || h.name || "").trim();
-          const qty  = Number(h.qty || h.quantity || 0) || 0;
-          const type = String(h.type || h.kind || "").toUpperCase();
-
-          if (!agg.has(code)) {
-            agg.set(code, { code, name, in: 0, out: 0 });
-          }
-          const rec = agg.get(code);
-          if (type === "OUT") rec.out += qty;
-          else rec.in += qty; // treat selain OUT sebagai IN
-        }
-
-        const rows = [...agg.values()]
-          .map(r => ({ ...r, total: r.in + r.out }))
-          .filter(r => r.total > 0)
-          .sort((a, b) => b.total - a.total) // terbesar → terkecil
-          .slice(0, 20);                     // TOP 20
-
-        const tbody = document.getElementById("tbl-top-mov");
-        if (tbody) {
-          if (!rows.length) {
-            tbody.innerHTML =
-              '<tr><td colspan="5" class="text-muted text-center py-2">データがありません</td></tr>';
-          } else {
-            tbody.innerHTML = rows.map((r, idx) => `
-              <tr>
-                <td class="text-center">${idx + 1}</td>
-                <td>
-                  <div class="small text-muted">${escapeHtml(r.code)}</div>
-                  <div>${escapeHtml(r.name || "")}</div>
-                </td>
-                <td class="text-end text-primary">${fmt(r.in)}</td>
-                <td class="text-end text-danger">${fmt(r.out)}</td>
-                <td class="text-end fw-semibold">${fmt(r.total)}</td>
-              </tr>
-            `).join("");
-          }
-        }
-
-        const lbl = document.getElementById("top-mov-month-label");
-        if (lbl) {
-          const ym = `${y}-${String(m + 1).padStart(2, "0")}`;
-          lbl.textContent = ym; // contoh: 2025-11
-        }
-      } catch (e) {
-        console.error("top movers render error", e);
-      }
+              
 
       }, { once: true });
     } catch (e) {
@@ -499,13 +512,15 @@ document.body.classList.toggle("is-admin", roleRaw === "admin");
 
   /* -------------------- Items -------------------- */
   // ukuran tetap untuk tombol agar “操作” rapi & tidak terlalu lebar
-const ACT_GRID_STYLE =
-  'display:grid;' 
-  'grid-template-columns:repeat(3,28px);'   // 3 tombol per baris
-  'grid-auto-rows:28px;'                  // tinggi tiap baris
-  'gap:4px;'                               // jarak antar tombol
-  'justify-content:end;' 
-  'min-width:140px;';                       // lebih ramping
+const ACT_GRID_STYLE = [
+  "display:grid;",
+  "grid-template-columns:repeat(3,28px);",   // 3 tombol per baris
+  "grid-auto-rows:28px;",                   // tinggi tiap baris
+  "gap:4px;",                               // jarak antar tombol
+  "justify-content:end;",
+  "min-width:140px;"                        // lebih ramping
+].join("");
+
 
   // alias agar tombol DL & bulk tidak error meski 62mm belum dibuat
   async function makeItemLabel62mmDataURL(item){ return await makeItemLabelDataURL(item); }
