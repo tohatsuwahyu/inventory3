@@ -291,12 +291,20 @@ function pickRows(raw) {
 
   return [];
 }
+function setTextSafe(selector, value) {
+  const el = document.querySelector(selector);
+  if (!el) return;          // kalau tidak ada, jangan bikin error
+  el.textContent = value;
+}
 
   /* -------------------- Dashboard -------------------- */
   let chartLine = null, chartPie = null;
   async function renderDashboard() {
-    const who = getCurrentUser();
-    if (who) $("#who").textContent = `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`;
+  const who = getCurrentUser();
+  if (who) {
+    setTextSafe("#who", `${who.name || who.id || "user"} (${who.id} | ${who.role || "user"})`);
+  }
+
 
     try {
      const [itemsRaw, usersRaw, seriesRaw, historyRaw] = await Promise.all([
@@ -312,10 +320,15 @@ function pickRows(raw) {
      const history = pickRows(historyRaw);
 
       // metric
-      $("#metric-total-items").textContent = items.length;
+            // metric
+      const totalItems = items.length;
       const low = items.filter(it => Number(it.stock || 0) <= Number(it.min || 0)).length;
-      $("#metric-low-stock").textContent = low;
-      $("#metric-users").textContent = users.length;
+      const userCount = users.length;
+
+      setTextSafe("#metric-total-items", fmt(totalItems));
+      setTextSafe("#metric-low-stock",   fmt(low));
+      setTextSafe("#metric-users",       fmt(userCount));
+
 
       // 直近30日 txn
       const now   = new Date();
