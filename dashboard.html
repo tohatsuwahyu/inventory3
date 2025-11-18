@@ -99,13 +99,33 @@
         <!-- ============ Dashboard ============ -->
         <section id="view-dashboard" class="active">
           <!-- welcome banner dikembalikan -->
-          <div class="welcome mb-3">
-            <div class="avatar">👋</div>
-            <div class="small">
-              ようこそ、<b id="wel-name">ユーザー</b> さん。
-              <span class="text-muted">端末<b>電源、電波</b> 確認しましょう</span>
-            </div>
-          </div>
+         <div class="welcome d-flex align-items-center justify-content-between mb-3">
+  <!-- KIRI: isi yang lama -->
+  <div class="d-flex align-items-center gap-2">
+    <div class="avatar">
+      <span>A</span>
+    </div>
+    <div class="small">
+      <div class="fw-semibold">ようこそ、Administrator（管理者）さん。</div>
+      <div class="text-muted">端末電源、電波 を確認しましょう。</div>
+    </div>
+  </div>
+
+  <!-- KANAN: Tanggal + Cuaca BARU -->
+  <div class="d-flex align-items-center gap-4 small dash-info">
+    <div class="text-end">
+      <div class="dash-info-label">本日</div>
+      <div id="today-text" class="dash-info-main">2025/11/18（火）</div>
+    </div>
+    <div class="text-end d-flex flex-column align-items-end">
+      <div class="dash-info-label">
+        <i class="bi bi-cloud-sun me-1"></i>天気
+      </div>
+      <div id="weather-text" class="dash-info-main">取得中…</div>
+    </div>
+  </div>
+</div>
+
 
          <!-- ===== Dashboard metrics row (4 cards) ===== -->
 <div class="row g-3 metric-row">
