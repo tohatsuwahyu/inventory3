@@ -1110,11 +1110,17 @@ td[data-editable]{ cursor:text; }
 
 /* Hormati user yang tidak suka animasi */
 @media (prefers-reduced-motion: reduce){
+  /* Animasi dimatikan, tapi kartu tetap kelihatan */
+  .metric-row .metric-card{
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+
   .metric-card,
   .metric-card::before,
   .metric-icon{
     transition: none !important;
-    animation: none !important;
     transform: none !important;
   }
 }
