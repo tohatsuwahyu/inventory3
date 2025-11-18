@@ -144,6 +144,36 @@
               </div>
             </div>
           </div>
+          <!-- 当月 入出庫ランキング -->
+<div class="row g-3 mt-3">
+  <div class="col-12 col-xl-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">当月の入出庫ランキング（TOP 20）</span>
+        <small class="text-muted" id="top-mov-month-label"></small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th style="width:56px">順位</th>
+                <th>コード / 品名</th>
+                <th class="text-end">IN</th>
+                <th class="text-end">OUT</th>
+                <th class="text-end">合計</th>
+              </tr>
+            </thead>
+            <tbody id="tbl-top-mov">
+              <!-- JS akan isi -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
         </section>
 
         <!-- ============ 入出庫 ============ -->
