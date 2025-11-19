@@ -339,6 +339,46 @@ setTextSafe("#metric-trx", fmt(count30));   // isi angka besar di kartu
 const days = 30;
 const avg  = days ? (count30 / days) : 0;
 setTextSafe("#metric-trx-badge", `平均 ${avg.toFixed(1)}件/日`);  // isi badge kecil
+
+            // ==== CHART SUBTITLES (リングサマリ) ====
+      // Line chart → pakai data bulan terbaru
+      const latest = series.length ? series[series.length - 1] : null;
+      if (latest) {
+        const inLast  = Number(latest.in  || 0);
+        const outLast = Number(latest.out || 0);
+        const label   = latest.month || "";
+        setTextSafe(
+          "#chart-monthly-sub",
+          `${label}：IN ${fmt(inLast)}件 ／ OUT ${fmt(outLast)}件`
+        );
+      } else {
+        setTextSafe("#chart-monthly-sub", "データがありません");
+      }
+
+      // Pie chart → juga pakai bulan terbaru (当月比率)
+      const lastForPie = series.length ? series[series.length - 1] : null;
+      if (lastForPie) {
+        const inCur  = Number(lastForPie.in  || 0);
+        const outCur = Number(lastForPie.out || 0);
+        const sumCur = inCur + outCur;
+
+        if (sumCur > 0) {
+          const pIn  = Math.round((inCur  * 100) / sumCur);
+          const pOut = 100 - pIn;
+          setTextSafe(
+            "#chart-pie-sub",
+            `IN ${fmt(inCur)}件 (${pIn}%) ／ OUT ${fmt(outCur)}件 (${pOut}%)`
+          );
+        } else {
+          setTextSafe("#chart-pie-sub", "当月のデータがありません");
+        }
+      } else {
+        setTextSafe("#chart-pie-sub", "当月のデータがありません");
+      }
+
+      // ==== LINE CHART ====
+      // (kode line chart lama kamu tetap, tidak perlu diubah)
+
       // ==== LINE CHART ====
           // ==== LINE CHART (月次 IN / OUT) ====
       const ctx1 = $("#chart-monthly");
