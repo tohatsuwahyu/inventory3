@@ -351,22 +351,68 @@ function setTextSafe(selector, value) {
       }
 
       // ==== 直近30日 取引件数 ====
-      const now   = new Date();
-      const limit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      let count30 = 0;
+           // ==== 直近30日 取引件数 + 前30日との比較 ====
+      const now         = new Date();
+      const limit       = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 直近30日開始
+      const prevStart   = new Date(limit.getTime() - 30 * 24 * 60 * 60 * 1000); // その前の30日
+
+      let count30 = 0;   // 今の30日分
+      let prev30  = 0;   // その前の30日分
+
       for (const h of history) {
         const raw = h.timestamp || h.date || h.datetime || "";
         if (!raw) continue;
-        let dt = raw instanceof Date ? raw : new Date(String(raw).replace(" ", "T"));
-        if (isNaN(dt)) continue;
-        if (dt >= limit && dt <= now) count30++;
-      }
-     
-setTextSafe("#metric-trx", fmt(count30));   // isi angka besar di kartu
 
-const days = 30;
-const avg  = days ? (count30 / days) : 0;
-setTextSafe("#metric-trx-badge", `平均 ${avg.toFixed(1)}件/日`);  // isi badge kecil
+        let dt = raw instanceof Date ? raw : new Date(String(raw).replace(" ", "T"));
+        if (!dt || isNaN(dt)) continue;
+
+        if (dt >= limit && dt <= now) {
+          // 直近30日
+          count30++;
+        } else if (dt >= prevStart && dt < limit) {
+          // その前の30日
+          prev30++;
+        }
+      }
+
+      // angka besar di kartu
+      setTextSafe("#metric-trx", fmt(count30));
+
+      // badge kecil: rata-rata per hari
+      const days = 30;
+      const avg  = days ? (count30 / days) : 0;
+      setTextSafe("#metric-trx-badge", `平均 ${avg.toFixed(1)}件/日`);
+
+      // --- perbandingan dengan 30 hari sebelumnya ---
+      const diff = count30 - prev30;
+      let diffLabel;
+
+      if (!prev30 && !count30) {
+        diffLabel = "前30日比 0件";
+      } else if (diff > 0) {
+        diffLabel = `前30日比 +${fmt(diff)}件`;
+      } else if (diff < 0) {
+        diffLabel = `前30日比 -${fmt(Math.abs(diff))}件`;
+      } else {
+        diffLabel = "前30日比 ±0件";
+      }
+
+      setTextSafe("#metric-trx-diff", diffLabel);
+
+      // warna hijau/merah sesuai naik/turun
+      const diffEl = document.querySelector("#metric-trx-diff");
+      if (diffEl) {
+        diffEl.classList.remove("text-success", "text-danger", "text-muted");
+        if (diff > 0) {
+          // lebih banyak transaksi dari sebelumnya (anggap "naik")
+          diffEl.classList.add("text-primary");
+        } else if (diff < 0) {
+          // lebih sedikit dari sebelumnya
+          diffEl.classList.add("text-success");
+        } else {
+          diffEl.classList.add("text-muted");
+        }
+      }
 
             // ==== CHART SUBTITLES (リングサマリ) ====
       // Line chart → pakai data bulan terbaru
