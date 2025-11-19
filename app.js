@@ -3843,24 +3843,25 @@ function initSidebar() {
     });
   });
 
-  // Inisialisasi awal: pakai link yang sudah .active di HTML
-    // Inisialisasi awal
-  // Desktop: pakai yang .active di HTML
+ 
+   // Desktop: pakai yang .active di HTML
   // Mobile: kalau ada menu IO, langsung buka IO
-  let firstLink = sidebar.querySelector('a[data-view].active') || links[0];
+  let firstLink = sidebar.querySelector('a[data-view].active') || links[0] || null;
   let firstView = firstLink ? firstLink.getAttribute('data-view') : 'view-dashboard';
 
-    // Di mobile: kalau ada view-io, pakai itu sebagai default
-  if (!firstViewId && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
-    const ioLink = sidebar.querySelector('a[data-view="view-io"]');
-    if (ioLink) firstViewId = 'view-io';
-  }
+  // Di mobile, kalau ada menu IO, jadikan itu default
+  const isMobileUA = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  const ioLink = sidebar.querySelector('a[data-view="view-io"]');
 
+  if (isMobileUA && ioLink) {
+    firstLink = ioLink;
+    firstView = 'view-io';
   }
 
   if (firstLink && firstView) {
     activateViewById(firstView, firstLink);
   }
+
 
 }
 
