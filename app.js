@@ -594,6 +594,40 @@ setTextSafe("#metric-trx-badge", `平均 ${avg.toFixed(1)}件/日`);  // isi bad
       toast("ダッシュボードの読み込みに失敗しました。");
     }
   }
+  // --- Dashboard cards drill-down (klik kartu → pindah view) ---
+  function goToView(viewId) {
+    if (!viewId) return;
+
+    // Cari link di sidebar yang punya data-view = viewId
+    const link =
+      document.querySelector(`#sb a[data-view="${viewId}"]`) ||
+      document.querySelector(`a[data-view="${viewId}"]`);
+
+    if (link) {
+      link.click();   // biarkan initSidebar yang urus ganti view, title, dll.
+    }
+  }
+
+  function bindDashboardDrilldown() {
+    const map = {
+      "metric-card-items": "view-items",   // アイテム数
+      "metric-card-below": "view-items",   // 最小在庫以下
+      "metric-card-users": "view-users",   // ユーザー数
+      "metric-card-trx"  : "view-history"  // 直近30日の取引
+    };
+
+    Object.entries(map).forEach(([id, viewId]) => {
+      const el = document.getElementById(id);
+      if (!el || el.__drillBound) return;
+
+      el.__drillBound = true;
+      el.style.cursor = "pointer";  // kasih tanda bisa diklik
+
+      el.addEventListener("click", () => {
+        goToView(viewId);
+      });
+    });
+  }
 
   // --- GANTI fungsi lama updateWelcomeBanner ---
   function updateWelcomeBanner() {
@@ -3035,6 +3069,7 @@ function keepBackendWarm(){
       Chart.defaults.plugins.legend.labels.usePointStyle = true;
     }
     renderDashboard();
+    bindDashboardDrilldown();
     bindPrintAllLabels();
     keepBackendWarm();
     $("#btn-logout")?.addEventListener("click", logout);
