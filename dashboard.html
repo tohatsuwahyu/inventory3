@@ -132,7 +132,9 @@
 <div class="row g-3 metric-row" id="dash-metrics">
   <!-- アイテム数 -->
   <div class="col-12 col-md-6 col-xl-3">
-    <div class="metric-card">
+    <div class="card metric-card h-100 js-metric-drill"
+     id="metric-card-items"
+     data-target="view-items">
       <div class="metric-icon metric-blue">
         <i class="bi-box"></i>
       </div>
@@ -151,7 +153,10 @@
 
   <!-- 最小在庫以下 -->
   <div class="col-12 col-md-6 col-xl-3">
-    <div class="metric-card">
+    <div class="metric-card metric-warning js-metric-drill"
+     id="metric-card-below"
+     data-target="view-items">
+
       <div class="metric-icon metric-pink">
         <i class="bi-arrow-down-circle"></i>
       </div>
@@ -170,7 +175,10 @@
 
   <!-- ユーザー -->
   <div class="col-12 col-md-6 col-xl-3">
-    <div class="metric-card">
+    <div class="card metric-card h-100 js-metric-drill"
+     id="metric-card-users"
+     data-target="view-users">
+
       <div class="metric-icon metric-green">
         <i class="bi-people"></i>
       </div>
@@ -189,7 +197,10 @@
 
   <!-- 直近30日の取引 -->
   <div class="col-12 col-md-6 col-xl-3">
-    <div class="metric-card">
+    <div class="metric-card js-metric-drill"
+     id="metric-card-trx"
+     data-target="view-history">
+
       <div class="metric-icon metric-purple">
         <i class="bi-arrow-left-right"></i>
       </div>
