@@ -42,7 +42,11 @@
   function safeId(s){ return String(s||"").replace(/[^a-zA-Z0-9_-]/g, "_"); }
 
   // Global caches
-  let _ITEMS_CACHE = [];
+ // Global caches
+let _ITEMS_CACHE   = [];
+let _HISTORY_CACHE = [];      // cache semua history dari API
+let _HISTORY_FILTER = "all";  // all / today / week / month
+
 
   function setLoading(show, text) {
     const el = $("#global-loading"); if (!el) return;
@@ -1286,33 +1290,112 @@ const ACT_GRID_STYLE = [
   }
 
   /* -------------------- History -------------------- */
-/* -------------------- History -------------------- */
-async function renderHistory() {
+// --- Helper: filter history berdasarkan range (all / today / week / month) ---
+function filterHistoryByRange(list, range) {
+  const mode = (range || "all");
+  if (!Array.isArray(list) || !list.length || mode === "all") {
+    return Array.isArray(list) ? list : [];
+  }
+
+  const now = new Date();
+  const todayStart   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+  // minggu: Senin–Minggu
+  const dow        = todayStart.getDay();          // 0:Sun ... 6:Sat
+  const diffToMon  = (dow + 6) % 7;                // jarak ke Senin
+  const weekStart  = new Date(todayStart);
+  weekStart.setDate(todayStart.getDate() - diffToMon);
+  const weekEnd    = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);        // [weekStart, weekEnd)
+
+  // bulan berjalan
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  function parseHistDate(h) {
+    const raw = h.timestamp || h.date || h.datetime || "";
+    if (!raw) return null;
+    const dt = raw instanceof Date ? raw : new Date(String(raw).replace(" ", "T"));
+    if (!dt || isNaN(dt)) return null;
+    return dt;
+  }
+
+  return list.filter(h => {
+    const dt = parseHistDate(h);
+    if (!dt) return false;
+
+    if (mode === "today") return dt >= todayStart && dt < tomorrowStart;
+    if (mode === "week")  return dt >= weekStart   && dt < weekEnd;
+    if (mode === "month") return dt >= monthStart  && dt < monthEnd;
+    return true;
+  });
+}
+
+// --- Helper: update tombol filter & badge teks ---
+function updateHistoryFilterUI(mode) {
+  const m = mode || "all";
+
+  document.querySelectorAll(".js-hist-filter").forEach(btn => {
+    const r = btn.dataset.range || "all";
+    btn.classList.toggle("active", r === m);
+  });
+
+  const badge = document.getElementById("history-range-badge");
+  if (badge) {
+    const map = {
+      all  : "最新400件を表示",
+      today: "本日の履歴（最新400件まで）",
+      week : "今週の履歴（最新400件まで）",
+      month: "今月の履歴（最新400件まで）"
+    };
+    badge.textContent = map[m] || map.all;
+  }
+}
+
+async function renderHistory(range) {
   try {
+    // simpan pilihan filter global
+    if (range) {
+      _HISTORY_FILTER = range;
+    }
+    const mode = _HISTORY_FILTER || "all";
+
     const raw  = await api("history", { method: "GET" });
     const list = pickRows(raw);
+
+    _HISTORY_CACHE = list.slice();   // cache kalau mau dipakai fitur lain
 
     // TBODY: prioritaskan #tbl-history tbody; fallback: elemen #tbl-history itu sendiri
     const tbody =
       document.querySelector("#tbl-history tbody") ||
       document.getElementById("tbl-history");
-    if (!tbody) { console.warn("Elemen #tbl-history tidak ditemukan"); return; }
+    if (!tbody) {
+      console.warn("Elemen #tbl-history tidak ditemukan");
+      return;
+    }
 
     // Ambil role user sekarang
     const admin = isAdmin();
 
     // Ambil 400 terakhir (baru → atas)
-    const recent = list.slice(-400).reverse();
+    let recent = list.slice(-400).reverse();
+
+    // Terapkan filter (all / today / week / month)
+    recent = filterHistoryByRange(recent, mode);
 
     // Kosong → pesan ramah
     if (!recent.length) {
-      tbody.innerHTML = `<tr><td colspan="${admin ? 10 : 9}" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
+      const colSpan = admin ? 10 : 9;
+      tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-muted py-3 text-center">履歴はありません</td></tr>`;
       ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
 
       // Sembunyikan header kolom 修正 untuk non-admin
       const table = tbody.closest("table") || document.querySelector("#tbl-history");
       const thLast = table?.querySelector("thead tr th:last-child");
       if (!admin && thLast) thLast.style.display = "none";
+
+      updateHistoryFilterUI(mode);
       return;
     }
 
@@ -1344,7 +1427,7 @@ async function renderHistory() {
 
     ensureViewAutoMenu("history", "#view-history .items-toolbar .right");
 
-    // 🆕 Binding tombol 修正 → buka modal edit
+    // 🆕 Binding tombol 修正 → buka modal edit (delegasi, ikat sekali saja)
     if (admin && !tbody.__histBound) {
       tbody.__histBound = true;
       tbody.addEventListener("click", (ev) => {
@@ -1387,11 +1470,14 @@ async function renderHistory() {
         });
       });
     }
+
+    updateHistoryFilterUI(mode);
   } catch (e) {
     console.error("renderHistory() error:", e);
     toast("履歴の読み込みに失敗しました。");
   }
 }
+
 function openHistoryEditModal(h) {
   if (!isAdmin()) {
     toast("Akses ditolak（管理者のみ）");
@@ -1498,6 +1584,22 @@ function openHistoryEditModal(h) {
   });
 
   wrap.addEventListener("hidden.bs.modal", () => wrap.remove(), { once: true });
+}
+function bindHistoryFilterUI() {
+  const btns = document.querySelectorAll(".js-hist-filter");
+  if (!btns.length) return;
+
+  btns.forEach(btn => {
+    if (btn.__bound) return;
+    btn.__bound = true;
+
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const range = btn.dataset.range || "all";
+      _HISTORY_FILTER = range;
+      renderHistory(range);   // reload + apply filter
+    });
+  });
 }
 
   // --- Tambahan: hint visual untuk input manual di 入出荷 ---
@@ -2924,6 +3026,7 @@ function keepBackendWarm(){
     hydrateCurrentUser();
     bindIO();
     bindShelf();
+    bindHistoryFilterUI(); 
     updateWelcomeBanner();
     // ✨ Chart.js global style
     if (window.Chart) {
