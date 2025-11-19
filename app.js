@@ -261,6 +261,18 @@ function setTextSafe(selector, value) {
 }
 
   /* -------------------- Dashboard -------------------- */
+  // Palet warna untuk chart (IN / OUT)
+  const CHART_COLORS = {
+    in: {
+      border: "rgba(59,130,246,1)",   // biru
+      fill:   "rgba(59,130,246,0.16)"
+    },
+    out: {
+      border: "rgba(244,63,94,1)",    // merah
+      fill:   "rgba(244,63,94,0.20)"
+    }
+  };
+
   let chartLine = null, chartPie = null;
   async function renderDashboard() {
     const who = getCurrentUser();
@@ -328,34 +340,126 @@ const days = 30;
 const avg  = days ? (count30 / days) : 0;
 setTextSafe("#metric-trx-badge", `平均 ${avg.toFixed(1)}件/日`);  // isi badge kecil
       // ==== LINE CHART ====
+          // ==== LINE CHART (月次 IN / OUT) ====
       const ctx1 = $("#chart-monthly");
       if (ctx1 && window.Chart) {
         chartLine?.destroy();
+
+        const labels = series.map(s => s.month || "");
+        const dataIn  = series.map(s => Number(s.in  || 0));
+        const dataOut = series.map(s => Number(s.out || 0));
+
         chartLine = new Chart(ctx1, {
           type: "line",
           data: {
-            labels: series.map(s => s.month || ""),
+            labels,
             datasets: [
-              { label: "IN",  data: series.map(s => Number(s.in  || 0)), borderWidth: 2 },
-              { label: "OUT", data: series.map(s => Number(s.out || 0)), borderWidth: 2 }
+              {
+                label: "IN",
+                data: dataIn,
+                borderColor: CHART_COLORS.in.border,
+                backgroundColor: CHART_COLORS.in.fill,
+                borderWidth: 2,
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+              },
+              {
+                label: "OUT",
+                data: dataOut,
+                borderColor: CHART_COLORS.out.border,
+                backgroundColor: CHART_COLORS.out.fill,
+                borderWidth: 2,
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+              }
             ]
           },
-          options: { responsive: true, maintainAspectRatio: false }
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: "index",
+              intersect: false
+            },
+            plugins: {
+              legend: {
+                position: "top",
+              },
+              tooltip: {
+                callbacks: {
+                  label(ctx) {
+                    const v = ctx.parsed.y || 0;
+                    return `${ctx.dataset.label}: ${fmt(v)} 件`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                grid: {
+                  display: false
+                }
+              },
+              y: {
+                beginAtZero: true,
+                grid: {
+                  color: "rgba(148,163,184,0.25)"
+                },
+                ticks: {
+                  callback(value) { return fmt(value); }
+                }
+              }
+            }
+          }
         });
       }
 
+
       // ==== PIE CHART ====
+           // ==== PIE CHART (当月 IN vs OUT) ====
       const ctx2 = $("#chart-pie");
       if (ctx2 && window.Chart) {
         chartPie?.destroy();
+
         const last = series.length ? series[series.length - 1] : { in: 0, out: 0 };
+        const totalIn  = Number(last.in  || 0);
+        const totalOut = Number(last.out || 0);
+        const sum = totalIn + totalOut || 1;
+
         chartPie = new Chart(ctx2, {
           type: "pie",
           data: {
             labels: ["IN", "OUT"],
-            datasets: [{ data: [Number(last.in || 0), Number(last.out || 0)] }]
+            datasets: [{
+              data: [totalIn, totalOut],
+              backgroundColor: [CHART_COLORS.in.fill, CHART_COLORS.out.fill],
+              borderColor: [CHART_COLORS.in.border, CHART_COLORS.out.border],
+              borderWidth: 2,
+              hoverOffset: 8
+            }]
           },
-          options: { responsive: true, maintainAspectRatio: false }
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: "right",
+              },
+              tooltip: {
+                callbacks: {
+                  label(ctx) {
+                    const v = ctx.parsed || 0;
+                    const pct = ((v * 100) / sum).toFixed(1);
+                    return `${ctx.label}: ${fmt(v)} 件 (${pct}%)`;
+                  }
+                }
+              }
+            }
+          }
         });
       }
 
@@ -2781,6 +2885,12 @@ function keepBackendWarm(){
     bindIO();
     bindShelf();
     updateWelcomeBanner();
+    // ✨ Chart.js global style
+    if (window.Chart) {
+      Chart.defaults.font.family = '"Noto Sans JP", system-ui';
+      Chart.defaults.color = "#4b5563";
+      Chart.defaults.plugins.legend.labels.usePointStyle = true;
+    }
     renderDashboard();
     bindPrintAllLabels();
     keepBackendWarm();
