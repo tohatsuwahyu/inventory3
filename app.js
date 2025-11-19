@@ -307,10 +307,9 @@ function setTextSafe(selector, value) {
 
       const userCount = users.length;
 
-      setTextSafe("#metric-total-items", fmt(totalItems));
-      setTextSafe("#metric-low-stock",   fmt(low));
-      setTextSafe("#metric-users",       fmt(userCount));
-
+      setTextSafe("#metric-items", fmt(totalItems));   // アイテム数
+setTextSafe("#metric-below", fmt(low));         // 最小在庫以下
+setTextSafe("#metric-users", fmt(userCount));   // ini sudah benar, biarkan
       // ==== 直近30日 取引件数 ====
       const now   = new Date();
       const limit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -322,9 +321,12 @@ function setTextSafe(selector, value) {
         if (isNaN(dt)) continue;
         if (dt >= limit && dt <= now) count30++;
       }
-      const elTxn = $("#metric-txn");
-      if (elTxn) elTxn.textContent = count30;
+     
+setTextSafe("#metric-trx", fmt(count30));   // isi angka besar di kartu
 
+const days = 30;
+const avg  = days ? (count30 / days) : 0;
+setTextSafe("#metric-trx-badge", `平均 ${avg.toFixed(1)}件/日`);  // isi badge kecil
       // ==== LINE CHART ====
       const ctx1 = $("#chart-monthly");
       if (ctx1 && window.Chart) {
