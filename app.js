@@ -3820,11 +3820,24 @@ function initSidebar() {
   });
 
   // Inisialisasi awal: pakai link yang sudah .active di HTML
-  const current = sidebar.querySelector('a[data-view].active') || links[0];
-  if (current) {
-    const firstView = current.getAttribute('data-view');
-    activateViewById(firstView, current);
+    // Inisialisasi awal
+  // Desktop: pakai yang .active di HTML
+  // Mobile: kalau ada menu IO, langsung buka IO
+  let firstLink = sidebar.querySelector('a[data-view].active') || links[0];
+  let firstView = firstLink ? firstLink.getAttribute('data-view') : 'view-dashboard';
+
+  if (isMobile()) {
+    const ioLink = sidebar.querySelector('a[data-view="view-io"]');
+    if (ioLink) {
+      firstLink = ioLink;
+      firstView = 'view-io';
+    }
   }
+
+  if (firstLink && firstView) {
+    activateViewById(firstView, firstLink);
+  }
+
 }
 
 // Listener global (boleh tetap seperti ini)
