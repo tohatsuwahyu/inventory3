@@ -867,13 +867,32 @@ const ACT_GRID_STYLE = [
         const m = (td?.textContent || "").match(/-?\d+(?:\.\d+)?/);
         return Number(m ? m[0] : 0);
       };
-      const highlightLow = () => {
-        $$("#tbl-items tr").forEach(tr => {
-          const stock = getNum(tr.children[5]);
-          const min   = getNum(tr.children[6]);
-          tr.classList.toggle("row-low", stock <= min);
-        });
-      };
+        const highlightLow = () => {
+    let lowCount = 0;
+
+    $$("#tbl-items tr").forEach(tr => {
+      const stock = getNum(tr.children[5]);
+      const min   = getNum(tr.children[6]);
+
+      const isLow = stock <= min;
+      tr.classList.toggle("row-low", isLow);
+
+      if (isLow) lowCount++;
+    });
+
+    // --- update badge di atas tabel ---
+    const badge = document.getElementById("items-low-badge");
+    if (!badge) return;
+
+    if (!lowCount) {
+      badge.textContent = "要補充アイテムはありません";
+      badge.classList.add("text-muted");
+    } else {
+      badge.textContent = `⚠ 要補充: ${fmt(lowCount)} アイテム`;
+      badge.classList.remove("text-muted");
+    }
+  };
+
 
       async function renderPage(){
         const slice = _ITEMS_CACHE.slice(page*size, (page+1)*size);
