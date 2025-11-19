@@ -312,6 +312,7 @@ function setTextSafe(selector, value) {
       }
 
       // ==== METRIK KARTU ATAS ====
+            // ==== METRIK KARTU ATAS ====
       const totalItems = items.length;
 
       let low = 0;
@@ -323,9 +324,32 @@ function setTextSafe(selector, value) {
 
       const userCount = users.length;
 
+      // angka besar
       setTextSafe("#metric-items", fmt(totalItems));   // アイテム数
-setTextSafe("#metric-below", fmt(low));         // 最小在庫以下
-setTextSafe("#metric-users", fmt(userCount));   // ini sudah benar, biarkan
+      setTextSafe("#metric-below", fmt(low));          // 最小在庫以下
+      setTextSafe("#metric-users", fmt(userCount));    // ユーザー
+
+      // === NEW: badge kecil di kartu 最小在庫以下 ===
+      const belowBadge = document.getElementById("metric-below-badge");
+      if (belowBadge) {
+        // teks
+        if (low > 0) {
+          belowBadge.textContent = `要補充: ${fmt(low)} アイテム`;
+        } else {
+          belowBadge.textContent = "OK";
+        }
+
+        // warna (pakai class metric-badge-… dari CSS)
+        belowBadge.classList.remove(
+          "metric-badge-neutral",
+          "metric-badge-success",
+          "metric-badge-danger"
+        );
+        belowBadge.classList.add(
+          low > 0 ? "metric-badge-danger" : "metric-badge-success"
+        );
+      }
+
       // ==== 直近30日 取引件数 ====
       const now   = new Date();
       const limit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
