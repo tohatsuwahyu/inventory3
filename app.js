@@ -837,6 +837,29 @@ const ACT_GRID_STYLE = [
       const listAll = await api("items", { method: "GET" });
       _ITEMS_CACHE = Array.isArray(listAll) ? listAll
                     : (Array.isArray(listAll?.data) ? listAll.data : []);
+    // === UPDATE BADGE "要補充" DI TOOLBAR ITEMS ===
+    try {
+      const lowCount = _ITEMS_CACHE.reduce((acc, it) => {
+        const stock = Number(it.stock || 0);
+        const min   = Number(it.min   || 0);
+        // Definisi "不足": stok > 0 dan stok <= min
+        return acc + (stock > 0 && stock <= min ? 1 : 0);
+      }, 0);
+
+      const badge = document.getElementById("items-low-badge");
+      if (badge) {
+        if (lowCount > 0) {
+          badge.textContent = `⚠ 要補充: ${fmt(lowCount)} アイテム`;
+          badge.classList.remove("d-none");
+        } else {
+          // Kalau mau selalu kelihatan, hapus baris classList.add dan biarkan text "要補充なし"
+          badge.textContent = "要補充なし";
+          badge.classList.add("d-none");
+        }
+      }
+    } catch (_) {
+      // jangan sampai dashboard mati hanya karena badge
+    }
 
       let page = 0, size = 100;
 
