@@ -3850,12 +3850,12 @@ function initSidebar() {
   let firstLink = sidebar.querySelector('a[data-view].active') || links[0];
   let firstView = firstLink ? firstLink.getAttribute('data-view') : 'view-dashboard';
 
-  if (isMobile()) {
+    // Di mobile: kalau ada view-io, pakai itu sebagai default
+  if (!firstViewId && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
     const ioLink = sidebar.querySelector('a[data-view="view-io"]');
-    if (ioLink) {
-      firstLink = ioLink;
-      firstView = 'view-io';
-    }
+    if (ioLink) firstViewId = 'view-io';
+  }
+
   }
 
   if (firstLink && firstView) {
