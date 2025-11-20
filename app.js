@@ -743,7 +743,7 @@ function setTextSafe(selector, value) {
   // === Live reload (user-configurable) ===
   const LIVE_KEY = "liveRefreshSec";
   let LIVE_TIMER = null;
-  let LIVE_SEC = Number(localStorage.getItem(LIVE_KEY) || "120");
+  let LIVE_SEC = Number(localStorage.getItem(LIVE_KEY) || "600");
 
   function setLiveRefresh(seconds){
     LIVE_SEC = Math.max(0, Number(seconds || 0));
