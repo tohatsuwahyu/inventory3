@@ -701,25 +701,44 @@ function setTextSafe(selector, value) {
 
   // --- GANTI fungsi lama updateWelcomeBanner ---
   function updateWelcomeBanner() {
-    const who = getCurrentUser();
-    const nama = who?.name || who?.id || "ユーザー";
-    const roleRaw = (who?.role || "user").toLowerCase();
-    const roleJP  = roleRaw === "admin" ? "管理者" : "ユーザー";
-document.body.classList.toggle("is-admin", roleRaw === "admin");
-    const banner = document.getElementById("welcome-banner");
-    if (banner) {
-      banner.innerHTML = `ようこそ、<b>${escapeHtml(nama)}</b> さん。<span class="badge-soft" style="margin-left:.4rem">${roleJP}</span>
-        <span class="text-muted small">端末、電源、電波確認しましょう。</span>`;
-    }
-    const welName = document.getElementById("wel-name");
-    if (welName) { welName.textContent = `${nama}（${roleJP}）`; }
-    const whoEl = document.getElementById("who");
-    if (whoEl) {
-      const id = who?.id || "";
-      const role = who?.role || "user";
-      whoEl.textContent = `${nama} (${id} | ${role})`;
-    }
-  }
+  const banner = document.getElementById('welcome-banner');
+  if (!banner) return;
+
+  // Ambil user yang sedang login
+  const user = getCurrentUser() || (window.CONFIG && CONFIG.DEFAULT_USER) || {};
+  const nama =
+    user.displayName ||
+    user.name ||
+    user.loginId ||
+    'ユーザー';
+
+  const rawRole = (user.role || user.roleName || '').toLowerCase();
+  const isAdmin = rawRole === 'admin' || user.isAdmin === true;
+
+  const roleJP = isAdmin ? '管理者' : '一般ユーザー';
+
+  banner.innerHTML = `
+    <div class="me-3">
+      <span class="avatar bg-primary text-white rounded-circle">
+        <i class="bi bi-person"></i>
+      </span>
+    </div>
+    <div class="flex-grow-1">
+      <div class="d-flex align-items-center gap-2">
+        <div class="fw-semibold">
+          ようこそ、<span>${escapeHtml(nama)}</span> さん。
+        </div>
+        <span class="badge badge-soft rounded-pill">
+          ${roleJP}
+        </span>
+      </div>
+      <div class="text-muted small mt-1">
+        端末電源、電波を確認しましょう。
+      </div>
+    </div>
+  `;
+}
+
 
   // === Live reload (user-configurable) ===
   const LIVE_KEY = "liveRefreshSec";
